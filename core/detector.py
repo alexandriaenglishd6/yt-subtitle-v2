@@ -1,0 +1,185 @@
+"""
+字幕检测模块
+检测单个视频的字幕情况（人工/自动字幕语言列表）
+"""
+import json
+import subprocess
+from typing import Optional
+
+from core.models import DetectionResult, VideoInfo
+from core.logger import get_logger
+
+logger = get_logger()
+
+
+class SubtitleDetector:
+    """字幕检测器
+    
+    负责检测单个视频的字幕情况，区分人工字幕和自动字幕
+    """
+    
+    def __init__(self, yt_dlp_path: Optional[str] = None):
+        """初始化字幕检测器
+        
+        Args:
+            yt_dlp_path: yt-dlp 可执行文件路径，如果为 None 则使用系统 PATH 中的 yt-dlp
+        """
+        self.yt_dlp_path = yt_dlp_path or "yt-dlp"
+    
+    def detect(self, video_info: VideoInfo) -> DetectionResult:
+        """检测视频字幕情况
+        
+        Args:
+            video_info: 视频信息对象
+        
+        Returns:
+            DetectionResult 对象，包含字幕检测结果
+        """
+        try:
+            logger.info(f"开始检测字幕: {video_info.video_id}")
+            
+            # 使用 yt-dlp 获取字幕信息
+            subtitle_info = self._get_subtitle_info_ytdlp(video_info.url)
+            
+            if subtitle_info is None:
+                logger.warning(f"无法获取字幕信息: {video_info.video_id}")
+                return DetectionResult(
+                    video_id=video_info.video_id,
+                    has_subtitles=False,
+                    manual_languages=[],
+                    auto_languages=[]
+                )
+            
+            # 解析字幕信息
+            manual_languages = []
+            auto_languages = []
+            
+            # yt-dlp 返回的字幕信息格式：
+            # subtitles: {lang_code: [{"ext": "vtt", "url": "...", ...}, ...]}
+            # automatic_captions: {lang_code: [{"ext": "vtt", "url": "...", ...}, ...]}
+            
+            subtitles = subtitle_info.get("subtitles", {})
+            automatic_captions = subtitle_info.get("automatic_captions", {})
+            
+            # 提取人工字幕语言
+            for lang_code in subtitles.keys():
+                if lang_code not in manual_languages:
+                    manual_languages.append(lang_code)
+            
+            # 提取自动字幕语言
+            for lang_code in automatic_captions.keys():
+                if lang_code not in auto_languages:
+                    auto_languages.append(lang_code)
+            
+            has_subtitles = len(manual_languages) > 0 or len(auto_languages) > 0
+            
+            result = DetectionResult(
+                video_id=video_info.video_id,
+                has_subtitles=has_subtitles,
+                manual_languages=manual_languages,
+                auto_languages=auto_languages
+            )
+            
+            if has_subtitles:
+                logger.info(
+                    f"字幕检测完成: {video_info.video_id} - "
+                    f"人工字幕: {len(manual_languages)} 种, "
+                    f"自动字幕: {len(auto_languages)} 种"
+                )
+            else:
+                logger.warning(f"视频无可用字幕: {video_info.video_id}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"字幕检测失败: {e}", video_id=video_info.video_id)
+            return DetectionResult(
+                video_id=video_info.video_id,
+                has_subtitles=False,
+                manual_languages=[],
+                auto_languages=[]
+            )
+    
+    def _get_subtitle_info_ytdlp(self, url: str) -> Optional[dict]:
+        """使用 yt-dlp 获取字幕信息
+        
+        Args:
+            url: 视频 URL
+        
+        Returns:
+            包含字幕信息的字典，如果失败则返回 None
+        """
+        try:
+            # 使用 yt-dlp 获取视频信息（包含字幕列表）
+            cmd = [
+                self.yt_dlp_path,
+                "--dump-json",
+                "--no-warnings",
+                "--skip-download",  # 不下载视频，只获取信息
+                url
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"yt-dlp 执行失败: {result.stderr}")
+                return None
+            
+            # 解析 JSON
+            data = json.loads(result.stdout)
+            
+            # 提取字幕信息
+            subtitle_info = {
+                "subtitles": data.get("subtitles", {}),
+                "automatic_captions": data.get("automatic_captions", {})
+            }
+            
+            return subtitle_info
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"获取字幕信息超时: {url}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"解析 yt-dlp 输出失败: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"获取字幕信息时出错: {e}")
+            return None
+    
+    def detect_by_url(self, url: str, video_id: Optional[str] = None) -> DetectionResult:
+        """通过 URL 检测字幕（便捷方法）
+        
+        Args:
+            url: 视频 URL
+            video_id: 视频 ID，如果为 None 则从 URL 提取
+        
+        Returns:
+            DetectionResult 对象
+        """
+        from core.fetcher import VideoFetcher
+        
+        if video_id is None:
+            fetcher = VideoFetcher()
+            video_id = fetcher.extract_video_id(url)
+            if not video_id:
+                logger.error(f"无法从 URL 提取视频 ID: {url}")
+                return DetectionResult(
+                    video_id="unknown",
+                    has_subtitles=False,
+                    manual_languages=[],
+                    auto_languages=[]
+                )
+        
+        video_info = VideoInfo(
+            video_id=video_id,
+            url=url,
+            title=""  # 标题不是必需的
+        )
+        
+        return self.detect(video_info)
+

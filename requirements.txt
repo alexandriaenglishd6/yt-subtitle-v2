@@ -1,6 +1,9 @@
 # 核心依赖（尽量精简，<= 10 个核心依赖）
 
-# yt-dlp: YouTube 视频信息获取（需要用户单独安装，不在此处安装）
-# 安装方法: pip install yt-dlp
-# 或: pip install yt-dlp>=2023.12.0
+# yt-dlp: YouTube 视频信息获取
+yt-dlp
+
+# AI 翻译和摘要支持（可选，仅在需要 AI 功能时安装）
+# OpenAI: pip install openai>=1.0.0
+# Anthropic: pip install anthropic>=0.18.0
 

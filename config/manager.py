@@ -40,24 +40,48 @@ def get_user_data_dir() -> Path:
 
 @dataclass
 class AIConfig:
-    """AI 配置"""
-    provider: str = "openai"  # openai, anthropic, 等
+    """AI 配置
+    
+    符合 ai_design.md 规范的配置结构
+    """
+    provider: str = "openai"  # openai, anthropic, gemini, groq, local 等
     model: str = "gpt-4o-mini"  # 模型名称
-    api_key_env: str = "YTSUB_API_KEY"  # API Key 环境变量名
+    base_url: Optional[str] = None  # 可选，自定义 API 网关或代理
+    timeout_seconds: int = 30  # 超时时间（秒）
+    max_retries: int = 2  # 最大重试次数
+    api_keys: dict[str, str] = field(default_factory=lambda: {
+        "openai": "env:YTSUB_API_KEY",
+        "anthropic": "env:YTSUB_API_KEY"
+    })  # API Key 字典，格式如 {"openai": "env:OPENAI_API_KEY"}
     
     def to_dict(self) -> dict:
         return {
             "provider": self.provider,
             "model": self.model,
-            "api_key_env": self.api_key_env,
+            "base_url": self.base_url,
+            "timeout_seconds": self.timeout_seconds,
+            "max_retries": self.max_retries,
+            "api_keys": self.api_keys,
         }
     
     @classmethod
     def from_dict(cls, data: dict) -> "AIConfig":
+        # 向后兼容：如果存在旧的 api_key_env，转换为 api_keys
+        api_keys = data.get("api_keys")
+        if not api_keys and "api_key_env" in data:
+            api_key_env = data["api_key_env"]
+            api_keys = {
+                "openai": f"env:{api_key_env}",
+                "anthropic": f"env:{api_key_env}"
+            }
+        
         return cls(
             provider=data.get("provider", "openai"),
             model=data.get("model", "gpt-4o-mini"),
-            api_key_env=data.get("api_key_env", "YTSUB_API_KEY"),
+            base_url=data.get("base_url"),
+            timeout_seconds=data.get("timeout_seconds", 30),
+            max_retries=data.get("max_retries", 2),
+            api_keys=api_keys,
         )
 
 

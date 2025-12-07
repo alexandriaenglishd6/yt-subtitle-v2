@@ -66,17 +66,20 @@ IDE 在开始任何任务前，必须先阅读并理解：
 | P0-2  | ConfigManager & 用户数据目录    | 实现配置模型 + 在用户数据目录读写 `config.json`（不含 UI），路径符合 `v2_final_plan.md` 约定。                                                        | P0-1                       | S        | ✅ 完成 |
 | P0-3  | 日志系统（文件 + 控制台）       | 实现统一 Logger，支持写入日志文件（用户数据目录）和控制台输出，为后续 UI 日志复用。                                                                  | P0-1                       | S        | ✅ 完成 |
 | P0-4  | CLI 入口 & 最小命令结构         | 实现基础 CLI：支持 `channel --url` / `urls --file` 两种命令框架，暂时可返回"未实现"提示，为后续 Dry Run / 全流程闭环做准备。                          | P0-1, P0-2                 | S        | ✅ 完成 |
-| P0-5  | 视频解析（频道 / 列表 / 单 URL）| 根据 URL 类型调用 yt-dlp 获取视频列表（频道 / 播放列表 / 单视频），返回标准化 `VideoInfo` 列表。                                                     | P0-4                       | M          | ✅ 完成 |
-| P0-6  | 增量管理基础（archives）        | 实现 `IncrementalManager`，在用户数据目录 `archives/` 下记录已处理视频 ID（目前只写接口，不完全接入流水线）。                                       | P0-5                       | S          | ⏳ 待开始 |
-| P0-7  | 字幕检测（单视频）              | 实现 `SubtitleDetector`：对单个视频返回是否有字幕、人工字幕语言列表、自动字幕语言列表。                                                              | P0-5                       | M          | ⏳ 待开始 |
-| P0-8  | Dry Run 模式（仅检测 + 日志输出）| 在 CLI 中实现 Dry Run：只调用 `SubtitleDetector` 批量检测，结果输出到日志，严格遵守"只检测、不下载、不摘要、不写报告、不更新增量"的语义。           | P0-7, P0-3                 | M          | ⏳ 待开始 |
-| P0-9  | 批量检测 + 增量接入             | 把 `IncrementalManager` 接入 Dry Run 和正常处理流程：**针对频道 / 播放列表 / URL 列表**，第二次处理时只对未成功处理的视频做检测/处理；Dry Run 不更新增量。 | P0-6, P0-8                 | M          | ⏳ 待开始 |
-| P0-10 | 字幕下载模块                    | 实现 `SubtitleDownloader`：根据检测结果和翻译策略，下载原始字幕（原语言）以及官方翻译字幕（如有），暂不调用 AI 翻译。                              | P0-7, P0-3                 | M          | ⏳ 待开始 |
-| P0-11 | LanguageConfig & 翻译策略       | 实现 `LanguageConfig`，定义 UI 语言、字幕目标语言、摘要语言、双语模式、翻译策略等；所有翻译 / 摘要逻辑必须从这里读配置。                             | P0-2                       | S          | ⏳ 待开始 |
-| P0-12 | AI 翻译模块（单目标语言）       | 实现 `SubtitleTranslator`：在 `OFFICIAL_AUTO_THEN_AI` 等策略下，当官方字幕不足时调用 AI 翻译生成目标语言字幕（先支持一个主目标语言）。             | P0-10, P0-11               | M          | ⏳ 待开始 |
-| P0-13 | AI 摘要模块（单语言）           | 实现 `Summarizer`：调用大模型对字幕文本生成单语言摘要；Prompt 模板集中在 `core/prompts.py`，不能写死"中文"，必须通过 `LanguageConfig` 注入语言。   | P0-11                      | M          | ⏳ 待开始 |
-| P0-14 | 输出模块（目录结构 & 文件）     | 实现 `OutputWriter`：按 `v2_final_plan.md` 规定的结构创建目录和文件（`original` / `translated` / `summary` / `metadata`），使用语言代码命名。       | P0-10, P0-12, P0-13        | M          | ⏳ 待开始 |
-| P0-15 | 失败记录 & `failed.txt`         | 实现失败记录器：所有下载 / 翻译 / 摘要失败的视频，写入 `out/failed.txt`；格式可读，追加写入。                                                        | P0-3, P0-14                | S          | ⏳ 待开始 |
+| P0-5  | 视频解析（频道 / 列表 / 单 URL）| 根据 URL 类型调用 yt-dlp 获取视频列表（频道 / 播放列表 / 单视频 / 批量 URL 列表），返回标准化 `VideoInfo` 列表。                                     | P0-4                       | M          | ✅ 完成 |
+| P0-5-fix | 批量 URL 列表 CLI 集成补丁 | 补充 CLI 中 `urls_command()` 的实际调用，使批量 URL 列表解析功能完整可用。                                                                        | P0-5                       | XS         | ✅ 完成 |
+| P0-6  | 增量管理基础（archives）        | 实现 `IncrementalManager`，在用户数据目录 `archives/` 下记录已处理视频 ID（目前只写接口，不完全接入流水线）。                                       | P0-5                       | S          | ✅ 完成 |
+| P0-7  | 字幕检测（单视频）              | 实现 `SubtitleDetector`：对单个视频返回是否有字幕、人工字幕语言列表、自动字幕语言列表。                                                              | P0-5                       | M          | ✅ 完成 |
+| P0-8  | Dry Run 模式（仅检测 + 日志输出）| 在 CLI 中实现 Dry Run：只调用 `SubtitleDetector` 批量检测，结果输出到日志，严格遵守"只检测、不下载、不摘要、不写报告、不更新增量"的语义。           | P0-7, P0-3                 | M          | ✅ 完成 |
+| P0-9  | 批量检测 + 增量接入             | 把 `IncrementalManager` 接入 Dry Run 和正常处理流程：**针对频道 / 播放列表 / URL 列表**，第二次处理时只对未成功处理的视频做检测/处理；Dry Run 不更新增量。 | P0-6, P0-8                 | M          | ✅ 完成 |
+| P0-10 | 字幕下载模块                    | 实现 `SubtitleDownloader`：根据检测结果和翻译策略，下载原始字幕（原语言）以及官方翻译字幕（如有），暂不调用 AI 翻译。                              | P0-7, P0-3                 | M          | ✅ 完成 |
+| P0-11 | LanguageConfig & 翻译策略       | 实现 `LanguageConfig`，定义 UI 语言、字幕目标语言、摘要语言、双语模式、翻译策略等；所有翻译 / 摘要逻辑必须从这里读配置。                             | P0-2                       | S          | ✅ 完成 |
+| P0-12 | AI 翻译模块（单目标语言）       | 实现 `SubtitleTranslator`：在 `OFFICIAL_AUTO_THEN_AI` 等策略下，当官方字幕不足时调用 AI 翻译生成目标语言字幕（先支持一个主目标语言）。             | P0-10, P0-11               | M          | ✅ 完成 |
+| P0-12-fix | AI 翻译模块规范修复 | 重构 `SubtitleTranslator` 以符合 `ai_design.md` 规范：使用 `LLMClient` 接口，统一错误处理，支持重试逻辑。 | P0-12 | XS | ✅ 完成 |
+| P0-13 | AI 摘要模块（单语言）           | 实现 `Summarizer`：调用大模型对字幕文本生成单语言摘要；Prompt 模板集中在 `core/prompts.py`，不能写死"中文"，必须通过 `LanguageConfig` 注入语言。   | P0-11                      | M          | ✅ 完成 |
+| P0-13-fix | AI 摘要模块规范修复 | 重构 `Summarizer` 以符合 `ai_design.md` 规范：使用 `LLMClient` 接口，统一错误处理，支持重试逻辑。 | P0-13 | XS | ✅ 完成 |
+| P0-14 | 输出模块（目录结构 & 文件）     | 实现 `OutputWriter`：按 `v2_final_plan.md` 规定的结构创建目录和文件（`original` / `translated` / `summary` / `metadata`），使用语言代码命名。       | P0-10, P0-12, P0-13        | M          | ✅ 完成 |
+| P0-15 | 失败记录 & `failed.txt`         | 实现失败记录器：所有下载 / 翻译 / 摘要失败的视频，写入 `out/failed_detail.log` 和 `out/failed_urls.txt`；格式可读，追加写入。                        | P0-3, P0-14                | S          | ✅ 完成 |
 | P0-16 | 并发执行器 & 任务调度           | 实现 `TaskRunner`：队列 + worker 池并发执行，支持配置并发数；并发默认值保守（3），不在代码中硬锁死上限，对过高配置只做日志警告。                  | P0-5, P0-10, P0-12, P0-13  | L          | ⏳ 待开始 |
 | P0-17 | 代理支持 & 简易健康管理         | 支持多代理列表（数量不锁死）；实现简单健康逻辑（连续失败 N 次暂时禁用，过一段时间再试）；不实现复杂评分系统。                                     | P0-16                      | M          | ⏳ 待开始 |
 | P0-18 | Cookie 支持 & 测试逻辑          | 支持从配置中读取 Cookie；实现一个"测试请求"函数，用于检查 Cookie 是否可用、所在地区；结果输出到日志。                                            | P0-5                       | S          | ⏳ 待开始 |
