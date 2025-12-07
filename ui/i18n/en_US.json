@@ -1,0 +1,10 @@
+{
+  "app_name": "YouTube Subtitle Tool v2",
+  "channel_mode": "Channel Mode",
+  "url_list_mode": "URL List Mode",
+  "check_new_videos": "Check New Videos",
+  "start_processing": "Start Processing",
+  "open_output_folder": "Open Output Folder",
+  "open_config_folder": "Open Config Folder"
+}
+

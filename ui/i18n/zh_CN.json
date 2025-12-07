@@ -1,0 +1,10 @@
+{
+  "app_name": "YouTube 字幕工具 v2",
+  "channel_mode": "频道模式",
+  "url_list_mode": "URL 列表模式",
+  "check_new_videos": "检查新视频",
+  "start_processing": "开始处理",
+  "open_output_folder": "打开输出文件夹",
+  "open_config_folder": "打开配置文件夹"
+}
+
