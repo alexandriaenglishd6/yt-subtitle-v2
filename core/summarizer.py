@@ -1,6 +1,7 @@
 """
 AI 摘要模块
 调用大模型对字幕文本生成单语言摘要
+符合 error_handling.md 规范：将 LLMException 适配为 AppException
 """
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ from core.language import LanguageConfig
 from core.prompts import get_summary_prompt
 from core.logger import get_logger
 from core.llm_client import LLMClient, LLMException, LLMErrorType
+from core.exceptions import AppException, ErrorType, map_llm_error_to_app_error
 
 logger = get_logger()
 
@@ -119,18 +121,59 @@ class Summarizer:
                 )
                 return None
             
-            # 保存摘要文件
-            summary_path.write_text(summary_content, encoding="utf-8")
+            # 保存摘要文件（使用原子写）
+            from core.failure_logger import _atomic_write
+            if not _atomic_write(summary_path, summary_content, mode="w"):
+                logger.error(
+                    f"保存摘要文件失败",
+                    video_id=video_info.video_id,
+                    error_type=ErrorType.FILE_IO.value
+                )
+                return None
+            
             logger.info(
                 f"摘要生成完成: {summary_path.name}",
                 video_id=video_info.video_id
             )
             return summary_path
             
-        except Exception as e:
+        except LLMException as e:
+            # 将 LLMException 适配为 AppException
+            app_error = AppException(
+                message=f"摘要生成过程出错: {e}",
+                error_type=map_llm_error_to_app_error(e.error_type.value),
+                cause=e
+            )
             logger.error(
-                f"摘要生成过程出错: {e}",
-                video_id=video_info.video_id
+                f"摘要生成过程出错: {app_error}",
+                video_id=video_info.video_id,
+                error_type=app_error.error_type.value
+            )
+            return None
+        except (OSError, IOError, PermissionError) as e:
+            # 文件IO错误
+            app_error = AppException(
+                message=f"摘要生成过程文件IO错误: {e}",
+                error_type=ErrorType.FILE_IO,
+                cause=e
+            )
+            logger.error(
+                f"摘要生成过程文件IO错误: {app_error}",
+                video_id=video_info.video_id,
+                error_type=app_error.error_type.value
+            )
+            return None
+        except Exception as e:
+            # 未映射的异常，转换为 AppException
+            app_error = AppException(
+                message=f"摘要生成过程出错: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"摘要生成过程出错: {app_error}",
+                video_id=video_info.video_id,
+                error_type=app_error.error_type.value
             )
             return None
     
@@ -183,8 +226,29 @@ class Summarizer:
         """
         try:
             return srt_path.read_text(encoding="utf-8")
+        except (OSError, IOError, PermissionError) as e:
+            # 文件IO错误
+            app_error = AppException(
+                message=f"读取 SRT 文件失败: {e}",
+                error_type=ErrorType.FILE_IO,
+                cause=e
+            )
+            logger.error(
+                f"读取 SRT 文件失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            return None
         except Exception as e:
-            logger.error(f"读取 SRT 文件失败: {e}")
+            # 未映射的异常
+            app_error = AppException(
+                message=f"读取 SRT 文件失败: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"读取 SRT 文件失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
             return None
     
     def _extract_text_from_srt(self, srt_content: str) -> str:
@@ -241,4 +305,29 @@ class Summarizer:
         
         # 合并文本行，用空格分隔
         return ' '.join(text_lines)
+    
+    def _call_ai_api(self, prompt: str) -> Optional[str]:
+        """调用 AI API 生成摘要
+        
+        Args:
+            prompt: 摘要提示词
+        
+        Returns:
+            摘要文本，如果失败则返回 None
+        
+        Raises:
+            LLMException: 当 LLM 调用失败时抛出
+        """
+        try:
+            result = self.llm.generate(prompt)
+            return result.text
+        except LLMException:
+            # 重新抛出 LLMException，由调用方处理
+            raise
+        except Exception as e:
+            # 未映射的异常，转换为 LLMException
+            raise LLMException(
+                f"AI API 调用失败: {e}",
+                LLMErrorType.UNKNOWN
+            )
     

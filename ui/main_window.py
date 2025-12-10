@@ -1,4 +1,632 @@
 """
-主窗口 & 控件布局
+主窗口 & 控件布局（重构版）
+实现四区结构：顶部工具栏 + 左侧侧边栏 + 中间主区 + 底部日志框
+使用组件化架构，main_window 仅负责布局和事件接线
 """
+import customtkinter as ctk
+from typing import Optional
+from pathlib import Path
+import subprocess
+import platform
 
+from core.logger import Logger, get_logger
+from ui.themes import ThemeTokens, get_theme, ThemeName, apply_theme_to_window
+from ui.i18n_manager import t, set_language, get_language
+from ui.app_events import get_event_bus, EventType
+from ui.state import get_state_manager
+from ui.components.toolbar import Toolbar
+from ui.components.sidebar import Sidebar
+from ui.components.log_panel import LogPanel
+from ui.fonts import heading_font
+from ui.pages.channel_page import ChannelPage
+from ui.pages.run_params_page import RunParamsPage
+from ui.pages.appearance_page import AppearancePage
+from ui.pages.network_ai_page import NetworkAIPage
+from ui.pages.system_page import SystemPage
+from ui.business_logic import VideoProcessor
+from config.manager import get_user_data_dir, ConfigManager
+
+
+class MainWindow(ctk.CTk):
+    """主窗口类（重构版）
+    
+    实现四区布局，使用组件化架构：
+    - 顶部工具栏：应用标题、运行状态、功能按钮
+    - 左侧侧边栏：导航菜单（任务、运行设置、外观 & 系统）
+    - 中间主区：根据导航显示不同页面
+    - 底部日志框：实时显示日志
+    """
+    
+    def __init__(self):
+        super().__init__()
+        
+        # 窗口基本设置（先设置默认标题，i18n 初始化后会更新）
+        self.title("YouTube 字幕工具 v2")
+        self.geometry("1200x800")
+        self.minsize(800, 600)
+        
+        # 初始化配置管理器
+        self.config_manager = ConfigManager()
+        self.app_config = self.config_manager.load()
+        
+        # 初始化 i18n（从配置读取语言设置）
+        self._init_i18n()
+        
+        # 更新窗口标题（i18n 初始化后）
+        self.title(t("app_name"))
+        
+        # 确保语言设置正确应用（可选：记录日志，但此时 logger 还未初始化）
+        # current_lang = get_language()
+        # get_logger().info(f"当前语言: {current_lang}")  # 如果需要调试，可以取消注释
+        
+        # 当前主题（从配置加载或使用默认值）
+        self.current_theme: ThemeName = self._load_theme_from_config()
+        self.theme_tokens: ThemeTokens = get_theme(self.current_theme)
+        
+        # 初始化事件总线和状态管理器
+        self.event_bus = get_event_bus()
+        self.state_manager = get_state_manager()  # 重命名避免与 window.state() 冲突
+        
+        # 初始化 Logger（用于 GUI 日志输出）
+        self.logger = Logger(name="gui", console_output=False, file_output=True)
+        self.logger.add_callback(self._on_log_message)
+        
+        # 初始化业务逻辑处理器
+        self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+        
+        # 当前页面
+        self.current_page: Optional[ctk.CTkFrame] = None
+        self.current_page_name = "channel"
+        
+        # 处理状态
+        self.is_processing = False
+        
+        # 构建 UI
+        self._build_ui()
+        
+        # 订阅事件
+        self._subscribe_events()
+        
+        # 应用主题
+        apply_theme_to_window(self, self.theme_tokens, self.current_theme)
+        
+        # 初始化状态
+        self.state_manager.set("current_page", "channel")
+        self.state_manager.set("current_theme", self.current_theme)
+        self.state_manager.set("current_language", get_language())
+    
+    def _init_i18n(self):
+        """初始化 i18n，从配置读取语言设置"""
+        try:
+            if hasattr(self.app_config, 'ui_language') and self.app_config.ui_language:
+                set_language(self.app_config.ui_language)
+            else:
+                set_language("zh-CN")
+        except Exception:
+            set_language("zh-CN")
+    
+    def _load_theme_from_config(self) -> ThemeName:
+        """从配置加载主题设置"""
+        try:
+            if hasattr(self.app_config, 'theme') and self.app_config.theme:
+                theme_name = self.app_config.theme
+                if theme_name in ["light", "light_gray", "dark_gray", "claude_warm"]:
+                    return theme_name
+        except Exception:
+            pass
+        return "light"
+    
+    def _build_ui(self):
+        """构建 UI 布局"""
+        # 配置网格权重，使布局可伸缩
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        
+        # 1. 顶部工具栏
+        self.toolbar = Toolbar(
+            self,
+            current_mode=t("channel_mode"),
+            running_status=t("status_idle"),
+            current_theme=self.current_theme,
+            on_language_changed=self._on_language_changed,
+            on_theme_changed=self._on_theme_changed,
+            on_open_output=self._on_open_output_folder,
+            on_open_config=self._on_open_config_folder
+        )
+        self.toolbar.grid(row=0, column=0, columnspan=2, sticky="ew")
+        
+        # 2. 左侧侧边栏
+        self.sidebar = Sidebar(
+            self,
+            on_page_changed=self._switch_page
+        )
+        self.sidebar.grid(row=1, column=0, sticky="nsew")
+        
+        # 3. 中间主内容区
+        self.main_content = ctk.CTkFrame(self)
+        self.main_content.grid(row=1, column=1, sticky="nsew", padx=8, pady=8)
+        self.main_content.grid_columnconfigure(0, weight=1)
+        self.main_content.grid_rowconfigure(0, weight=1)
+        
+        # 页面容器
+        self.page_container = ctk.CTkFrame(self.main_content)
+        self.page_container.pack(fill="both", expand=True)
+        
+        # 4. 底部日志框
+        self.log_panel = LogPanel(self, height=200)
+        self.log_panel.grid(row=2, column=0, columnspan=2, sticky="ew")
+        
+        # 5. 默认显示频道页面
+        self._switch_page("channel")
+    
+    def _subscribe_events(self):
+        """订阅事件"""
+        self.event_bus.subscribe(EventType.STATUS_CHANGED, self._on_status_changed)
+        self.event_bus.subscribe(EventType.STATS_UPDATED, self._on_stats_updated)
+    
+    def _switch_page(self, page_name: str):
+        """切换页面"""
+        # 清除当前页面
+        for widget in self.page_container.winfo_children():
+            widget.destroy()
+        
+        self.current_page_name = page_name
+        
+        # 创建并显示目标页面
+        if page_name == "channel":
+            page = ChannelPage(
+                self.page_container,
+                on_check_new=self._on_check_new_videos,
+                on_start_processing=self._on_start_processing,
+                stats=self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0, "current": 0}),
+                running_status=self.state_manager.get("running_status", t("status_idle")),
+                language_config=self.app_config.language.to_dict() if self.app_config.language else {},
+                on_save_language_config=self._on_save_language_config
+            )
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("channel_mode"))
+            self.state_manager.set("current_mode", t("channel_mode"))
+            
+        elif page_name == "run_params":
+            page = RunParamsPage(
+                self.page_container,
+                concurrency=self.app_config.concurrency,
+                on_save=self._on_save_run_params
+            )
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("run_params"))
+            self.state_manager.set("current_mode", t("run_params"))
+            
+        elif page_name == "appearance":
+            page = AppearancePage(self.page_container)
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("appearance_lang"))
+            
+        elif page_name == "network_ai":
+            page = NetworkAIPage(
+                self.page_container,
+                cookie=self.app_config.cookie,
+                proxies=self.app_config.proxies,
+                ai_config=self.app_config.ai.to_dict() if self.app_config.ai else {},
+                output_dir=self.app_config.output_dir,
+                on_save_cookie=self._on_save_cookie,
+                on_save_proxies=self._on_save_proxies,
+                on_save_ai_config=self._on_save_ai_config,
+                on_save_output_dir=self._on_save_output_dir,
+                on_log_message=self._on_log
+            )
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("network_ai"))
+            
+        elif page_name == "system":
+            page = SystemPage(self.page_container)
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("system_tools"))
+            
+        else:
+            # 占位页面
+            placeholder = ctk.CTkLabel(
+                self.page_container,
+                text=t("page_not_implemented", page=page_name),
+                font=heading_font()
+            )
+            placeholder.pack(expand=True)
+    
+    def _on_check_new_videos(self, url: str):
+        """检查新视频按钮点击（Dry Run）"""
+        if not url:
+            self.log_panel.append_log("WARN", "请输入频道 URL")
+            return
+        
+        if self.is_processing:
+            self.log_panel.append_log("WARN", "正在处理中，请等待完成")
+            return
+        
+        self.is_processing = True
+        
+        # 创建线程安全的回调包装器
+        def safe_on_log(level: str, message: str, video_id: Optional[str] = None):
+            """线程安全的日志回调"""
+            def update_ui():
+                self._on_log(level, message, video_id)
+            self.after(0, update_ui)
+        
+        def safe_on_status(status: str):
+            """线程安全的状态更新回调"""
+            def update_ui():
+                self._on_status(status)
+            self.after(0, update_ui)
+        
+        def safe_on_complete():
+            """线程安全的完成回调"""
+            def update_ui():
+                self.is_processing = False
+            self.after(0, update_ui)
+        
+        self.video_processor.dry_run(
+            url=url,
+            on_log=safe_on_log,
+            on_status=safe_on_status,
+            on_complete=safe_on_complete
+        )
+    
+    def _on_start_processing(self, url: str):
+        """开始处理按钮点击"""
+        if not url:
+            self.log_panel.append_log("WARN", "请输入频道 URL")
+            return
+        
+        if self.is_processing:
+            self.log_panel.append_log("WARN", "正在处理中，请等待完成")
+            return
+        
+        self.is_processing = True
+        
+        # 创建线程安全的回调包装器
+        def safe_on_log(level: str, message: str, video_id: Optional[str] = None):
+            """线程安全的日志回调"""
+            def update_ui():
+                self._on_log(level, message, video_id)
+            self.after(0, update_ui)
+        
+        def safe_on_status(status: str):
+            """线程安全的状态更新回调"""
+            def update_ui():
+                self._on_status(status)
+            self.after(0, update_ui)
+        
+        def safe_on_stats(stats: dict):
+            """线程安全的统计信息更新回调"""
+            def update_ui():
+                self._on_stats(stats)
+            self.after(0, update_ui)
+        
+        def safe_on_complete():
+            """线程安全的完成回调"""
+            def update_ui():
+                self.is_processing = False
+            self.after(0, update_ui)
+        
+        # 添加初始日志
+        self.log_panel.append_log("INFO", f"开始处理：{url}")
+        
+        # 启动处理任务
+        thread = self.video_processor.process_videos(
+            url=url,
+            on_log=safe_on_log,
+            on_status=safe_on_status,
+            on_stats=safe_on_stats,
+            on_complete=safe_on_complete
+        )
+        
+        # 确认线程已启动
+        if thread and thread.is_alive():
+            self.log_panel.append_log("DEBUG", "处理任务线程已启动")
+        else:
+            self.log_panel.append_log("ERROR", "处理任务线程启动失败")
+    
+    def _on_save_cookie(self, cookie: str):
+        """保存 Cookie"""
+        try:
+            self.app_config.cookie = cookie
+            self.config_manager.save(self.app_config)
+            # 重新初始化核心组件（以使用新的 Cookie）
+            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+            self.log_panel.append_log("INFO", "Cookie 已保存并重新加载")
+        except Exception as e:
+            logger = get_logger()
+            logger.error(f"保存 Cookie 失败: {e}")
+            self.log_panel.append_log("ERROR", f"保存 Cookie 失败: {e}")
+    
+    def _on_save_proxies(self, proxies: list):
+        """保存代理列表"""
+        try:
+            self.app_config.proxies = proxies
+            self.config_manager.save(self.app_config)
+            # 重新初始化核心组件（以使用新的代理）
+            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+            self.log_panel.append_log("INFO", f"代理设置已保存（共 {len(proxies)} 个）")
+        except Exception as e:
+            logger = get_logger()
+            logger.error(f"保存代理设置失败: {e}")
+            self.log_panel.append_log("ERROR", f"保存代理设置失败: {e}")
+    
+    def _on_save_ai_config(self, ai_config: dict):
+        """保存 AI 配置"""
+        try:
+            from config.manager import AIConfig
+            self.app_config.ai = AIConfig.from_dict(ai_config)
+            self.config_manager.save(self.app_config)
+            # 重新初始化核心组件（以使用新的 AI 配置）
+            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+            self.log_panel.append_log("INFO", f"AI 配置已保存: {ai_config.get('provider', 'unknown')} - {ai_config.get('model', 'unknown')}")
+        except Exception as e:
+            logger = get_logger()
+            logger.error(f"保存 AI 配置失败: {e}")
+            self.log_panel.append_log("ERROR", f"保存 AI 配置失败: {e}")
+    
+    def _on_save_output_dir(self, output_dir: str):
+        """保存输出目录"""
+        try:
+            self.app_config.output_dir = output_dir
+            self.config_manager.save(self.app_config)
+            self.log_panel.append_log("INFO", f"输出目录已保存: {output_dir}")
+        except Exception as e:
+            logger = get_logger()
+            logger.error(f"保存输出目录失败: {e}")
+            self.log_panel.append_log("ERROR", f"保存输出目录失败: {e}")
+    
+    def _on_save_language_config(self, language_config: dict):
+        """保存语言配置"""
+        try:
+            from core.language import LanguageConfig
+            # 保留 ui_language（因为它在 AppConfig 中单独存储）
+            current_ui_language = self.app_config.language.ui_language if self.app_config.language else "zh-CN"
+            # 合并配置
+            merged_config = {
+                "ui_language": current_ui_language,
+                **language_config
+            }
+            self.app_config.language = LanguageConfig.from_dict(merged_config)
+            self.config_manager.save(self.app_config)
+            # 重新初始化核心组件（以使用新的语言配置）
+            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+            self.log_panel.append_log("INFO", "语言配置已保存并重新加载")
+        except Exception as e:
+            logger = get_logger()
+            logger.error(f"保存语言配置失败: {e}")
+            self.log_panel.append_log("ERROR", f"保存语言配置失败: {e}")
+    
+    def _on_save_run_params(self, concurrency: int):
+        """保存运行参数"""
+        try:
+            self.app_config.concurrency = concurrency
+            self.config_manager.save(self.app_config)
+            self.log_panel.append_log("INFO", f"并发数已更新为: {concurrency}")
+        except Exception as e:
+            self.log_panel.append_log("ERROR", f"保存运行参数失败: {e}")
+    
+    def _on_language_changed(self, value: str):
+        """语言切换回调"""
+        # 直接比较显示文本，因为翻译文件中 language_zh 和 language_en 的值是固定的
+        # zh_CN.json: "language_zh": "中文", "language_en": "English"
+        # en_US.json: "language_zh": "中文", "language_en": "English"
+        logger = get_logger()
+        logger.info(f"语言切换回调被调用，value={value}")
+        
+        if value == "中文":
+            new_lang = "zh-CN"
+        elif value == "English":
+            new_lang = "en-US"
+        else:
+            logger.warning(f"未知的语言值: {value}")
+            return
+        
+        current_lang = get_language()
+        logger.info(f"当前语言: {current_lang}, 新语言: {new_lang}")
+        
+        if current_lang == new_lang:
+            logger.info("语言未变化，跳过")
+            return
+        
+        set_language(new_lang)
+        logger.info(f"语言已设置为: {new_lang}, 测试翻译: {t('app_name')}")
+        
+        # 保存到配置
+        try:
+            if hasattr(self.app_config, 'ui_language'):
+                self.app_config.ui_language = new_lang
+                self.config_manager.save(self.app_config)
+                logger.info("语言设置已保存到配置")
+        except Exception as e:
+            logger.error(f"保存语言设置失败: {e}")
+        
+        # 刷新 UI 文本
+        self._refresh_ui_texts()
+        self.state_manager.set("current_language", new_lang)
+        self.event_bus.publish(EventType.LANGUAGE_CHANGED, new_lang)
+        logger.info("UI 文本刷新完成")
+    
+    def _on_theme_changed(self, value: str):
+        """主题切换回调"""
+        # 直接通过翻译文本反向查找主题名
+        # 需要同时支持中英文翻译
+        theme_map = {}
+        for theme_key in ["light", "light_gray", "dark_gray", "claude_warm"]:
+            # 获取当前语言下的主题显示名称
+            theme_display = t(f"theme_{theme_key}")
+            theme_map[theme_display] = theme_key
+            # 也支持英文翻译（以防万一）
+            from ui.i18n_manager import load_translations
+            en_translations = load_translations("en-US")
+            if en_translations:
+                en_display = en_translations.get(f"theme_{theme_key}", "")
+                if en_display:
+                    theme_map[en_display] = theme_key
+        
+        theme_name = theme_map.get(value, "light")
+        
+        # 调试日志
+        logger = get_logger()
+        logger.info(f"主题切换: value={value}, theme_name={theme_name}, current_theme={self.current_theme}")
+        
+        if theme_name != self.current_theme:
+            self.current_theme = theme_name
+            self.theme_tokens = get_theme(theme_name)
+            
+            # 同步更新 toolbar 的 current_theme，并刷新下拉框显示
+            # 这会在下拉框中显示正确的主题名称
+            self.toolbar.update_theme(theme_name)
+            
+            # 保存到配置
+            try:
+                if hasattr(self.app_config, 'theme'):
+                    self.app_config.theme = theme_name
+                    self.config_manager.save(self.app_config)
+                    logger.info(f"主题已保存到配置: {theme_name}")
+            except Exception as e:
+                logger.error(f"保存主题设置失败: {e}")
+            
+            # 应用主题
+            apply_theme_to_window(self, self.theme_tokens, self.current_theme)
+            
+            # 强制刷新所有组件（确保主题立即生效）
+            self.update_idletasks()
+            self.update()
+            
+            self.state_manager.set("current_theme", theme_name)
+            self.event_bus.publish(EventType.THEME_CHANGED, theme_name)
+    
+    def _refresh_ui_texts(self):
+        """刷新 UI 中的所有文本（语言切换后调用）"""
+        # 更新窗口标题（set_language 已经加载了翻译）
+        self.title(t("app_name"))
+        
+        # 刷新组件文本
+        self.toolbar.refresh_language()
+        self.sidebar.refresh_language()
+        self.log_panel.refresh_language()
+        
+        # 刷新状态显示（确保使用翻译键）
+        current_status = self.state_manager.get("running_status", "status_idle")
+        # 如果状态不是翻译键，尝试转换
+        if not current_status.startswith("status_"):
+            from ui.i18n_manager import get_language, load_translations
+            current_lang = get_language()
+            translations = load_translations(current_lang)
+            status_key = None
+            for key, value in translations.items():
+                if key.startswith("status_") and value == current_status:
+                    status_key = key
+                    break
+            if status_key:
+                current_status = status_key
+            else:
+                current_status = "status_idle"
+        self.toolbar.update_status(current_status)
+        
+        # 重新构建当前页面（确保所有文本都更新）
+        if self.current_page_name:
+            # 保存当前页面的状态（如果有）
+            saved_stats = None
+            saved_status = None
+            if isinstance(self.current_page, ChannelPage):
+                saved_stats = self.current_page.stats
+                saved_status = self.current_page.running_status
+            
+            # 重新切换页面（会重新构建，使用新语言）
+            self._switch_page(self.current_page_name)
+            
+            # 恢复状态（使用翻译键）
+            if isinstance(self.current_page, ChannelPage) and saved_stats:
+                self.current_page.update_stats(saved_stats, current_status)
+        else:
+            # 如果无法重新构建，至少刷新现有页面
+            if self.current_page and hasattr(self.current_page, 'refresh_language'):
+                self.current_page.refresh_language()
+        
+        # 重新应用主题（确保颜色正确）
+        apply_theme_to_window(self, self.theme_tokens, self.current_theme)
+        self.toolbar.refresh_theme_combo()
+    
+    def _on_open_output_folder(self):
+        """打开输出文件夹"""
+        output_dir = Path(self.app_config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        system = platform.system()
+        if system == "Windows":
+            subprocess.Popen(f'explorer "{output_dir.absolute()}"')
+        elif system == "Darwin":  # macOS
+            subprocess.Popen(["open", str(output_dir.absolute())])
+        else:  # Linux
+            subprocess.Popen(["xdg-open", str(output_dir.absolute())])
+        
+        self.log_panel.append_log("INFO", f"已打开输出文件夹：{output_dir.absolute()}")
+    
+    def _on_open_config_folder(self):
+        """打开配置文件夹"""
+        config_dir = get_user_data_dir()
+        
+        system = platform.system()
+        if system == "Windows":
+            subprocess.Popen(f'explorer "{config_dir.absolute()}"')
+        elif system == "Darwin":  # macOS
+            subprocess.Popen(["open", str(config_dir.absolute())])
+        else:  # Linux
+            subprocess.Popen(["xdg-open", str(config_dir.absolute())])
+        
+        self.log_panel.append_log("INFO", f"已打开配置文件夹：{config_dir.absolute()}")
+    
+    def _on_log_message(self, level: str, message: str, video_id: Optional[str] = None):
+        """日志回调函数（从 Logger 接收日志）"""
+        self.after(0, lambda: self._on_log(level, message, video_id))
+    
+    def _on_log(self, level: str, message: str, video_id: Optional[str] = None):
+        """处理日志消息"""
+        self.log_panel.append_log(level, message, video_id)
+    
+    def _on_status(self, status: str):
+        """处理状态更新"""
+        # 确保 status 是翻译键，如果不是则尝试转换
+        if not status.startswith("status_"):
+            # 尝试反向查找翻译键
+            from ui.i18n_manager import get_language, load_translations
+            current_lang = get_language()
+            translations = load_translations(current_lang)
+            # 查找匹配的翻译值
+            status_key = None
+            for key, value in translations.items():
+                if key.startswith("status_") and value == status:
+                    status_key = key
+                    break
+            if status_key:
+                status = status_key
+            else:
+                # 如果找不到，使用默认的 status_idle
+                status = "status_idle"
+        
+        self.toolbar.update_status(status)
+        self.state_manager.set("running_status", status)
+        self.event_bus.publish(EventType.STATUS_CHANGED, status)
+    
+    def _on_stats(self, stats: dict):
+        """处理统计信息更新"""
+        self.state_manager.set("stats", stats)
+        if isinstance(self.current_page, ChannelPage):
+            self.current_page.update_stats(stats, self.state_manager.get("running_status", ""))
+        self.event_bus.publish(EventType.STATS_UPDATED, stats)
+    
+    def _on_status_changed(self, status: str):
+        """状态变化事件处理"""
+        self.toolbar.update_status(status)
+    
+    def _on_stats_updated(self, stats: dict):
+        """统计信息更新事件处理"""
+        if isinstance(self.current_page, ChannelPage):
+            self.current_page.update_stats(stats, self.state_manager.get("running_status", ""))

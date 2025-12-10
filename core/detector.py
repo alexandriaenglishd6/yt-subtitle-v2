@@ -8,6 +8,8 @@ from typing import Optional
 
 from core.models import DetectionResult, VideoInfo
 from core.logger import get_logger
+from core.exceptions import AppException, ErrorType
+from core.fetcher import _map_ytdlp_error_to_app_error
 
 logger = get_logger()
 
@@ -18,13 +20,15 @@ class SubtitleDetector:
     负责检测单个视频的字幕情况，区分人工字幕和自动字幕
     """
     
-    def __init__(self, yt_dlp_path: Optional[str] = None):
+    def __init__(self, yt_dlp_path: Optional[str] = None, cookie_manager=None):
         """初始化字幕检测器
         
         Args:
             yt_dlp_path: yt-dlp 可执行文件路径，如果为 None 则使用系统 PATH 中的 yt-dlp
+            cookie_manager: CookieManager 实例，如果为 None 则不使用 Cookie
         """
         self.yt_dlp_path = yt_dlp_path or "yt-dlp"
+        self.cookie_manager = cookie_manager
     
     def detect(self, video_info: VideoInfo) -> DetectionResult:
         """检测视频字幕情况
@@ -91,14 +95,27 @@ class SubtitleDetector:
             
             return result
             
-        except Exception as e:
-            logger.error(f"字幕检测失败: {e}", video_id=video_info.video_id)
-            return DetectionResult(
+        except AppException as e:
+            # AppException 应该被重新抛出，让调用者处理
+            logger.error(
+                f"字幕检测失败: {e}",
                 video_id=video_info.video_id,
-                has_subtitles=False,
-                manual_languages=[],
-                auto_languages=[]
+                error_type=e.error_type.value
             )
+            raise
+        except Exception as e:
+            # 其他异常转换为 AppException
+            app_error = AppException(
+                message=f"字幕检测失败: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"字幕检测失败: {app_error}",
+                video_id=video_info.video_id,
+                error_type=app_error.error_type.value
+            )
+            raise app_error
     
     def _get_subtitle_info_ytdlp(self, url: str) -> Optional[dict]:
         """使用 yt-dlp 获取字幕信息
@@ -116,8 +133,20 @@ class SubtitleDetector:
                 "--dump-json",
                 "--no-warnings",
                 "--skip-download",  # 不下载视频，只获取信息
-                url
             ]
+            
+            # 如果配置了 Cookie，添加 Cookie 参数
+            if self.cookie_manager:
+                cookie_file = self.cookie_manager.get_cookie_file_path()
+                if cookie_file:
+                    cmd.extend(["--cookies", cookie_file])
+                    logger.info(f"使用 Cookie 文件检测字幕: {cookie_file}")
+                else:
+                    logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径（字幕检测）")
+            else:
+                logger.debug("未配置 Cookie 管理器（字幕检测）")
+            
+            cmd.append(url)
             
             result = subprocess.run(
                 cmd,
@@ -127,8 +156,18 @@ class SubtitleDetector:
             )
             
             if result.returncode != 0:
-                logger.error(f"yt-dlp 执行失败: {result.stderr}")
-                return None
+                # 将 yt-dlp 错误映射为 AppException
+                app_error = _map_ytdlp_error_to_app_error(
+                    returncode=result.returncode,
+                    stderr=result.stderr or "",
+                    timeout=False
+                )
+                logger.error(
+                    f"yt-dlp 执行失败: {app_error}",
+                    error_type=app_error.error_type.value
+                )
+                # 抛出异常，而不是返回 None
+                raise app_error
             
             # 解析 JSON
             data = json.loads(result.stdout)
@@ -142,14 +181,40 @@ class SubtitleDetector:
             return subtitle_info
             
         except subprocess.TimeoutExpired:
-            logger.error(f"获取字幕信息超时: {url}")
-            return None
+            app_error = AppException(
+                message=f"获取字幕信息超时: {url}",
+                error_type=ErrorType.TIMEOUT
+            )
+            logger.error(
+                f"获取字幕信息超时: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            raise app_error
         except json.JSONDecodeError as e:
-            logger.error(f"解析 yt-dlp 输出失败: {e}")
-            return None
+            app_error = AppException(
+                message=f"解析 yt-dlp 输出失败: {e}",
+                error_type=ErrorType.PARSE,
+                cause=e
+            )
+            logger.error(
+                f"解析 yt-dlp 输出失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            raise app_error
+        except AppException:
+            # 重新抛出 AppException
+            raise
         except Exception as e:
-            logger.error(f"获取字幕信息时出错: {e}")
-            return None
+            app_error = AppException(
+                message=f"获取字幕信息时出错: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"获取字幕信息时出错: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            raise app_error
     
     def detect_by_url(self, url: str, video_id: Optional[str] = None) -> DetectionResult:
         """通过 URL 检测字幕（便捷方法）

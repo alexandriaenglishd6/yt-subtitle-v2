@@ -245,9 +245,23 @@ def _run_full_pipeline(url: str, logger, force: bool = False) -> int:
         config_manager = ConfigManager()
         config = config_manager.load()
         
+        # 创建代理管理器（如果有代理配置）
+        from core.proxy_manager import ProxyManager
+        proxy_manager = None
+        if config.proxies:
+            proxy_manager = ProxyManager(proxies=config.proxies)
+            logger.info(f"已配置 {len(config.proxies)} 个代理")
+        
+        # 创建 Cookie 管理器（如果有 Cookie 配置）
+        from core.cookie_manager import CookieManager
+        cookie_manager = None
+        if config.cookie:
+            cookie_manager = CookieManager(cookie_string=config.cookie)
+            logger.info("已配置 Cookie")
+        
         # 获取视频列表
         logger.info(f"获取视频列表: {url}")
-        fetcher = VideoFetcher()
+        fetcher = VideoFetcher(proxy_manager=proxy_manager, cookie_manager=cookie_manager)
         all_videos = fetcher.fetch_from_url(url)
         
         if not all_videos:
@@ -295,7 +309,7 @@ def _run_full_pipeline(url: str, logger, force: bool = False) -> int:
         output_writer = OutputWriter(output_dir)
         failure_logger = FailureLogger(output_dir)
         
-        # 处理视频列表
+        # 处理视频列表（使用配置的并发数、代理和 Cookie）
         stats = process_video_list(
             videos,
             config.language,
@@ -304,7 +318,10 @@ def _run_full_pipeline(url: str, logger, force: bool = False) -> int:
             failure_logger,
             incremental_manager,
             archive_path,
-            force
+            force,
+            concurrency=config.concurrency,
+            proxy_manager=proxy_manager,
+            cookie_manager=cookie_manager
         )
         
         # 输出汇总
@@ -353,9 +370,23 @@ def _run_full_pipeline_for_urls(file_path: Path, logger, force: bool = False) ->
         config_manager = ConfigManager()
         config = config_manager.load()
         
+        # 创建代理管理器（如果有代理配置）
+        from core.proxy_manager import ProxyManager
+        proxy_manager = None
+        if config.proxies:
+            proxy_manager = ProxyManager(proxies=config.proxies)
+            logger.info(f"已配置 {len(config.proxies)} 个代理")
+        
+        # 创建 Cookie 管理器（如果有 Cookie 配置）
+        from core.cookie_manager import CookieManager
+        cookie_manager = None
+        if config.cookie:
+            cookie_manager = CookieManager(cookie_string=config.cookie)
+            logger.info("已配置 Cookie")
+        
         # 获取视频列表
         logger.info(f"从文件读取 URL 列表: {file_path}")
-        fetcher = VideoFetcher()
+        fetcher = VideoFetcher(proxy_manager=proxy_manager, cookie_manager=cookie_manager)
         all_videos = fetcher.fetch_from_file(file_path)
         
         if not all_videos:
@@ -402,7 +433,7 @@ def _run_full_pipeline_for_urls(file_path: Path, logger, force: bool = False) ->
         output_writer = OutputWriter(output_dir)
         failure_logger = FailureLogger(output_dir)
         
-        # 处理视频列表
+        # 处理视频列表（使用配置的并发数、代理和 Cookie）
         stats = process_video_list(
             videos,
             config.language,
@@ -411,7 +442,10 @@ def _run_full_pipeline_for_urls(file_path: Path, logger, force: bool = False) ->
             failure_logger,
             incremental_manager,
             archive_path,
-            force
+            force,
+            concurrency=config.concurrency,
+            proxy_manager=proxy_manager,
+            cookie_manager=cookie_manager
         )
         
         # 输出汇总
@@ -573,6 +607,13 @@ def main():
         help="强制重跑：忽略历史记录，重新处理所有视频"
     )
     urls_parser.set_defaults(func=urls_command)
+    
+    # test-cookie 子命令
+    test_cookie_parser = subparsers.add_parser(
+        "test-cookie",
+        help="测试 Cookie：检查 Cookie 是否可用、所在地区"
+    )
+    test_cookie_parser.set_defaults(func=test_cookie_command)
     
     # 解析参数
     args = parser.parse_args()

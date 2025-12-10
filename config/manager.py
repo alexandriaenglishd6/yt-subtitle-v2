@@ -97,6 +97,8 @@ class AppConfig:
     cookie: str = ""  # Cookie 字符串
     output_dir: str = "out"  # 输出目录（相对路径）
     ai: AIConfig = field(default_factory=AIConfig)
+    ui_language: str = "zh-CN"  # UI 语言（zh-CN / en-US）
+    theme: str = "light"  # UI 主题（light / light_gray / dark_gray / claude_warm）
     
     def to_dict(self) -> dict:
         """转换为字典（用于 JSON 序列化）"""
@@ -107,6 +109,8 @@ class AppConfig:
             "cookie": self.cookie,
             "output_dir": self.output_dir,
             "ai": self.ai.to_dict(),
+            "ui_language": self.ui_language,
+            "theme": self.theme,
         }
     
     @classmethod
@@ -119,6 +123,8 @@ class AppConfig:
             cookie=data.get("cookie", ""),
             output_dir=data.get("output_dir", "out"),
             ai=AIConfig.from_dict(data.get("ai", {})),
+            ui_language=data.get("ui_language", "zh-CN"),
+            theme=data.get("theme", "light"),
         )
     
     @classmethod

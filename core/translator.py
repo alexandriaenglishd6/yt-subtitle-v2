@@ -1,6 +1,7 @@
 """
 字幕翻译模块
 根据翻译策略调用 AI 翻译或使用官方字幕
+符合 error_handling.md 规范：将 LLMException 适配为 AppException
 """
 import os
 import re
@@ -12,6 +13,7 @@ from core.language import LanguageConfig
 from core.prompts import get_translation_prompt
 from core.logger import get_logger
 from core.llm_client import LLMClient, LLMException, LLMErrorType
+from core.exceptions import AppException, ErrorType, map_llm_error_to_app_error
 from config.manager import AIConfig
 
 logger = get_logger()
@@ -138,10 +140,31 @@ class SubtitleTranslator:
                     )
                 else:
                     result[target_lang] = None
-            except Exception as e:
+            except LLMException as e:
+                # 将 LLMException 适配为 AppException
+                app_error = AppException(
+                    message=f"AI 翻译失败: {e}",
+                    error_type=map_llm_error_to_app_error(e.error_type.value),
+                    cause=e
+                )
                 logger.error(
-                    f"AI 翻译失败: {e}",
-                    video_id=video_info.video_id
+                    f"AI 翻译失败: {app_error}",
+                    video_id=video_info.video_id,
+                    error_type=app_error.error_type.value
+                )
+                result[target_lang] = None
+                # 不抛出异常，继续处理其他语言
+            except Exception as e:
+                # 未映射的异常，转换为 AppException
+                app_error = AppException(
+                    message=f"AI 翻译失败: {e}",
+                    error_type=ErrorType.UNKNOWN,
+                    cause=e
+                )
+                logger.error(
+                    f"AI 翻译失败: {app_error}",
+                    video_id=video_info.video_id,
+                    error_type=app_error.error_type.value
                 )
                 result[target_lang] = None
         
@@ -194,8 +217,29 @@ class SubtitleTranslator:
         try:
             import shutil
             shutil.copy2(source_path, target_path)
+        except (OSError, IOError, PermissionError) as e:
+            # 文件IO错误
+            app_error = AppException(
+                message=f"复制文件失败: {e}",
+                error_type=ErrorType.FILE_IO,
+                cause=e
+            )
+            logger.error(
+                f"复制文件失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            # 不抛出异常，由调用方决定如何处理
         except Exception as e:
-            logger.error(f"复制文件失败: {e}")
+            # 未映射的异常
+            app_error = AppException(
+                message=f"复制文件失败: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"复制文件失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
     
     def _translate_with_ai(
         self,
@@ -241,12 +285,52 @@ class SubtitleTranslator:
                 logger.error("AI API 调用失败")
                 return None
             
-            # 保存翻译后的字幕文件
-            output_path.write_text(translated_text, encoding="utf-8")
+            # 保存翻译后的字幕文件（使用原子写）
+            from core.failure_logger import _atomic_write
+            if not _atomic_write(output_path, translated_text, mode="w"):
+                logger.error(
+                    "保存翻译文件失败",
+                    error_type=ErrorType.FILE_IO.value
+                )
+                return None
+            
             return output_path
             
+        except LLMException as e:
+            # 将 LLMException 适配为 AppException
+            app_error = AppException(
+                message=f"AI 翻译过程出错: {e}",
+                error_type=map_llm_error_to_app_error(e.error_type.value),
+                cause=e
+            )
+            logger.error(
+                f"AI 翻译过程出错: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            return None
+        except (OSError, IOError, PermissionError) as e:
+            # 文件IO错误
+            app_error = AppException(
+                message=f"AI 翻译过程文件IO错误: {e}",
+                error_type=ErrorType.FILE_IO,
+                cause=e
+            )
+            logger.error(
+                f"AI 翻译过程文件IO错误: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            return None
         except Exception as e:
-            logger.error(f"AI 翻译过程出错: {e}")
+            # 未映射的异常，转换为 AppException
+            app_error = AppException(
+                message=f"AI 翻译过程出错: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"AI 翻译过程出错: {app_error}",
+                error_type=app_error.error_type.value
+            )
             return None
     
     def _determine_source_language(self, detection_result: DetectionResult) -> Optional[str]:
@@ -276,7 +360,52 @@ class SubtitleTranslator:
         """
         try:
             return srt_path.read_text(encoding="utf-8")
+        except (OSError, IOError, PermissionError) as e:
+            # 文件IO错误
+            app_error = AppException(
+                message=f"读取 SRT 文件失败: {e}",
+                error_type=ErrorType.FILE_IO,
+                cause=e
+            )
+            logger.error(
+                f"读取 SRT 文件失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
+            return None
         except Exception as e:
-            logger.error(f"读取 SRT 文件失败: {e}")
+            # 未映射的异常
+            app_error = AppException(
+                message=f"读取 SRT 文件失败: {e}",
+                error_type=ErrorType.UNKNOWN,
+                cause=e
+            )
+            logger.error(
+                f"读取 SRT 文件失败: {app_error}",
+                error_type=app_error.error_type.value
+            )
             return None
     
+    def _call_ai_api(self, prompt: str) -> Optional[str]:
+        """调用 AI API 进行翻译
+        
+        Args:
+            prompt: 翻译提示词
+        
+        Returns:
+            翻译后的文本，如果失败则返回 None
+        
+        Raises:
+            LLMException: 当 LLM 调用失败时抛出
+        """
+        try:
+            result = self.llm.generate(prompt)
+            return result.text
+        except LLMException:
+            # 重新抛出 LLMException，由调用方处理
+            raise
+        except Exception as e:
+            # 未映射的异常，转换为 LLMException
+            raise LLMException(
+                f"AI API 调用失败: {e}",
+                LLMErrorType.UNKNOWN
+            )
