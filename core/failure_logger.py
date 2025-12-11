@@ -36,8 +36,18 @@ def _atomic_write(file_path: Path, content: str, mode: str = "a") -> bool:
         # 确保目录存在
         file_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # 写入临时文件
-        with open(tmp_path, mode, encoding="utf-8") as f:
+        # 如果是追加模式且原文件存在，先读取原文件内容
+        existing_content = ""
+        if mode == "a" and file_path.exists():
+            try:
+                existing_content = file_path.read_text(encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"读取原文件失败，将创建新文件: {e}")
+        
+        # 写入临时文件（追加模式下先写入原内容，再写入新内容）
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            if mode == "a":
+                f.write(existing_content)
             f.write(content)
             f.flush()
             os.fsync(f.fileno())  # 强制刷新到磁盘

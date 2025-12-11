@@ -49,19 +49,20 @@ class TaskRunner:
         self._lock = threading.Lock()
         self._completed_count = 0
         self._total_count = 0
+        self._running_tasks: Dict[Future, str] = {}  # 跟踪正在运行的任务
     
     def run_tasks(
         self,
         tasks: List[Callable[[], Any]],
         task_names: Optional[List[str]] = None,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int, List[str]], None]] = None
     ) -> Dict[str, Any]:
         """并发执行任务列表
         
         Args:
             tasks: 任务函数列表（每个函数不接受参数，返回任务结果）
             task_names: 任务名称列表（用于日志），如果为 None 则使用索引
-            progress_callback: 进度回调函数 (completed, total) -> None
+            progress_callback: 进度回调函数 (completed, total, running_tasks) -> None
         
         Returns:
             执行结果字典：
@@ -87,6 +88,7 @@ class TaskRunner:
         self._completed_count = 0
         self._results = []
         self._errors = []
+        self._running_tasks = {}
         
         # 如果没有提供任务名称，使用索引
         if task_names is None:
@@ -106,6 +108,9 @@ class TaskRunner:
             for i, (task, task_name) in enumerate(zip(tasks, task_names)):
                 future = executor.submit(self._execute_task, task, task_name, i)
                 future_to_task[future] = (task_name, i)
+                # 记录正在运行的任务
+                with self._lock:
+                    self._running_tasks[future] = task_name
             
             # 等待所有任务完成
             for future in as_completed(future_to_task):
@@ -116,26 +121,38 @@ class TaskRunner:
                         if result is not None:
                             self._results.append(result)
                         self._completed_count += 1
+                        # 从运行列表中移除
+                        self._running_tasks.pop(future, None)
                         
                         # 调用进度回调
                         if progress_callback:
                             try:
-                                progress_callback(self._completed_count, self._total_count)
+                                running_list = list(self._running_tasks.values())
+                                progress_callback(self._completed_count, self._total_count, running_list)
                             except Exception as e:
                                 logger.warning(f"进度回调执行失败: {e}")
                 except Exception as e:
+                    # 提取错误类型（如果是 AppException）
+                    error_type = "unknown"
+                    if hasattr(e, 'error_type'):
+                        error_type = e.error_type.value
+                    
                     with self._lock:
                         self._errors.append({
                             "task_name": task_name,
                             "task_index": task_index,
-                            "error": str(e)
+                            "error": str(e),
+                            "error_type": error_type
                         })
                         self._completed_count += 1
+                        # 从运行列表中移除
+                        self._running_tasks.pop(future, None)
                         
                         # 调用进度回调
                         if progress_callback:
                             try:
-                                progress_callback(self._completed_count, self._total_count)
+                                running_list = list(self._running_tasks.values())
+                                progress_callback(self._completed_count, self._total_count, running_list)
                             except Exception as e:
                                 logger.warning(f"进度回调执行失败: {e}")
                     
@@ -177,15 +194,16 @@ class TaskRunner:
             logger.error(f"任务执行异常 [{task_name}]: {e}")
             raise
     
-    def get_progress(self) -> Dict[str, int]:
+    def get_progress(self) -> Dict[str, Any]:
         """获取当前执行进度
         
         Returns:
-            进度信息字典：{"completed": 已完成数, "total": 总数}
+            进度信息字典：{"completed": 已完成数, "total": 总数, "running": 正在运行的任务列表}
         """
         with self._lock:
             return {
                 "completed": self._completed_count,
-                "total": self._total_count
+                "total": self._total_count,
+                "running": list(self._running_tasks.values())
             }
 

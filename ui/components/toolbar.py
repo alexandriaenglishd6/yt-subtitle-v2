@@ -50,20 +50,9 @@ class Toolbar(ctk.CTkFrame):
         )
         self.title_label.pack(side="left", padx=8)
         
-        # 中间：运行状态
-        status_frame = ctk.CTkFrame(self, fg_color="transparent")
-        status_frame.grid(row=0, column=1, padx=16, pady=8, sticky="ew")
-        
-        self.status_label = ctk.CTkLabel(
-            status_frame,
-            text=f"{t('status')}：{self.running_status}",
-            font=body_font()
-        )
-        self.status_label.pack(side="left", padx=8)
-        
         # 右侧：功能按钮区域
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.grid(row=0, column=2, padx=16, pady=8, sticky="e")
+        button_frame.grid(row=0, column=1, padx=16, pady=8, sticky="e")
         
         # UI 语言切换
         # 使用固定文本，避免翻译问题
@@ -107,14 +96,14 @@ class Toolbar(ctk.CTkFrame):
         )
         self.open_output_btn.pack(side="left", padx=4)
         
-        # 打开配置文件夹按钮
-        self.open_config_btn = ctk.CTkButton(
+        # 打开失败链接按钮
+        self.open_failed_links_btn = ctk.CTkButton(
             button_frame,
-            text=t("open_config_folder"),
+            text=t("open_failed_links"),
             width=120,
-            command=self._on_open_config_folder
+            command=self._on_open_failed_links
         )
-        self.open_config_btn.pack(side="left", padx=4)
+        self.open_failed_links_btn.pack(side="left", padx=4)
     
     def _on_language_changed(self, value: str):
         """语言切换回调"""
@@ -133,9 +122,9 @@ class Toolbar(ctk.CTkFrame):
         if self.on_open_output:
             self.on_open_output()
     
-    def _on_open_config_folder(self):
-        """打开配置文件夹"""
-        if self.on_open_config:
+    def _on_open_failed_links(self):
+        """打开失败链接"""
+        if self.on_open_config:  # 复用回调参数名，但功能已改变
             self.on_open_config()
     
     def update_title(self, mode: str):
@@ -145,16 +134,9 @@ class Toolbar(ctk.CTkFrame):
             self.title_label.configure(text=f"{t('app_name')} – {mode}")
     
     def update_status(self, status: str):
-        """更新运行状态"""
+        """更新运行状态（已废弃，状态现在显示在日志面板）"""
         self.running_status = status
-        if hasattr(self, 'status_label'):
-            # status 可能是中文或英文，需要确保显示正确
-            # 如果 status 是翻译键（如 "status_idle"），则翻译它
-            if status.startswith("status_"):
-                status_display = t(status)
-            else:
-                status_display = status
-            self.status_label.configure(text=f"{t('status')}：{status_display}")
+        # 状态现在显示在日志面板中，不再更新工具栏
     
     def refresh_language(self):
         """刷新语言相关文本"""
@@ -176,14 +158,12 @@ class Toolbar(ctk.CTkFrame):
         # 更新按钮文本
         if hasattr(self, 'open_output_btn'):
             self.open_output_btn.configure(text=t("open_output_folder"))
-        if hasattr(self, 'open_config_btn'):
-            self.open_config_btn.configure(text=t("open_config_folder"))
+        if hasattr(self, 'open_failed_links_btn'):
+            self.open_failed_links_btn.configure(text=t("open_failed_links"))
         
-        # 更新标题和状态
+        # 更新标题
         if hasattr(self, 'title_label'):
             self.title_label.configure(text=f"{t('app_name')} – {self.current_mode}")
-        if hasattr(self, 'status_label'):
-            self.status_label.configure(text=f"{t('status')}：{self.running_status}")
     
     def update_theme(self, theme_name: ThemeName):
         """更新当前主题并刷新下拉框显示"""

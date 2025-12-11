@@ -44,6 +44,7 @@ class AIConfig:
     
     符合 ai_design.md 规范的配置结构
     """
+    enabled: bool = True  # 是否启用此 AI 功能
     provider: str = "openai"  # openai, anthropic, gemini, groq, local 等
     model: str = "gpt-4o-mini"  # 模型名称
     base_url: Optional[str] = None  # 可选，自定义 API 网关或代理
@@ -56,6 +57,7 @@ class AIConfig:
     
     def to_dict(self) -> dict:
         return {
+            "enabled": self.enabled,
             "provider": self.provider,
             "model": self.model,
             "base_url": self.base_url,
@@ -75,10 +77,16 @@ class AIConfig:
                 "anthropic": f"env:{api_key_env}"
             }
         
+        # 处理 base_url：如果为 None 或空字符串，保持为 None（表示使用官方 API）
+        base_url = data.get("base_url")
+        if base_url == "":
+            base_url = None
+        
         return cls(
+            enabled=data.get("enabled", True),  # 默认启用，向后兼容
             provider=data.get("provider", "openai"),
             model=data.get("model", "gpt-4o-mini"),
-            base_url=data.get("base_url"),
+            base_url=base_url,
             timeout_seconds=data.get("timeout_seconds", 30),
             max_retries=data.get("max_retries", 2),
             api_keys=api_keys,
@@ -93,36 +101,69 @@ class AppConfig:
     """
     language: LanguageConfig = field(default_factory=LanguageConfig)
     concurrency: int = 3  # 并发数，默认 3
+    retry_count: int = 2  # 重试次数，默认 2（用于网络错误、限流等可重试错误）
     proxies: list[str] = field(default_factory=list)  # 代理列表
     cookie: str = ""  # Cookie 字符串
     output_dir: str = "out"  # 输出目录（相对路径）
-    ai: AIConfig = field(default_factory=AIConfig)
+    translation_ai: AIConfig = field(default_factory=AIConfig)  # 翻译 AI 配置
+    summary_ai: AIConfig = field(default_factory=AIConfig)  # 摘要 AI 配置
+    # 保留 ai 字段用于向后兼容（已废弃，将在未来版本移除）
+    ai: Optional[AIConfig] = None
     ui_language: str = "zh-CN"  # UI 语言（zh-CN / en-US）
     theme: str = "light"  # UI 主题（light / light_gray / dark_gray / claude_warm）
     
     def to_dict(self) -> dict:
         """转换为字典（用于 JSON 序列化）"""
-        return {
+        result = {
             "language": self.language.to_dict(),
             "concurrency": self.concurrency,
+            "retry_count": self.retry_count,
             "proxies": self.proxies,
             "cookie": self.cookie,
             "output_dir": self.output_dir,
-            "ai": self.ai.to_dict(),
+            "translation_ai": self.translation_ai.to_dict(),
+            "summary_ai": self.summary_ai.to_dict(),
             "ui_language": self.ui_language,
             "theme": self.theme,
         }
+        # 向后兼容：如果 ai 字段存在，也保存（用于旧版本兼容）
+        if self.ai is not None:
+            result["ai"] = self.ai.to_dict()
+        return result
     
     @classmethod
     def from_dict(cls, data: dict) -> "AppConfig":
-        """从字典创建（用于 JSON 反序列化）"""
+        """从字典创建（用于 JSON 反序列化）
+        
+        向后兼容：如果存在旧的 ai 配置，将其复制到 translation_ai 和 summary_ai
+        """
+        # 向后兼容：处理旧的 ai 配置
+        old_ai = data.get("ai")
+        translation_ai_data = data.get("translation_ai")
+        summary_ai_data = data.get("summary_ai")
+        
+        # 如果存在旧的 ai 配置，且没有新的 translation_ai/summary_ai，则迁移
+        if old_ai and not translation_ai_data and not summary_ai_data:
+            # 将旧的 ai 配置复制到 translation_ai 和 summary_ai
+            translation_ai_data = old_ai
+            summary_ai_data = old_ai
+        
+        # 如果只有 translation_ai 或 summary_ai，另一个使用默认值
+        if translation_ai_data and not summary_ai_data:
+            summary_ai_data = AIConfig.from_dict({}).to_dict()
+        elif summary_ai_data and not translation_ai_data:
+            translation_ai_data = AIConfig.from_dict({}).to_dict()
+        
         return cls(
             language=LanguageConfig.from_dict(data.get("language", {})),
             concurrency=data.get("concurrency", 3),
+            retry_count=data.get("retry_count", 2),
             proxies=data.get("proxies", []),
             cookie=data.get("cookie", ""),
             output_dir=data.get("output_dir", "out"),
-            ai=AIConfig.from_dict(data.get("ai", {})),
+            translation_ai=AIConfig.from_dict(translation_ai_data or {}),
+            summary_ai=AIConfig.from_dict(summary_ai_data or {}),
+            ai=AIConfig.from_dict(old_ai) if old_ai else None,  # 保留用于向后兼容
             ui_language=data.get("ui_language", "zh-CN"),
             theme=data.get("theme", "light"),
         )

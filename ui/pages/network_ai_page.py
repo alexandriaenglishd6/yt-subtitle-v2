@@ -10,6 +10,7 @@ from ui.i18n_manager import t
 from core.cookie_manager import CookieManager
 from ui.fonts import title_font, heading_font, body_font
 from core.logger import get_logger
+from ui.components.collapsible_frame import CollapsibleFrame
 
 logger = get_logger()
 
@@ -22,12 +23,11 @@ class NetworkAIPage(ctk.CTkFrame):
         parent,
         cookie: str = "",
         proxies: list = None,
-        ai_config: Optional[dict] = None,
-        output_dir: str = "out",
+        translation_ai_config: Optional[dict] = None,
+        summary_ai_config: Optional[dict] = None,
         on_save_cookie: Optional[Callable[[str], None]] = None,
         on_save_proxies: Optional[Callable[[list], None]] = None,
-        on_save_ai_config: Optional[Callable[[dict], None]] = None,
-        on_save_output_dir: Optional[Callable[[str], None]] = None,
+        on_save_ai_config: Optional[Callable[[dict, dict], None]] = None,  # 现在接收两个配置
         on_log_message: Optional[Callable[[str, str], None]] = None,
         **kwargs
     ):
@@ -35,12 +35,11 @@ class NetworkAIPage(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.cookie = cookie
         self.proxies = proxies or []
-        self.ai_config = ai_config or {}
-        self.output_dir = output_dir
+        self.translation_ai_config = translation_ai_config or {}
+        self.summary_ai_config = summary_ai_config or {}
         self.on_save_cookie = on_save_cookie
         self.on_save_proxies = on_save_proxies
         self.on_save_ai_config = on_save_ai_config
-        self.on_save_output_dir = on_save_output_dir
         self.on_log_message = on_log_message
         self._build_ui()
     
@@ -59,9 +58,17 @@ class NetworkAIPage(ctk.CTkFrame):
         )
         title.pack(pady=(0, 24))
         
+        # ========== 网络设置分组（可折叠） ==========
+        network_collapsible = CollapsibleFrame(
+            scroll_frame,
+            title=t("network_settings_group"),
+            expanded=True
+        )
+        network_collapsible.pack(fill="x", pady=(0, 16))
+        
         # Cookie 配置区域
-        cookie_frame = ctk.CTkFrame(scroll_frame)
-        cookie_frame.pack(fill="x", pady=(0, 16))
+        cookie_frame = ctk.CTkFrame(network_collapsible.content_frame)
+        cookie_frame.pack(fill="x", padx=0, pady=(0, 16))
         cookie_frame.grid_columnconfigure(0, weight=1)
         
         cookie_label = ctk.CTkLabel(
@@ -128,8 +135,8 @@ class NetworkAIPage(ctk.CTkFrame):
         cookie_help.grid(row=3, column=0, columnspan=3, sticky="w", padx=16, pady=(0, 16))
         
         # 代理配置区域
-        proxy_frame = ctk.CTkFrame(scroll_frame)
-        proxy_frame.pack(fill="x", pady=(0, 16))
+        proxy_frame = ctk.CTkFrame(network_collapsible.content_frame)
+        proxy_frame.pack(fill="x", padx=0, pady=(0, 16))
         proxy_frame.grid_columnconfigure(0, weight=1)
         
         proxy_label = ctk.CTkLabel(
@@ -179,111 +186,55 @@ class NetworkAIPage(ctk.CTkFrame):
         )
         proxy_help.grid(row=3, column=0, columnspan=2, sticky="w", padx=16, pady=(0, 16))
         
-        # AI 配置区域
-        ai_frame = ctk.CTkFrame(scroll_frame)
-        ai_frame.pack(fill="x", pady=(0, 16))
-        ai_frame.grid_columnconfigure(1, weight=1)
+        # ========== 翻译&摘要分组（可折叠） ==========
+        translation_summary_collapsible = CollapsibleFrame(
+            scroll_frame,
+            title=t("translation_summary_group"),
+            expanded=True
+        )
+        translation_summary_collapsible.pack(fill="x", pady=(0, 16))
         
-        ai_label = ctk.CTkLabel(
-            ai_frame,
-            text=t("ai_config_label"),
+        # 翻译 AI 配置区域
+        translation_ai_frame = ctk.CTkFrame(translation_summary_collapsible.content_frame)
+        translation_ai_frame.pack(fill="x", padx=0, pady=(0, 16))
+        translation_ai_frame.grid_columnconfigure(1, weight=1)
+        
+        translation_ai_label = ctk.CTkLabel(
+            translation_ai_frame,
+            text=t("translation_ai_config_label"),
             font=heading_font(weight="bold")
         )
-        ai_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
+        translation_ai_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
         
-        # AI Provider
-        provider_label = ctk.CTkLabel(ai_frame, text=t("ai_provider_label"))
-        provider_label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
-        self.ai_provider_entry = ctk.CTkEntry(ai_frame, width=200)
-        self.ai_provider_entry.grid(row=1, column=1, sticky="ew", padx=16, pady=8)
-        if self.ai_config.get("provider"):
-            self.ai_provider_entry.insert(0, self.ai_config["provider"])
+        # 翻译 AI 配置字段
+        self._build_ai_config_fields(translation_ai_frame, self.translation_ai_config, "translation", start_row=1)
         
-        # AI Model
-        model_label = ctk.CTkLabel(ai_frame, text=t("ai_model_label"))
-        model_label.grid(row=2, column=0, sticky="w", padx=16, pady=8)
-        self.ai_model_entry = ctk.CTkEntry(ai_frame, width=200)
-        self.ai_model_entry.grid(row=2, column=1, sticky="ew", padx=16, pady=8)
-        if self.ai_config.get("model"):
-            self.ai_model_entry.insert(0, self.ai_config["model"])
+        # 摘要 AI 配置区域
+        summary_ai_frame = ctk.CTkFrame(translation_summary_collapsible.content_frame)
+        summary_ai_frame.pack(fill="x", padx=0, pady=(0, 16))
+        summary_ai_frame.grid_columnconfigure(1, weight=1)
         
-        # Base URL
-        base_url_label = ctk.CTkLabel(ai_frame, text=t("ai_base_url_label"))
-        base_url_label.grid(row=3, column=0, sticky="w", padx=16, pady=8)
-        self.ai_base_url_entry = ctk.CTkEntry(ai_frame, width=200)
-        self.ai_base_url_entry.grid(row=3, column=1, sticky="ew", padx=16, pady=8)
-        if self.ai_config.get("base_url"):
-            self.ai_base_url_entry.insert(0, self.ai_config["base_url"])
+        summary_ai_label = ctk.CTkLabel(
+            summary_ai_frame,
+            text=t("summary_ai_config_label"),
+            font=heading_font(weight="bold")
+        )
+        summary_ai_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
         
-        # Timeout
-        timeout_label = ctk.CTkLabel(ai_frame, text=t("ai_timeout_label"))
-        timeout_label.grid(row=4, column=0, sticky="w", padx=16, pady=8)
-        self.ai_timeout_entry = ctk.CTkEntry(ai_frame, width=200)
-        self.ai_timeout_entry.grid(row=4, column=1, sticky="ew", padx=16, pady=8)
-        if self.ai_config.get("timeout_seconds"):
-            self.ai_timeout_entry.insert(0, str(self.ai_config["timeout_seconds"]))
-        else:
-            self.ai_timeout_entry.insert(0, "30")
+        # 摘要 AI 配置字段
+        self._build_ai_config_fields(summary_ai_frame, self.summary_ai_config, "summary", start_row=1)
         
-        # Max Retries
-        retries_label = ctk.CTkLabel(ai_frame, text=t("ai_retries_label"))
-        retries_label.grid(row=5, column=0, sticky="w", padx=16, pady=8)
-        self.ai_retries_entry = ctk.CTkEntry(ai_frame, width=200)
-        self.ai_retries_entry.grid(row=5, column=1, sticky="ew", padx=16, pady=8)
-        if self.ai_config.get("max_retries"):
-            self.ai_retries_entry.insert(0, str(self.ai_config["max_retries"]))
-        else:
-            self.ai_retries_entry.insert(0, "2")
-        
-        # API Keys
-        api_keys_label = ctk.CTkLabel(ai_frame, text=t("ai_api_keys_label"))
-        api_keys_label.grid(row=6, column=0, columnspan=2, sticky="w", padx=16, pady=(8, 4))
-        self.ai_api_keys_textbox = ctk.CTkTextbox(ai_frame, height=80, wrap="word")
-        self.ai_api_keys_textbox.grid(row=7, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 8))
-        if self.ai_config.get("api_keys"):
-            api_keys_text = "\n".join([f"{k}={v}" for k, v in self.ai_config["api_keys"].items()])
-            self.ai_api_keys_textbox.insert("1.0", api_keys_text)
-        
-        # AI 保存按钮
-        ai_btn_frame = ctk.CTkFrame(ai_frame, fg_color="transparent")
-        ai_btn_frame.grid(row=8, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 16))
+        # AI 保存按钮（统一保存两个配置）
+        ai_btn_frame = ctk.CTkFrame(translation_summary_collapsible.content_frame, fg_color="transparent")
+        ai_btn_frame.pack(fill="x", padx=0, pady=(0, 16))
         self.ai_save_btn = ctk.CTkButton(
             ai_btn_frame,
-            text=t("ai_save"),
+            text=t("ai_save_all"),
             command=self._on_save_ai_config,
             width=120
         )
-        self.ai_save_btn.pack(side="left", padx=(0, 8))
+        self.ai_save_btn.pack(side="left", padx=16, pady=8)
         
-        # 输出目录配置区域
-        output_frame = ctk.CTkFrame(scroll_frame)
-        output_frame.pack(fill="x", pady=(0, 16))
-        output_frame.grid_columnconfigure(1, weight=1)
-        
-        output_label = ctk.CTkLabel(
-            output_frame,
-            text=t("output_dir_label"),
-            font=heading_font(weight="bold")
-        )
-        output_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
-        
-        output_dir_input_label = ctk.CTkLabel(output_frame, text=t("output_dir_placeholder"))
-        output_dir_input_label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
-        self.output_dir_entry = ctk.CTkEntry(output_frame, width=200)
-        self.output_dir_entry.grid(row=1, column=1, sticky="ew", padx=16, pady=8)
-        if self.output_dir:
-            self.output_dir_entry.insert(0, self.output_dir)
-        
-        output_btn_frame = ctk.CTkFrame(output_frame, fg_color="transparent")
-        output_btn_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 16))
-        self.output_dir_save_btn = ctk.CTkButton(
-            output_btn_frame,
-            text=t("output_dir_save"),
-            command=self._on_save_output_dir,
-            width=120
-        )
-        self.output_dir_save_btn.pack(side="left", padx=(0, 8))
-    
     def _on_paste_cookie(self):
         """从剪贴板粘贴 Cookie"""
         try:
@@ -393,28 +344,127 @@ class NetworkAIPage(ctk.CTkFrame):
         else:
             logger.warning("on_save_proxies 回调未设置")
     
+    def _build_ai_config_fields(self, parent_frame, ai_config: dict, prefix: str, start_row: int = 1):
+        """构建 AI 配置字段（辅助方法，用于翻译和摘要配置）
+        
+        Args:
+            parent_frame: 父框架
+            ai_config: AI 配置字典
+            prefix: 字段前缀（"translation" 或 "summary"）
+            start_row: 起始行号
+        """
+        row = start_row
+        
+        # Provider
+        provider_label = ctk.CTkLabel(parent_frame, text=t("ai_provider_label"))
+        provider_label.grid(row=row, column=0, sticky="w", padx=16, pady=8)
+        provider_entry = ctk.CTkEntry(parent_frame, width=200)
+        provider_entry.grid(row=row, column=1, sticky="ew", padx=16, pady=8)
+        setattr(self, f"{prefix}_ai_provider_entry", provider_entry)
+        if ai_config.get("provider"):
+            provider_entry.insert(0, ai_config["provider"])
+        
+        row += 1
+        
+        # Model
+        model_label = ctk.CTkLabel(parent_frame, text=t("ai_model_label"))
+        model_label.grid(row=row, column=0, sticky="w", padx=16, pady=8)
+        model_entry = ctk.CTkEntry(parent_frame, width=200)
+        model_entry.grid(row=row, column=1, sticky="ew", padx=16, pady=8)
+        setattr(self, f"{prefix}_ai_model_entry", model_entry)
+        if ai_config.get("model"):
+            model_entry.insert(0, ai_config["model"])
+        
+        row += 1
+        
+        # Base URL
+        base_url_label = ctk.CTkLabel(parent_frame, text=t("ai_base_url_label"))
+        base_url_label.grid(row=row, column=0, sticky="w", padx=16, pady=8)
+        base_url_entry = ctk.CTkEntry(parent_frame, width=200)
+        base_url_entry.grid(row=row, column=1, sticky="ew", padx=16, pady=8)
+        setattr(self, f"{prefix}_ai_base_url_entry", base_url_entry)
+        if ai_config.get("base_url"):
+            base_url_entry.insert(0, ai_config["base_url"])
+        
+        row += 1
+        
+        # Timeout
+        timeout_label = ctk.CTkLabel(parent_frame, text=t("ai_timeout_label"))
+        timeout_label.grid(row=row, column=0, sticky="w", padx=16, pady=8)
+        timeout_entry = ctk.CTkEntry(parent_frame, width=200)
+        timeout_entry.grid(row=row, column=1, sticky="ew", padx=16, pady=8)
+        setattr(self, f"{prefix}_ai_timeout_entry", timeout_entry)
+        if ai_config.get("timeout_seconds"):
+            timeout_entry.insert(0, str(ai_config["timeout_seconds"]))
+        else:
+            timeout_entry.insert(0, "30")
+        
+        row += 1
+        
+        # Max Retries
+        retries_label = ctk.CTkLabel(parent_frame, text=t("ai_retries_label"))
+        retries_label.grid(row=row, column=0, sticky="w", padx=16, pady=8)
+        retries_entry = ctk.CTkEntry(parent_frame, width=200)
+        retries_entry.grid(row=row, column=1, sticky="ew", padx=16, pady=8)
+        setattr(self, f"{prefix}_ai_retries_entry", retries_entry)
+        if ai_config.get("max_retries"):
+            retries_entry.insert(0, str(ai_config["max_retries"]))
+        else:
+            retries_entry.insert(0, "2")
+        
+        row += 1
+        
+        # API Keys
+        api_keys_label = ctk.CTkLabel(parent_frame, text=t("ai_api_keys_label"))
+        api_keys_label.grid(row=row, column=0, columnspan=2, sticky="w", padx=16, pady=(8, 4))
+        api_keys_textbox = ctk.CTkTextbox(parent_frame, height=80, wrap="word")
+        api_keys_textbox.grid(row=row+1, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 8))
+        setattr(self, f"{prefix}_ai_api_keys_textbox", api_keys_textbox)
+        if ai_config.get("api_keys"):
+            api_keys_text = "\n".join([f"{k}={v}" for k, v in ai_config["api_keys"].items()])
+            api_keys_textbox.insert("1.0", api_keys_text)
+    
     def _on_save_ai_config(self):
-        """保存 AI 配置"""
+        """保存 AI 配置（翻译和摘要）"""
         try:
-            ai_config = {
-                "provider": self.ai_provider_entry.get().strip(),
-                "model": self.ai_model_entry.get().strip(),
-                "base_url": self.ai_base_url_entry.get().strip() or None,
-                "timeout_seconds": int(self.ai_timeout_entry.get().strip() or "30"),
-                "max_retries": int(self.ai_retries_entry.get().strip() or "2"),
+            # 构建翻译 AI 配置
+            translation_ai_config = {
+                "provider": getattr(self, "translation_ai_provider_entry").get().strip(),
+                "model": getattr(self, "translation_ai_model_entry").get().strip(),
+                "base_url": getattr(self, "translation_ai_base_url_entry").get().strip() or None,
+                "timeout_seconds": int(getattr(self, "translation_ai_timeout_entry").get().strip() or "30"),
+                "max_retries": int(getattr(self, "translation_ai_retries_entry").get().strip() or "2"),
                 "api_keys": {}
             }
             
-            # 解析 API Keys
-            api_keys_text = self.ai_api_keys_textbox.get("1.0", "end-1c").strip()
-            for line in api_keys_text.split("\n"):
+            # 解析翻译 API Keys
+            translation_api_keys_text = getattr(self, "translation_ai_api_keys_textbox").get("1.0", "end-1c").strip()
+            for line in translation_api_keys_text.split("\n"):
                 line = line.strip()
                 if "=" in line:
                     key, value = line.split("=", 1)
-                    ai_config["api_keys"][key.strip()] = value.strip()
+                    translation_ai_config["api_keys"][key.strip()] = value.strip()
+            
+            # 构建摘要 AI 配置
+            summary_ai_config = {
+                "provider": getattr(self, "summary_ai_provider_entry").get().strip(),
+                "model": getattr(self, "summary_ai_model_entry").get().strip(),
+                "base_url": getattr(self, "summary_ai_base_url_entry").get().strip() or None,
+                "timeout_seconds": int(getattr(self, "summary_ai_timeout_entry").get().strip() or "30"),
+                "max_retries": int(getattr(self, "summary_ai_retries_entry").get().strip() or "2"),
+                "api_keys": {}
+            }
+            
+            # 解析摘要 API Keys
+            summary_api_keys_text = getattr(self, "summary_ai_api_keys_textbox").get("1.0", "end-1c").strip()
+            for line in summary_api_keys_text.split("\n"):
+                line = line.strip()
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    summary_ai_config["api_keys"][key.strip()] = value.strip()
             
             if self.on_save_ai_config:
-                self.on_save_ai_config(ai_config)
+                self.on_save_ai_config(translation_ai_config, summary_ai_config)
                 if self.on_log_message:
                     self.on_log_message("INFO", t("ai_save_success"))
         except ValueError as e:
@@ -425,24 +475,6 @@ class NetworkAIPage(ctk.CTkFrame):
             logger.error(f"保存 AI 配置失败: {e}")
             if self.on_log_message:
                 self.on_log_message("ERROR", t("ai_save_failed", error=str(e)))
-    
-    def _on_save_output_dir(self):
-        """保存输出目录"""
-        output_dir = self.output_dir_entry.get().strip()
-        if not output_dir:
-            output_dir = "out"
-        
-        if self.on_save_output_dir:
-            try:
-                self.on_save_output_dir(output_dir)
-                if self.on_log_message:
-                    self.on_log_message("INFO", t("output_dir_save_success"))
-            except Exception as e:
-                logger.error(f"保存输出目录失败: {e}")
-                if self.on_log_message:
-                    self.on_log_message("ERROR", t("output_dir_save_failed", error=str(e)))
-        else:
-            logger.warning("on_save_output_dir 回调未设置")
     
     def refresh_language(self):
         """刷新语言相关文本"""

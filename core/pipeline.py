@@ -5,6 +5,7 @@
 """
 from pathlib import Path
 from typing import Optional, Dict, List, Callable
+import time
 
 from core.models import VideoInfo, DetectionResult
 from core.language import LanguageConfig
@@ -23,11 +24,36 @@ from config.manager import ConfigManager
 
 logger = get_logger()
 
+# 常量定义
+MAX_TITLE_DISPLAY_LENGTH = 50
+
+
+def _safe_log(
+    on_log: Optional[Callable[[str, str, Optional[str]], None]],
+    level: str,
+    message: str,
+    video_id: Optional[str] = None
+):
+    """安全的日志回调执行
+    
+    Args:
+        on_log: 日志回调函数（可能为 None）
+        level: 日志级别
+        message: 日志消息
+        video_id: 视频 ID（可选）
+    """
+    if on_log:
+        try:
+            on_log(level, message, video_id)
+        except Exception as e:
+            logger.warning(f"日志回调执行失败: {e}")
+
 
 def process_single_video(
     video_info: VideoInfo,
     language_config: LanguageConfig,
-    llm: LLMClient,
+    translation_llm: Optional[LLMClient],
+    summary_llm: Optional[LLMClient],
     output_writer: OutputWriter,
     failure_logger: FailureLogger,
     incremental_manager: IncrementalManager,
@@ -66,25 +92,21 @@ def process_single_video(
         set_log_context(run_id=run_id, task="process", video_id=video_info.video_id)
     
     try:
+        vid = video_info.video_id
+        title_preview = video_info.title[:MAX_TITLE_DISPLAY_LENGTH]
+        
         # 步骤 1: 字幕检测
-        set_log_context(run_id=run_id, task="detect", video_id=video_info.video_id)
-        logger.info(f"检测字幕: {video_info.video_id} - {video_info.title[:50]}...", video_id=video_info.video_id)
+        set_log_context(run_id=run_id, task="detect", video_id=vid)
+        logger.info(f"检测字幕: {vid} - {title_preview}...", video_id=vid)
         detector = SubtitleDetector(cookie_manager=cookie_manager)
         detection_result = detector.detect(video_info)
         
         if not detection_result.has_subtitles:
-            error_msg = f"视频无可用字幕，跳过处理"
-            logger.warning(error_msg, video_id=video_info.video_id)
-            
-            # 实时传递错误信息到 UI（如果提供了回调）
-            if on_log:
-                try:
-                    on_log("WARN", error_msg, video_id=video_info.video_id)
-                except Exception as log_error:
-                    logger.warning(f"日志回调执行失败: {log_error}")
-            
+            error_msg = "视频无可用字幕，跳过处理"
+            logger.warning(error_msg, video_id=vid)
+            _safe_log(on_log, "WARN", error_msg, vid)
             failure_logger.log_failure(
-                video_id=video_info.video_id,
+                video_id=vid,
                 url=video_info.url,
                 reason="无可用字幕",
                 error_type=ErrorType.CONTENT,
@@ -96,10 +118,10 @@ def process_single_video(
             return False
         
         # 步骤 2: 字幕下载
-        set_log_context(run_id=run_id, task="download", video_id=video_info.video_id)
-        logger.info(f"下载字幕: {video_info.video_id}", video_id=video_info.video_id)
+        set_log_context(run_id=run_id, task="download", video_id=vid)
+        logger.info(f"下载字幕: {vid}", video_id=vid)
         downloader = SubtitleDownloader(proxy_manager=proxy_manager, cookie_manager=cookie_manager)
-        temp_dir = Path("temp") / video_info.video_id
+        temp_dir = Path("temp") / vid
         temp_dir.mkdir(parents=True, exist_ok=True)
         
         download_result = downloader.download(
@@ -110,21 +132,14 @@ def process_single_video(
         )
         
         if not download_result.get("original"):
-            error_msg = f"下载原始字幕失败"
-            logger.error(error_msg, video_id=video_info.video_id)
-            
-            # 实时传递错误信息到 UI（如果提供了回调）
-            if on_log:
-                try:
-                    on_log("ERROR", error_msg, video_id=video_info.video_id)
-                except Exception as log_error:
-                    logger.warning(f"日志回调执行失败: {log_error}")
-            
+            error_msg = "下载原始字幕失败"
+            logger.error(error_msg, video_id=vid)
+            _safe_log(on_log, "ERROR", error_msg, vid)
             failure_logger.log_download_failure(
-                video_id=video_info.video_id,
+                video_id=vid,
                 url=video_info.url,
                 reason="下载原始字幕失败",
-                error_type=ErrorType.NETWORK,  # 默认网络错误，实际应由 downloader 提供
+                error_type=ErrorType.NETWORK,
                 batch_id=run_id,
                 channel_id=video_info.channel_id,
                 channel_name=video_info.channel_name
@@ -132,14 +147,13 @@ def process_single_video(
             return False
         
         # 步骤 3: 字幕翻译
-        set_log_context(run_id=run_id, task="translate", video_id=video_info.video_id)
-        logger.info(f"翻译字幕: {video_info.video_id}", video_id=video_info.video_id)
-        if not llm:
-            logger.warning(f"LLM 客户端不可用，跳过翻译", video_id=video_info.video_id)
+        set_log_context(run_id=run_id, task="translate", video_id=vid)
+        logger.info(f"翻译字幕: {vid}", video_id=vid)
+        if not translation_llm:
+            logger.warning("翻译 LLM 客户端不可用，跳过翻译", video_id=vid)
             translation_result = {}
         else:
-            translator = SubtitleTranslator(llm=llm, language_config=language_config)
-            
+            translator = SubtitleTranslator(llm=translation_llm, language_config=language_config)
             translation_result = translator.translate(
                 video_info,
                 detection_result,
@@ -156,22 +170,23 @@ def process_single_video(
         )
         
         # 检查是否所有目标语言都有翻译结果
-        missing_languages = []
-        for target_lang in language_config.subtitle_target_languages:
-            translated_path = translation_result.get(target_lang)
-            if not translated_path or not translated_path.exists():
-                missing_languages.append(target_lang)
+        missing_languages = [
+            target_lang
+            for target_lang in language_config.subtitle_target_languages
+            if not translation_result.get(target_lang) or not translation_result[target_lang].exists()
+        ]
         
         if missing_languages:
-            # 如果翻译策略是 OFFICIAL_ONLY 且没有可用翻译，应该停止任务
+            missing_str = ', '.join(missing_languages)
             if language_config.translation_strategy == "OFFICIAL_ONLY":
+                # 如果翻译策略是 OFFICIAL_ONLY 且没有可用翻译，应该停止任务
                 error_msg = (
-                    f"翻译策略为'只用官方多语言字幕'，但以下目标语言无可用官方字幕：{', '.join(missing_languages)}。\n"
+                    f"翻译策略为'只用官方多语言字幕'，但以下目标语言无可用官方字幕：{missing_str}。\n"
                     f"请修改翻译策略为'优先官方字幕/自动翻译，无则用 AI'，或确保视频有对应的官方字幕。"
                 )
-                logger.error(error_msg, video_id=video_info.video_id)
+                logger.error(error_msg, video_id=vid)
                 failure_logger.log_translation_failure(
-                    video_id=video_info.video_id,
+                    video_id=vid,
                     url=video_info.url,
                     reason=error_msg,
                     error_type=ErrorType.CONTENT,
@@ -179,28 +194,15 @@ def process_single_video(
                     channel_id=video_info.channel_id,
                     channel_name=video_info.channel_name
                 )
-                # 实时传递错误信息到 UI（如果提供了回调）
-                if on_log:
-                    try:
-                        on_log("ERROR", error_msg, video_id=video_info.video_id)
-                    except Exception as log_error:
-                        logger.warning(f"日志回调执行失败: {log_error}")
-                
-                # 抛出异常，停止处理
-                raise AppException(
-                    message=error_msg,
-                    error_type=ErrorType.CONTENT
-                )
+                _safe_log(on_log, "ERROR", error_msg, vid)
+                raise AppException(message=error_msg, error_type=ErrorType.CONTENT)
             else:
                 # 其他策略下，翻译失败不视为整体失败，继续处理
-                logger.warning(
-                    f"以下目标语言翻译失败或无可用翻译：{', '.join(missing_languages)}",
-                    video_id=video_info.video_id
-                )
+                logger.warning(f"以下目标语言翻译失败或无可用翻译：{missing_str}", video_id=vid)
                 failure_logger.log_translation_failure(
-                    video_id=video_info.video_id,
+                    video_id=vid,
                     url=video_info.url,
-                    reason=f"翻译失败或无可用翻译：{', '.join(missing_languages)}",
+                    reason=f"翻译失败或无可用翻译：{missing_str}",
                     error_type=ErrorType.UNKNOWN,
                     batch_id=run_id,
                     channel_id=video_info.channel_id,
@@ -209,11 +211,10 @@ def process_single_video(
         
         # 步骤 4: 生成摘要
         summary_path = None
-        if (has_translation or download_result.get("original")) and llm:
-            set_log_context(run_id=run_id, task="summarize", video_id=video_info.video_id)
-            logger.info(f"生成摘要: {video_info.video_id}", video_id=video_info.video_id)
-            summarizer = Summarizer(llm=llm, language_config=language_config)
-            
+        if (has_translation or download_result.get("original")) and summary_llm:
+            set_log_context(run_id=run_id, task="summarize", video_id=vid)
+            logger.info(f"生成摘要: {vid}", video_id=vid)
+            summarizer = Summarizer(llm=summary_llm, language_config=language_config)
             summary_path = summarizer.summarize(
                 video_info,
                 language_config,
@@ -224,12 +225,12 @@ def process_single_video(
             )
             
             if not summary_path:
-                logger.warning(f"摘要生成失败", video_id=video_info.video_id)
+                logger.warning("摘要生成失败", video_id=vid)
                 failure_logger.log_summary_failure(
-                    video_id=video_info.video_id,
+                    video_id=vid,
                     url=video_info.url,
                     reason="摘要生成失败",
-                    error_type=ErrorType.UNKNOWN,  # 默认未知错误，实际应由 summarizer 提供
+                    error_type=ErrorType.UNKNOWN,
                     batch_id=run_id,
                     channel_id=video_info.channel_id,
                     channel_name=video_info.channel_name
@@ -237,9 +238,9 @@ def process_single_video(
                 # 摘要失败不视为整体失败
         
         # 步骤 5: 写入输出文件
-        set_log_context(run_id=run_id, task="output", video_id=video_info.video_id)
-        logger.info(f"写入输出文件: {video_info.video_id}", video_id=video_info.video_id)
-        video_output_dir = output_writer.write_all(
+        set_log_context(run_id=run_id, task="output", video_id=vid)
+        logger.info(f"写入输出文件: {vid}", video_id=vid)
+        output_writer.write_all(
             video_info,
             detection_result,
             language_config,
@@ -252,84 +253,113 @@ def process_single_video(
         
         # 步骤 6: 更新增量记录（仅在成功时）
         if archive_path:
-            incremental_manager.mark_as_processed(video_info.video_id, archive_path)
-            logger.debug(f"已更新增量记录: {video_info.video_id}", video_id=video_info.video_id)
+            incremental_manager.mark_as_processed(vid, archive_path)
+            logger.debug(f"已更新增量记录: {vid}", video_id=vid)
         
         # 清理临时文件
-        try:
-            import shutil
-            if temp_dir.exists():
-                shutil.rmtree(temp_dir)
-        except Exception as e:
-            logger.warning(f"清理临时文件失败: {e}")
+        _cleanup_temp_dir(temp_dir)
         
-        logger.info(f"处理完成: {video_info.video_id}", video_id=video_info.video_id)
+        logger.info(f"处理完成: {vid}", video_id=vid)
         return True
         
     except AppException as e:
-        # 统一异常处理
         error_msg = f"处理视频失败: {e}"
-        logger.error(
-            error_msg,
-            video_id=video_info.video_id,
-            error_type=e.error_type.value
-        )
-        import traceback
-        logger.debug(traceback.format_exc(), video_id=video_info.video_id)
-        
-        # 实时传递错误信息到 UI（如果提供了回调）
-        if on_log:
-            try:
-                on_log("ERROR", error_msg, video_id=video_info.video_id)
-            except Exception as log_error:
-                logger.warning(f"日志回调执行失败: {log_error}")
-        
-        failure_logger.log_failure(
-            video_id=video_info.video_id,
-            url=video_info.url,
-            reason=str(e),
-            error_type=e.error_type,
-            batch_id=run_id,
-            channel_id=video_info.channel_id,
-            channel_name=video_info.channel_name
+        _handle_processing_error(
+            error_msg, e.error_type, video_info, failure_logger,
+            run_id, on_log, str(e)
         )
         return False
     except Exception as e:
-        # 未映射的异常，转换为 AppException
         app_error = AppException(
             message=f"处理失败: {str(e)}",
             error_type=ErrorType.UNKNOWN,
             cause=e
         )
         error_msg = f"处理视频失败: {app_error}"
-        logger.error(
-            error_msg,
-            video_id=video_info.video_id,
-            error_type=app_error.error_type.value
-        )
-        import traceback
-        logger.debug(traceback.format_exc(), video_id=video_info.video_id)
-        
-        # 实时传递错误信息到 UI（如果提供了回调）
-        if on_log:
-            try:
-                on_log("ERROR", error_msg, video_id=video_info.video_id)
-            except Exception as log_error:
-                logger.warning(f"日志回调执行失败: {log_error}")
-        
-        failure_logger.log_failure(
-            video_id=video_info.video_id,
-            url=video_info.url,
-            reason=str(app_error),
-            error_type=app_error.error_type,
-            batch_id=run_id,
-            channel_id=video_info.channel_id,
-            channel_name=video_info.channel_name
+        _handle_processing_error(
+            error_msg, app_error.error_type, video_info, failure_logger,
+            run_id, on_log, str(app_error)
         )
         return False
     finally:
-        # 清除日志上下文
         clear_log_context()
+
+
+def _cleanup_temp_dir(temp_dir: Path):
+    """清理临时目录"""
+    try:
+        import shutil
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    except Exception as e:
+        logger.warning(f"清理临时文件失败: {e}")
+
+
+def _handle_processing_error(
+    error_msg: str,
+    error_type: ErrorType,
+    video_info: VideoInfo,
+    failure_logger: FailureLogger,
+    run_id: Optional[str],
+    on_log: Optional[Callable],
+    reason: str
+):
+    """处理视频处理过程中的错误（统一错误处理）
+    
+    Args:
+        error_msg: 错误消息
+        error_type: 错误类型
+        video_info: 视频信息
+        failure_logger: 失败记录器
+        run_id: 批次 ID
+        on_log: 日志回调
+        reason: 失败原因
+    """
+    import traceback
+    
+    # 生成清晰的错误消息（包含错误类型和原因）
+    error_type_name = _get_error_type_display_name(error_type)
+    detailed_msg = f"[{error_type_name}] {video_info.video_id} - {reason}"
+    
+    logger.error(detailed_msg, video_id=video_info.video_id, error_type=error_type.value)
+    logger.debug(traceback.format_exc(), video_id=video_info.video_id)
+    
+    _safe_log(on_log, "ERROR", detailed_msg, video_info.video_id)
+    
+    failure_logger.log_failure(
+        video_id=video_info.video_id,
+        url=video_info.url,
+        reason=reason,
+        error_type=error_type,
+        batch_id=run_id,
+        channel_id=video_info.channel_id,
+        channel_name=video_info.channel_name
+    )
+
+
+def _get_error_type_display_name(error_type: ErrorType) -> str:
+    """获取错误类型的显示名称
+    
+    Args:
+        error_type: 错误类型
+    
+    Returns:
+        错误类型的显示名称
+    """
+    error_type_names = {
+        ErrorType.NETWORK: "网络错误",
+        ErrorType.TIMEOUT: "超时",
+        ErrorType.RATE_LIMIT: "限流",
+        ErrorType.AUTH: "认证失败",
+        ErrorType.CONTENT: "内容不可用",
+        ErrorType.FILE_IO: "文件IO错误",
+        ErrorType.PARSE: "解析错误",
+        ErrorType.INVALID_INPUT: "输入无效",
+        ErrorType.CANCELLED: "已取消",
+        ErrorType.EXTERNAL_SERVICE: "外部服务错误",
+        ErrorType.UNKNOWN: "未知错误",
+    }
+    return error_type_names.get(error_type, "未知错误")
 
 
 def process_video_list(
@@ -357,7 +387,8 @@ def process_video_list(
     Args:
         videos: 视频列表
         language_config: 语言配置
-        llm: LLM 客户端
+        translation_llm: 翻译 LLM 客户端（可选）
+        summary_llm: 摘要 LLM 客户端（可选）
         output_writer: 输出写入器
         failure_logger: 失败记录器
         incremental_manager: 增量管理器
@@ -409,7 +440,8 @@ def process_video_list(
                 return process_single_video(
                     v,  # 这里 v 是闭包捕获的，每个任务都有独立的 v
                     language_config,
-                    llm,
+                    translation_llm,  # 翻译 LLM 客户端
+                    summary_llm,  # 摘要 LLM 客户端
                     output_writer,
                     failure_logger,
                     incremental_manager,
@@ -428,22 +460,84 @@ def process_video_list(
     # 使用 TaskRunner 并发执行
     task_runner = TaskRunner(concurrency=concurrency)
     
-    def progress_callback(completed: int, total: int):
-        """进度回调"""
-        if completed % max(1, total // 10) == 0 or completed == total:
-            logger.info(f"处理进度: {completed}/{total} ({completed * 100 // total}%)")
+    # ETA 计算相关变量
+    start_time = time.time()
+    last_eta_update = start_time
+    min_samples_for_eta = 1  # 至少完成 1 个样本就开始显示 ETA（降低阈值以支持少量视频）
+    eta_update_interval = 5.0  # ETA 更新间隔（秒，降低到 5 秒以更频繁更新）
+    
+    def progress_callback(completed: int, total: int, running_tasks: List[str]):
+        """进度回调
+        
+        Args:
+            completed: 已完成数量
+            total: 总数量
+            running_tasks: 正在运行的任务列表
+        """
+        nonlocal last_eta_update
+        
+        # 输出进度信息到日志（控制台和文件）
+        # 对于少量视频，每次完成都显示；对于大量视频，每 10% 显示一次
+        progress_interval = max(1, total // 10) if total >= 10 else 1
+        if completed % progress_interval == 0 or completed == total:
+            progress_msg = f"处理进度: {completed}/{total} ({completed * 100 // total}%)"
+            logger.info(progress_msg)
+            # 也通过 on_log 回调输出到 GUI
+            _safe_log(on_log, "INFO", progress_msg)
+        
+        # 计算 ETA
+        eta_seconds = None
+        current_time = time.time()
+        
+        if completed >= min_samples_for_eta and completed < total:
+            # 计算平均耗时
+            elapsed = current_time - start_time
+            if elapsed > 0 and completed > 0:
+                avg_time_per_video = elapsed / completed
+                remaining = total - completed
+                eta_seconds = avg_time_per_video * remaining
+                
+                # 限制更新频率（对于少量视频，更频繁更新）
+                update_interval = eta_update_interval if total >= 10 else 2.0
+                if current_time - last_eta_update >= update_interval or completed == total:
+                    last_eta_update = current_time
+                    if eta_seconds >= 60:
+                        eta_minutes = int(eta_seconds / 60)
+                        eta_msg = f"预计剩余时间: 约 {eta_minutes} 分钟（仅供参考）"
+                    else:
+                        eta_msg = f"预计剩余时间: 约 {int(eta_seconds)} 秒（仅供参考）"
+                    logger.info(eta_msg)
+                    # 也通过 on_log 回调输出到 GUI
+                    _safe_log(on_log, "INFO", eta_msg)
+        
+        # 显示正在处理的任务（每次更新都显示，但限制频率）
+        if running_tasks:
+            # 对于少量视频，更频繁显示；对于大量视频，每 20% 显示一次
+            running_interval = max(1, total // 5) if total >= 10 else 1
+            if completed == 0 or completed % running_interval == 0 or completed == total:
+                running_text = ", ".join(running_tasks[:3])
+                if len(running_tasks) > 3:
+                    running_text += f" ... 还有 {len(running_tasks) - 3} 个"
+                running_msg = f"正在处理: {running_text}"
+                logger.info(running_msg)
+                # 也通过 on_log 回调输出到 GUI
+                _safe_log(on_log, "INFO", running_msg)
         
         # 更新 UI 统计信息（如果提供了回调）
         if on_stats:
             try:
-                # 统计当前成功和失败数量
-                # 注意：这里只能统计已完成的，无法区分成功/失败
-                # 实际的成功/失败数量需要等所有任务完成后才能准确统计
+                # 格式化正在处理的任务列表（最多显示 3 个）
+                running_display = running_tasks[:3]
+                if len(running_tasks) > 3:
+                    running_display.append(f"... 还有 {len(running_tasks) - 3} 个")
+                
                 stats = {
                     "total": total,
                     "success": 0,  # 暂时设为 0，等完成后更新
                     "failed": 0,   # 暂时设为 0，等完成后更新
-                    "current": completed
+                    "current": completed,
+                    "running": running_display,  # 正在处理的任务列表
+                    "eta_seconds": eta_seconds  # 预计剩余时间（秒）
                 }
                 on_stats(stats)
             except Exception as e:
@@ -459,26 +553,36 @@ def process_video_list(
     success_count = sum(1 for r in result["results"] if r is True)
     failed_count = result["failed"]
     
-    # 记录错误信息到日志和回调
+    # 统计错误分类
+    error_counts = {}
     if result.get("errors"):
         for error_info in result["errors"]:
-            error_msg = f"视频处理失败 [{error_info.get('task_name', 'unknown')}]: {error_info.get('error', '未知错误')}"
+            error_type = error_info.get('error_type', 'unknown')
+            error_counts[error_type] = error_counts.get(error_type, 0) + 1
+            
+            task_name = error_info.get('task_name', 'unknown')
+            error_msg = f"视频处理失败 [{task_name}]: {error_info.get('error', '未知错误')}"
             logger.error(error_msg, run_id=run_id)
-            if on_log:
-                try:
-                    # 从 task_name 中提取 video_id（格式：video_id - title...）
-                    task_name = error_info.get("task_name", "")
-                    video_id = None
-                    if " - " in task_name:
-                        video_id = task_name.split(" - ")[0]
-                    on_log("ERROR", error_msg, video_id=video_id)
-                except Exception as e:
-                    logger.warning(f"日志回调执行失败: {e}")
+            # 从 task_name 中提取 video_id（格式：video_id - title...）
+            video_id = task_name.split(" - ")[0] if " - " in task_name else None
+            _safe_log(on_log, "ERROR", error_msg, video_id)
+    
+    # 生成错误分类摘要
+    error_summary = []
+    if error_counts:
+        for error_type, count in sorted(error_counts.items()):
+            error_type_name = _get_error_type_display_name(ErrorType(error_type))
+            error_summary.append(f"{error_type_name}: {count}")
     
     logger.info(
         f"处理完成: 总计 {total}，成功 {success_count}，失败 {failed_count}",
         run_id=run_id
     )
+    
+    if error_summary:
+        summary_msg = f"错误分类: {', '.join(error_summary)}"
+        logger.info(summary_msg, run_id=run_id)
+        _safe_log(on_log, "INFO", summary_msg, None)
     
     # 清除日志上下文
     clear_log_context()
@@ -487,5 +591,6 @@ def process_video_list(
         "total": total,
         "success": success_count,
         "failed": failed_count,
-        "errors": result.get("errors", [])
+        "errors": result.get("errors", []),
+        "error_counts": error_counts  # 错误分类统计
     }

@@ -10,7 +10,10 @@ from ui.fonts import title_font, heading_font
 class SystemPage(ctk.CTkFrame):
     """系统工具页面"""
     
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, on_log=None, **kwargs):
+        # 从 kwargs 中移除 on_log，因为 CTkFrame 不支持这个参数
+        # 如果将来需要使用，可以保存为实例变量
+        self.on_log = on_log
         super().__init__(parent, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self._build_ui()

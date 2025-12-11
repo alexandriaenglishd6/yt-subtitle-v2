@@ -1,6 +1,6 @@
 """
 左侧侧边栏组件
-包含导航菜单（任务、运行设置、外观 & 系统）
+包含导航菜单（任务、运行设置）
 """
 import customtkinter as ctk
 from typing import Callable, Optional
@@ -47,7 +47,7 @@ class Sidebar(ctk.CTkFrame):
         )
         self.channel_mode_btn.pack(fill="x", pady=2)
         
-        # URL 列表模式（P1，暂时占位）
+        # URL 列表模式
         self.url_list_mode_btn = ctk.CTkButton(
             sidebar_content,
             text=t("url_list_mode"),
@@ -55,8 +55,7 @@ class Sidebar(ctk.CTkFrame):
             anchor="w",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
-            hover_color=("gray70", "gray30"),
-            state="disabled"  # P1 功能，暂时禁用
+            hover_color=("gray70", "gray30")
         )
         self.url_list_mode_btn.pack(fill="x", pady=2)
         
@@ -79,46 +78,31 @@ class Sidebar(ctk.CTkFrame):
         )
         self.run_params_btn.pack(fill="x", pady=2)
         
-        self.network_ai_btn = ctk.CTkButton(
+        # 网络设置按钮（点击后显示包含 Cookie 和代理的页面）
+        self.network_settings_btn = ctk.CTkButton(
             sidebar_content,
-            text=t("network_ai"),
-            command=lambda: self._switch_page("network_ai"),
+            text=t("network_settings_group"),
+            command=lambda: self._switch_page("network_settings"),
             anchor="w",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30")
         )
-        self.network_ai_btn.pack(fill="x", pady=2)
+        self.network_settings_btn.pack(fill="x", pady=2)
         
-        # 外观 & 系统分组
-        self.appearance_label = ctk.CTkLabel(
+        # 翻译&摘要按钮（点击后显示包含翻译 AI 和摘要 AI 的页面）
+        self.translation_summary_btn = ctk.CTkButton(
             sidebar_content,
-            text=t("sidebar_appearance"),
-            font=body_font(weight="bold")
-        )
-        self.appearance_label.pack(pady=(16, 4), anchor="w")
-        
-        self.appearance_lang_btn = ctk.CTkButton(
-            sidebar_content,
-            text=t("appearance_lang"),
-            command=lambda: self._switch_page("appearance"),
+            text=t("translation_summary_group"),
+            command=lambda: self._switch_page("translation_summary"),
             anchor="w",
             fg_color="transparent",
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30")
         )
-        self.appearance_lang_btn.pack(fill="x", pady=2)
+        self.translation_summary_btn.pack(fill="x", pady=2)
         
-        self.system_tools_btn = ctk.CTkButton(
-            sidebar_content,
-            text=t("system_tools"),
-            command=lambda: self._switch_page("system"),
-            anchor="w",
-            fg_color="transparent",
-            text_color=("gray10", "gray90"),
-            hover_color=("gray70", "gray30")
-        )
-        self.system_tools_btn.pack(fill="x", pady=2)
+        # 外观 & 系统分组已暂时删除
     
     def _switch_page(self, page_name: str):
         """切换页面"""
@@ -132,8 +116,7 @@ class Sidebar(ctk.CTkFrame):
             self.task_label.configure(text=t("sidebar_task"))
         if hasattr(self, 'settings_label'):
             self.settings_label.configure(text=t("sidebar_settings"))
-        if hasattr(self, 'appearance_label'):
-            self.appearance_label.configure(text=t("sidebar_appearance"))
+        # 外观与语言和系统工具已暂时删除
         
         # 刷新按钮文本
         if hasattr(self, 'channel_mode_btn'):
@@ -142,10 +125,9 @@ class Sidebar(ctk.CTkFrame):
             self.url_list_mode_btn.configure(text=t("url_list_mode"))
         if hasattr(self, 'run_params_btn'):
             self.run_params_btn.configure(text=t("run_params"))
-        if hasattr(self, 'network_ai_btn'):
-            self.network_ai_btn.configure(text=t("network_ai"))
-        if hasattr(self, 'appearance_lang_btn'):
-            self.appearance_lang_btn.configure(text=t("appearance_lang"))
-        if hasattr(self, 'system_tools_btn'):
-            self.system_tools_btn.configure(text=t("system_tools"))
+        if hasattr(self, 'network_settings_btn'):
+            self.network_settings_btn.configure(text=t("network_settings_group"))
+        if hasattr(self, 'translation_summary_btn'):
+            self.translation_summary_btn.configure(text=t("translation_summary_group"))
+        # 外观与语言和系统工具已暂时删除
 

@@ -19,10 +19,13 @@ from ui.components.sidebar import Sidebar
 from ui.components.log_panel import LogPanel
 from ui.fonts import heading_font
 from ui.pages.channel_page import ChannelPage
+from ui.pages.url_list_page import UrlListPage
 from ui.pages.run_params_page import RunParamsPage
 from ui.pages.appearance_page import AppearancePage
 from ui.pages.network_ai_page import NetworkAIPage
 from ui.pages.system_page import SystemPage
+from ui.pages.network_settings_page import NetworkSettingsPage
+from ui.pages.translation_summary_page import TranslationSummaryPage
 from ui.business_logic import VideoProcessor
 from config.manager import get_user_data_dir, ConfigManager
 
@@ -42,8 +45,8 @@ class MainWindow(ctk.CTk):
         
         # 窗口基本设置（先设置默认标题，i18n 初始化后会更新）
         self.title("YouTube 字幕工具 v2")
-        self.geometry("1200x800")
-        self.minsize(800, 600)
+        self.geometry("1600x1000")
+        self.minsize(1000, 700)
         
         # 初始化配置管理器
         self.config_manager = ConfigManager()
@@ -70,6 +73,10 @@ class MainWindow(ctk.CTk):
         # 初始化 Logger（用于 GUI 日志输出）
         self.logger = Logger(name="gui", console_output=False, file_output=True)
         self.logger.add_callback(self._on_log_message)
+        
+        # 同时为全局 logger 注册回调，确保所有通过 get_logger() 的日志都能显示在 GUI 中
+        global_logger = get_logger()
+        global_logger.add_callback(self._on_log_message)
         
         # 初始化业务逻辑处理器
         self.video_processor = VideoProcessor(self.config_manager, self.app_config)
@@ -131,7 +138,7 @@ class MainWindow(ctk.CTk):
             on_language_changed=self._on_language_changed,
             on_theme_changed=self._on_theme_changed,
             on_open_output=self._on_open_output_folder,
-            on_open_config=self._on_open_config_folder
+            on_open_config=self._on_open_failed_links
         )
         self.toolbar.grid(row=0, column=0, columnspan=2, sticky="ew")
         
@@ -188,10 +195,27 @@ class MainWindow(ctk.CTk):
             self.toolbar.update_title(t("channel_mode"))
             self.state_manager.set("current_mode", t("channel_mode"))
             
+        elif page_name == "url_list":
+            page = UrlListPage(
+                self.page_container,
+                on_check_new=self._on_check_new_urls,
+                on_start_processing=self._on_start_processing_urls,
+                stats=self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0, "current": 0}),
+                running_status=self.state_manager.get("running_status", t("status_idle")),
+                language_config=self.app_config.language.to_dict() if self.app_config.language else {},
+                on_save_language_config=self._on_save_language_config
+            )
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("url_list_mode"))
+            self.state_manager.set("current_mode", t("url_list_mode"))
+            
         elif page_name == "run_params":
             page = RunParamsPage(
                 self.page_container,
                 concurrency=self.app_config.concurrency,
+                retry_count=self.app_config.retry_count,
+                output_dir=self.app_config.output_dir,
                 on_save=self._on_save_run_params
             )
             page.pack(fill="both", expand=True)
@@ -210,20 +234,48 @@ class MainWindow(ctk.CTk):
                 self.page_container,
                 cookie=self.app_config.cookie,
                 proxies=self.app_config.proxies,
-                ai_config=self.app_config.ai.to_dict() if self.app_config.ai else {},
-                output_dir=self.app_config.output_dir,
+                translation_ai_config=self.app_config.translation_ai.to_dict(),
+                summary_ai_config=self.app_config.summary_ai.to_dict(),
                 on_save_cookie=self._on_save_cookie,
                 on_save_proxies=self._on_save_proxies,
                 on_save_ai_config=self._on_save_ai_config,
-                on_save_output_dir=self._on_save_output_dir,
                 on_log_message=self._on_log
             )
             page.pack(fill="both", expand=True)
             self.current_page = page
             self.toolbar.update_title(t("network_ai"))
             
+        elif page_name == "network_settings":
+            page = NetworkSettingsPage(
+                self.page_container,
+                cookie=self.app_config.cookie,
+                proxies=self.app_config.proxies,
+                on_save_cookie=self._on_save_cookie,
+                on_save_proxies=self._on_save_proxies,
+                on_log_message=self._on_log
+            )
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("network_settings_group"))
+            
+        elif page_name == "translation_summary":
+            page = TranslationSummaryPage(
+                self.page_container,
+                translation_ai_config=self.app_config.translation_ai.to_dict(),
+                summary_ai_config=self.app_config.summary_ai.to_dict(),
+                on_save_translation_ai=self._on_save_translation_ai,
+                on_save_summary_ai=self._on_save_summary_ai,
+                on_log_message=self._on_log
+            )
+            page.pack(fill="both", expand=True)
+            self.current_page = page
+            self.toolbar.update_title(t("translation_summary_group"))
+            
         elif page_name == "system":
-            page = SystemPage(self.page_container)
+            page = SystemPage(
+                self.page_container,
+                on_log=self._on_log
+            )
             page.pack(fill="both", expand=True)
             self.current_page = page
             self.toolbar.update_title(t("system_tools"))
@@ -237,83 +289,85 @@ class MainWindow(ctk.CTk):
             )
             placeholder.pack(expand=True)
     
-    def _on_check_new_videos(self, url: str):
-        """检查新视频按钮点击（Dry Run）"""
-        if not url:
-            self.log_panel.append_log("WARN", "请输入频道 URL")
-            return
+    def _create_safe_callbacks(self):
+        """创建线程安全的回调函数集
         
-        if self.is_processing:
-            self.log_panel.append_log("WARN", "正在处理中，请等待完成")
-            return
-        
-        self.is_processing = True
-        
-        # 创建线程安全的回调包装器
+        Returns:
+            tuple: (safe_on_log, safe_on_status, safe_on_stats, safe_on_complete)
+        """
         def safe_on_log(level: str, message: str, video_id: Optional[str] = None):
             """线程安全的日志回调"""
-            def update_ui():
-                self._on_log(level, message, video_id)
-            self.after(0, update_ui)
+            self.after(0, lambda: self._on_log(level, message, video_id))
         
         def safe_on_status(status: str):
             """线程安全的状态更新回调"""
-            def update_ui():
-                self._on_status(status)
-            self.after(0, update_ui)
+            self.after(0, lambda: self._on_status(status))
+            # 同时更新日志面板的统计信息（包含状态）
+            if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+                current_stats = self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0})
+                self.after(0, lambda: self.log_panel.update_stats(current_stats, status))
+        
+        def safe_on_stats(stats: dict):
+            """线程安全的统计信息更新回调"""
+            self.after(0, lambda: self._on_stats(stats))
         
         def safe_on_complete():
             """线程安全的完成回调"""
-            def update_ui():
-                self.is_processing = False
-            self.after(0, update_ui)
+            self.after(0, lambda: setattr(self, 'is_processing', False))
+        
+        return safe_on_log, safe_on_status, safe_on_stats, safe_on_complete
+    
+    def _check_can_start_task(self, input_text: str) -> bool:
+        """检查是否可以启动任务
+        
+        Args:
+            input_text: 输入的 URL 或 URL 列表文本
+        
+        Returns:
+            是否可以启动任务
+        """
+        if not input_text or not input_text.strip():
+            # 根据当前页面类型显示不同的提示
+            if self.current_page_name == "url_list":
+                self.log_panel.append_log("WARN", t("url_list_empty"))
+            else:
+                self.log_panel.append_log("WARN", t("enter_channel_url"))
+            return False
+        
+        if self.is_processing:
+            self.log_panel.append_log("WARN", t("processing_in_progress"))
+            return False
+        
+        return True
+    
+    def _on_check_new_videos(self, url: str, force: bool = False):
+        """检查新视频按钮点击（Dry Run）"""
+        if not self._check_can_start_task(url):
+            return
+        
+        self.is_processing = True
+        safe_on_log, safe_on_status, _, safe_on_complete = self._create_safe_callbacks()
         
         self.video_processor.dry_run(
             url=url,
             on_log=safe_on_log,
             on_status=safe_on_status,
-            on_complete=safe_on_complete
+            on_complete=safe_on_complete,
+            force=force
         )
     
-    def _on_start_processing(self, url: str):
-        """开始处理按钮点击"""
-        if not url:
-            self.log_panel.append_log("WARN", "请输入频道 URL")
-            return
-        
-        if self.is_processing:
-            self.log_panel.append_log("WARN", "正在处理中，请等待完成")
+    def _on_start_processing(self, url: str, force: bool = False):
+        """开始处理按钮点击（频道模式）"""
+        if not self._check_can_start_task(url):
             return
         
         self.is_processing = True
-        
-        # 创建线程安全的回调包装器
-        def safe_on_log(level: str, message: str, video_id: Optional[str] = None):
-            """线程安全的日志回调"""
-            def update_ui():
-                self._on_log(level, message, video_id)
-            self.after(0, update_ui)
-        
-        def safe_on_status(status: str):
-            """线程安全的状态更新回调"""
-            def update_ui():
-                self._on_status(status)
-            self.after(0, update_ui)
-        
-        def safe_on_stats(stats: dict):
-            """线程安全的统计信息更新回调"""
-            def update_ui():
-                self._on_stats(stats)
-            self.after(0, update_ui)
-        
-        def safe_on_complete():
-            """线程安全的完成回调"""
-            def update_ui():
-                self.is_processing = False
-            self.after(0, update_ui)
+        safe_on_log, safe_on_status, safe_on_stats, safe_on_complete = self._create_safe_callbacks()
         
         # 添加初始日志
-        self.log_panel.append_log("INFO", f"开始处理：{url}")
+        self.log_panel.append_log("INFO", t("processing_start", url=url))
+        if force:
+            self.log_panel.append_log("INFO", t("force_rerun_enabled"))
         
         # 启动处理任务
         thread = self.video_processor.process_videos(
@@ -321,95 +375,190 @@ class MainWindow(ctk.CTk):
             on_log=safe_on_log,
             on_status=safe_on_status,
             on_stats=safe_on_stats,
-            on_complete=safe_on_complete
+            on_complete=safe_on_complete,
+            force=force
         )
         
         # 确认线程已启动
-        if thread and thread.is_alive():
-            self.log_panel.append_log("DEBUG", "处理任务线程已启动")
-        else:
-            self.log_panel.append_log("ERROR", "处理任务线程启动失败")
+        if not (thread and thread.is_alive()):
+            self.log_panel.append_log("ERROR", t("processing_failed", error="线程启动失败"))
+    
+    def _on_check_new_urls(self, urls_text: str, force: bool = False):
+        """检查新视频按钮点击（URL 列表模式）"""
+        if not urls_text or not urls_text.strip():
+            self.log_panel.append_log("WARN", t("url_list_empty"))
+            return
+        
+        if not self._check_can_start_task(urls_text):
+            return
+        
+        self.is_processing = True
+        safe_on_log, safe_on_status, _, safe_on_complete = self._create_safe_callbacks()
+        
+        self.video_processor.dry_run_url_list(
+            urls_text=urls_text,
+            on_log=safe_on_log,
+            on_status=safe_on_status,
+            on_complete=safe_on_complete,
+            force=force
+        )
+    
+    def _on_start_processing_urls(self, urls_text: str, force: bool = False):
+        """开始处理按钮点击（URL 列表模式）"""
+        if not urls_text or not urls_text.strip():
+            self.log_panel.append_log("WARN", t("url_list_empty"))
+            return
+        
+        if not self._check_can_start_task(urls_text):
+            return
+        
+        self.is_processing = True
+        safe_on_log, safe_on_status, safe_on_stats, safe_on_complete = self._create_safe_callbacks()
+        
+        # 添加初始日志
+        self.log_panel.append_log("INFO", t("processing_start_url_list"))
+        if force:
+            self.log_panel.append_log("INFO", t("force_rerun_enabled"))
+        
+        # 启动处理任务
+        thread = self.video_processor.process_url_list(
+            urls_text=urls_text,
+            on_log=safe_on_log,
+            on_status=safe_on_status,
+            on_stats=safe_on_stats,
+            on_complete=safe_on_complete,
+            force=force
+        )
+        
+        # 确认线程已启动
+        if not (thread and thread.is_alive()):
+            self.log_panel.append_log("ERROR", t("processing_failed", error="线程启动失败"))
+    
+    def _save_config(
+        self,
+        update_fn,
+        success_msg: str,
+        error_msg_prefix: str,
+        reinit_processor: bool = False
+    ):
+        """通用配置保存方法
+        
+        Args:
+            update_fn: 更新配置的函数，接收 app_config 并修改
+            success_msg: 成功时的日志消息
+            error_msg_prefix: 失败时的日志消息前缀
+            reinit_processor: 是否需要重新初始化 video_processor
+        """
+        try:
+            update_fn(self.app_config)
+            self.config_manager.save(self.app_config)
+            if reinit_processor:
+                self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+            self.log_panel.append_log("INFO", success_msg)
+        except Exception as e:
+            logger = get_logger()
+            logger.error(f"{error_msg_prefix}: {e}")
+            self.log_panel.append_log("ERROR", f"{error_msg_prefix}: {e}")
     
     def _on_save_cookie(self, cookie: str):
         """保存 Cookie"""
-        try:
-            self.app_config.cookie = cookie
-            self.config_manager.save(self.app_config)
-            # 重新初始化核心组件（以使用新的 Cookie）
-            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
-            self.log_panel.append_log("INFO", "Cookie 已保存并重新加载")
-        except Exception as e:
-            logger = get_logger()
-            logger.error(f"保存 Cookie 失败: {e}")
-            self.log_panel.append_log("ERROR", f"保存 Cookie 失败: {e}")
+        self._save_config(
+            update_fn=lambda cfg: setattr(cfg, 'cookie', cookie),
+            success_msg=t("cookie_save_success"),
+            error_msg_prefix=t("cookie_save_failed", error="").rstrip(": "),
+            reinit_processor=True
+        )
     
     def _on_save_proxies(self, proxies: list):
         """保存代理列表"""
-        try:
-            self.app_config.proxies = proxies
-            self.config_manager.save(self.app_config)
-            # 重新初始化核心组件（以使用新的代理）
-            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
-            self.log_panel.append_log("INFO", f"代理设置已保存（共 {len(proxies)} 个）")
-        except Exception as e:
-            logger = get_logger()
-            logger.error(f"保存代理设置失败: {e}")
-            self.log_panel.append_log("ERROR", f"保存代理设置失败: {e}")
+        self._save_config(
+            update_fn=lambda cfg: setattr(cfg, 'proxies', proxies),
+            success_msg=t("proxy_save_success"),
+            error_msg_prefix=t("proxy_save_failed", error="").rstrip(": "),
+            reinit_processor=True
+        )
     
-    def _on_save_ai_config(self, ai_config: dict):
-        """保存 AI 配置"""
-        try:
-            from config.manager import AIConfig
-            self.app_config.ai = AIConfig.from_dict(ai_config)
-            self.config_manager.save(self.app_config)
-            # 重新初始化核心组件（以使用新的 AI 配置）
-            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
-            self.log_panel.append_log("INFO", f"AI 配置已保存: {ai_config.get('provider', 'unknown')} - {ai_config.get('model', 'unknown')}")
-        except Exception as e:
-            logger = get_logger()
-            logger.error(f"保存 AI 配置失败: {e}")
-            self.log_panel.append_log("ERROR", f"保存 AI 配置失败: {e}")
+    def _on_save_translation_ai(self, translation_ai_config: dict):
+        """保存翻译 AI 配置"""
+        from config.manager import AIConfig
+        def update_config(cfg):
+            cfg.translation_ai = AIConfig.from_dict(translation_ai_config)
+        self._save_config(
+            update_fn=update_config,
+            success_msg=t("ai_save_success"),
+            error_msg_prefix=t("ai_save_failed", error="").rstrip(": "),
+            reinit_processor=True
+        )
+    
+    def _on_save_summary_ai(self, summary_ai_config: dict):
+        """保存摘要 AI 配置"""
+        from config.manager import AIConfig
+        def update_config(cfg):
+            cfg.summary_ai = AIConfig.from_dict(summary_ai_config)
+        self._save_config(
+            update_fn=update_config,
+            success_msg=t("ai_save_success"),
+            error_msg_prefix=t("ai_save_failed", error="").rstrip(": "),
+            reinit_processor=True
+        )
+    
+    def _on_save_ai_config(self, translation_ai_config: dict, summary_ai_config: dict):
+        """保存 AI 配置（翻译和摘要）"""
+        from config.manager import AIConfig
+        self._save_config(
+            update_fn=lambda cfg: (
+                setattr(cfg, 'translation_ai', AIConfig.from_dict(translation_ai_config)),
+                setattr(cfg, 'summary_ai', AIConfig.from_dict(summary_ai_config))
+            ),
+            success_msg=t("ai_save_success"),
+            error_msg_prefix=t("ai_save_failed", error="").rstrip(": "),
+            reinit_processor=True
+        )
     
     def _on_save_output_dir(self, output_dir: str):
         """保存输出目录"""
-        try:
-            self.app_config.output_dir = output_dir
-            self.config_manager.save(self.app_config)
-            self.log_panel.append_log("INFO", f"输出目录已保存: {output_dir}")
-        except Exception as e:
-            logger = get_logger()
-            logger.error(f"保存输出目录失败: {e}")
-            self.log_panel.append_log("ERROR", f"保存输出目录失败: {e}")
+        self._save_config(
+            update_fn=lambda cfg: setattr(cfg, 'output_dir', output_dir),
+            success_msg=t("output_dir_save_success"),
+            error_msg_prefix=t("output_dir_save_failed", error="").rstrip(": "),
+            reinit_processor=False
+        )
     
     def _on_save_language_config(self, language_config: dict):
         """保存语言配置"""
-        try:
-            from core.language import LanguageConfig
-            # 保留 ui_language（因为它在 AppConfig 中单独存储）
-            current_ui_language = self.app_config.language.ui_language if self.app_config.language else "zh-CN"
-            # 合并配置
-            merged_config = {
-                "ui_language": current_ui_language,
-                **language_config
-            }
-            self.app_config.language = LanguageConfig.from_dict(merged_config)
-            self.config_manager.save(self.app_config)
-            # 重新初始化核心组件（以使用新的语言配置）
-            self.video_processor = VideoProcessor(self.config_manager, self.app_config)
-            self.log_panel.append_log("INFO", "语言配置已保存并重新加载")
-        except Exception as e:
-            logger = get_logger()
-            logger.error(f"保存语言配置失败: {e}")
-            self.log_panel.append_log("ERROR", f"保存语言配置失败: {e}")
+        from core.language import LanguageConfig
+        
+        def update_language(cfg):
+            current_ui_language = cfg.language.ui_language if cfg.language else "zh-CN"
+            merged_config = {"ui_language": current_ui_language, **language_config}
+            cfg.language = LanguageConfig.from_dict(merged_config)
+        
+        self._save_config(
+            update_fn=update_language,
+            success_msg=t("language_config_save_success"),
+            error_msg_prefix=t("language_config_save_failed", error="").rstrip(": "),
+            reinit_processor=True
+        )
     
-    def _on_save_run_params(self, concurrency: int):
-        """保存运行参数"""
-        try:
-            self.app_config.concurrency = concurrency
-            self.config_manager.save(self.app_config)
-            self.log_panel.append_log("INFO", f"并发数已更新为: {concurrency}")
-        except Exception as e:
-            self.log_panel.append_log("ERROR", f"保存运行参数失败: {e}")
+    def _on_save_run_params(self, concurrency: int, retry_count: int, output_dir: str):
+        """保存运行参数
+        
+        Args:
+            concurrency: 并发数
+            retry_count: 重试次数
+            output_dir: 输出目录
+        """
+        def update_config(cfg):
+            cfg.concurrency = concurrency
+            cfg.retry_count = retry_count
+            cfg.output_dir = output_dir
+        
+        self._save_config(
+            update_fn=update_config,
+            success_msg=t("run_params_updated", concurrency=concurrency, retry_count=retry_count),
+            error_msg_prefix=t("save_params_failed", error="").rstrip(": "),
+            reinit_processor=True  # 重试次数和输出目录变化需要重新初始化处理器
+        )
     
     def _on_language_changed(self, value: str):
         """语言切换回调"""
@@ -528,23 +677,31 @@ class MainWindow(ctk.CTk):
                 current_status = status_key
             else:
                 current_status = "status_idle"
-        self.toolbar.update_status(current_status)
+        # 不再更新工具栏状态（已删除）
+        # 更新日志面板的统计信息
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+            current_stats = self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0})
+            self.log_panel.update_stats(current_stats, current_status)
         
         # 重新构建当前页面（确保所有文本都更新）
         if self.current_page_name:
             # 保存当前页面的状态（如果有）
             saved_stats = None
             saved_status = None
-            if isinstance(self.current_page, ChannelPage):
+            if isinstance(self.current_page, (ChannelPage, UrlListPage)):
                 saved_stats = self.current_page.stats
                 saved_status = self.current_page.running_status
             
             # 重新切换页面（会重新构建，使用新语言）
             self._switch_page(self.current_page_name)
             
-            # 恢复状态（使用翻译键）
-            if isinstance(self.current_page, ChannelPage) and saved_stats:
-                self.current_page.update_stats(saved_stats, current_status)
+        # 恢复状态（使用翻译键）
+        if isinstance(self.current_page, (ChannelPage, UrlListPage)) and saved_stats:
+            self.current_page.update_stats(saved_stats, current_status)
+        # 更新日志面板的统计信息
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+            current_stats = self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0})
+            self.log_panel.update_stats(current_stats, current_status)
         else:
             # 如果无法重新构建，至少刷新现有页面
             if self.current_page and hasattr(self.current_page, 'refresh_language'):
@@ -569,19 +726,35 @@ class MainWindow(ctk.CTk):
         
         self.log_panel.append_log("INFO", f"已打开输出文件夹：{output_dir.absolute()}")
     
-    def _on_open_config_folder(self):
-        """打开配置文件夹"""
-        config_dir = get_user_data_dir()
+    def _on_open_failed_links(self):
+        """打开失败链接文件"""
+        from pathlib import Path
         
+        # 获取输出目录
+        output_dir = Path(self.app_config.output_dir)
+        failed_urls_file = output_dir / "failed_urls.txt"
+        
+        # 如果文件不存在，创建空文件
+        if not failed_urls_file.exists():
+            output_dir.mkdir(parents=True, exist_ok=True)
+            failed_urls_file.touch()
+            self.log_panel.append_log("INFO", f"失败链接文件不存在，已创建：{failed_urls_file.absolute()}")
+        
+        # 打开文件
         system = platform.system()
-        if system == "Windows":
-            subprocess.Popen(f'explorer "{config_dir.absolute()}"')
-        elif system == "Darwin":  # macOS
-            subprocess.Popen(["open", str(config_dir.absolute())])
-        else:  # Linux
-            subprocess.Popen(["xdg-open", str(config_dir.absolute())])
-        
-        self.log_panel.append_log("INFO", f"已打开配置文件夹：{config_dir.absolute()}")
+        try:
+            if system == "Windows":
+                # Windows: 使用 notepad 打开
+                subprocess.Popen(['notepad', str(failed_urls_file.absolute())])
+            elif system == "Darwin":  # macOS
+                subprocess.Popen(["open", "-t", str(failed_urls_file.absolute())])
+            else:  # Linux
+                # Linux: 尝试使用默认文本编辑器
+                subprocess.Popen(["xdg-open", str(failed_urls_file.absolute())])
+            
+            self.log_panel.append_log("INFO", f"已打开失败链接文件：{failed_urls_file.absolute()}")
+        except Exception as e:
+            self.log_panel.append_log("ERROR", f"打开失败链接文件失败：{e}")
     
     def _on_log_message(self, level: str, message: str, video_id: Optional[str] = None):
         """日志回调函数（从 Logger 接收日志）"""
@@ -611,22 +784,36 @@ class MainWindow(ctk.CTk):
                 # 如果找不到，使用默认的 status_idle
                 status = "status_idle"
         
-        self.toolbar.update_status(status)
+        # 不再更新工具栏状态（已删除）
         self.state_manager.set("running_status", status)
+        # 更新日志面板的统计信息（包含状态）
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+            current_stats = self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0})
+            self.log_panel.update_stats(current_stats, status)
         self.event_bus.publish(EventType.STATUS_CHANGED, status)
     
     def _on_stats(self, stats: dict):
         """处理统计信息更新"""
         self.state_manager.set("stats", stats)
-        if isinstance(self.current_page, ChannelPage):
+        if isinstance(self.current_page, (ChannelPage, UrlListPage)):
             self.current_page.update_stats(stats, self.state_manager.get("running_status", ""))
+        # 更新日志面板的统计信息
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+            self.log_panel.update_stats(stats, self.state_manager.get("running_status", ""))
         self.event_bus.publish(EventType.STATS_UPDATED, stats)
     
     def _on_status_changed(self, status: str):
         """状态变化事件处理"""
-        self.toolbar.update_status(status)
+        # 不再更新工具栏状态（已删除）
+        # 更新日志面板的统计信息（包含状态）
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+            current_stats = self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0})
+            self.log_panel.update_stats(current_stats, status)
     
     def _on_stats_updated(self, stats: dict):
         """统计信息更新事件处理"""
-        if isinstance(self.current_page, ChannelPage):
+        if isinstance(self.current_page, (ChannelPage, UrlListPage)):
             self.current_page.update_stats(stats, self.state_manager.get("running_status", ""))
+        # 更新日志面板的统计信息
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
+            self.log_panel.update_stats(stats, self.state_manager.get("running_status", ""))

@@ -90,6 +90,11 @@ class SubtitleDetector:
                     f"人工字幕: {len(manual_languages)} 种, "
                     f"自动字幕: {len(auto_languages)} 种"
                 )
+                # 输出详细语言列表
+                if manual_languages:
+                    logger.info(f"  人工字幕语言: {', '.join(manual_languages)}")
+                if auto_languages:
+                    logger.info(f"  自动字幕语言: {', '.join(auto_languages)}")
             else:
                 logger.warning(f"视频无可用字幕: {video_info.video_id}")
             
