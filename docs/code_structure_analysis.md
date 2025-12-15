@@ -395,3 +395,344 @@ ui/pages/network_settings/
 6. **ui/business_logic.py** - 业务逻辑层
 7. **ui/pages/network_settings_page.py** - 页面层，影响最小
 
+---
+
+## AI 供应商接入扩展计划
+
+### 当前架构优势
+
+项目已实现统一的 `LLMClient` 协议，为接入新供应商提供了良好的基础：
+
+- **统一接口**：所有供应商实现相同的 `LLMClient` 协议
+- **注册表机制**：通过 `_LLM_REGISTRY` 轻松添加新供应商
+- **配置驱动**：通过 `AIConfig` 配置供应商参数
+- **工厂模式**：`create_llm_client()` 统一创建客户端
+
+### 接入新供应商的步骤
+
+#### 1. OpenAI 兼容协议供应商
+
+**适用场景：**
+- 提供 OpenAI Chat Completions 兼容 API
+- 如：DeepSeek、Kimi、Qwen、GLM 等
+
+**实现方式：**
+- 使用现有的 `OpenAICompatibleClient`
+- 配置 `base_url` 和 `api_keys`
+- 无需编写新代码
+
+**示例：**
+```json
+{
+  "provider": "openai",
+  "model": "deepseek-chat",
+  "base_url": "https://api.deepseek.com/v1",
+  "api_keys": {"openai": "env:DEEPSEEK_API_KEY"}
+}
+```
+
+#### 2. 独立供应商（需要新实现）
+
+**实现步骤：**
+
+1. **创建客户端类**（在拆分后的 `core/ai_providers/` 目录）：
+   ```python
+   # core/ai_providers/new_provider.py
+   class NewProviderClient:
+       def __init__(self, ai_config: AIConfig):
+           # 初始化
+           self.ai_config = ai_config
+           self._max_concurrency = ai_config.max_concurrency
+           self._sem = threading.Semaphore(self._max_concurrency)
+       
+       @property
+       def supports_vision(self) -> bool:
+           return False
+       
+       @property
+       def max_input_tokens(self) -> int:
+           return 128000
+       
+       @property
+       def max_output_tokens(self) -> int:
+           return 4096
+       
+       @property
+       def max_concurrency(self) -> int:
+           return self._max_concurrency
+       
+       def generate(self, prompt: str, ...) -> LLMResult:
+           # 实现生成逻辑
+           with self._sem:
+               # API 调用
+               pass
+   ```
+
+2. **注册到注册表**：
+   ```python
+   # core/ai_providers/registry.py
+   from .new_provider import NewProviderClient
+   
+   _LLM_REGISTRY["new_provider"] = NewProviderClient
+   ```
+
+3. **更新配置和 UI**：
+   - 在 `AIConfig` 中添加 provider 选项
+   - 更新 UI 配置页面
+
+### 本地 AI 模型优化
+
+**当前实现：**
+- ✅ 通过 `base_url` 配置本地服务
+- ✅ 预热功能（R3-3）
+- ✅ 并发控制
+
+**优化方向：**
+
+1. **资源监控**：
+   - GPU/CPU 使用率监控
+   - 内存使用监控
+   - 自动降级策略
+
+2. **性能优化**：
+   - 批量请求合并
+   - 流式输出支持
+   - 响应缓存
+
+3. **错误处理**：
+   - 服务不可用检测
+   - 自动重试和降级
+   - 资源耗尽处理
+
+### Gemini 和 Anthropic 增强
+
+**当前状态：**
+- ✅ 基本功能已实现
+- ⚠️ 可以进一步优化
+
+**优化方向：**
+1. **功能增强**：
+   - 流式输出支持
+   - 多模态支持（图片输入）
+   - 函数调用支持
+
+2. **性能优化**：
+   - 请求合并
+   - 缓存机制
+   - 连接池
+
+---
+
+## 日志国际化优化方案
+
+### 问题描述
+
+- ✅ UI 已实现国际化（中英文切换）
+- ❌ 日志输出仍为中文，未实现国际化
+- 影响：英文界面下，日志显示中文，用户体验不一致
+
+### 当前日志系统分析
+
+**日志系统位置：** `core/logger.py`
+
+**主要组件：**
+- `Logger` 类：日志记录器
+- `ContextFormatter`：支持上下文的格式化器
+- `get_logger()`：获取日志实例
+
+**日志调用方式：**
+```python
+logger = get_logger()
+logger.info("检测到视频: {video_id}".format(video_id=vid))
+logger.warning("翻译失败: {error}".format(error=str(e)))
+```
+
+**问题：**
+- 日志消息硬编码为中文
+- 未使用国际化系统
+- 无法根据 UI 语言切换日志语言
+
+### 优化方案
+
+#### 方案 A：日志消息键值化（推荐）
+
+**架构设计：**
+
+1. **扩展翻译文件**：
+   ```json
+   // ui/i18n/zh_CN.json
+   {
+     "log_video_detected": "检测到视频: {video_id}",
+     "log_translation_start": "开始翻译: {video_id}",
+     "log_translation_success": "翻译成功: {video_id}",
+     "log_translation_failed": "翻译失败: {video_id}: {error}",
+     "log_summary_generated": "摘要已生成: {video_id}",
+     "log_error_occurred": "发生错误: {error}"
+   }
+   
+   // ui/i18n/en_US.json
+   {
+     "log_video_detected": "Video detected: {video_id}",
+     "log_translation_start": "Starting translation: {video_id}",
+     "log_translation_success": "Translation successful: {video_id}",
+     "log_translation_failed": "Translation failed: {video_id}: {error}",
+     "log_summary_generated": "Summary generated: {video_id}",
+     "log_error_occurred": "Error occurred: {error}"
+   }
+   ```
+
+2. **修改日志系统**：
+   ```python
+   # core/logger.py
+   from ui.i18n_manager import get_language, t
+   
+   class Logger:
+       def __init__(self, ...):
+           self._use_i18n = True  # 是否使用国际化
+           self._current_language = get_language()
+       
+       def _translate_message(self, message: str, **kwargs) -> str:
+           """翻译日志消息"""
+           if not self._use_i18n:
+               return message
+           
+           # 如果消息是键值（以 log_ 开头），尝试翻译
+           if message.startswith("log_"):
+               translated = t(message, default=message, **kwargs)
+               return translated
+           
+           # 否则返回原消息（向后兼容）
+           return message.format(**kwargs) if kwargs else message
+       
+       def info(self, message: str, **kwargs):
+           translated_msg = self._translate_message(message, **kwargs)
+           # 记录日志
+   ```
+
+3. **更新日志调用**：
+   ```python
+   # 旧方式
+   logger.info("检测到视频: {video_id}".format(video_id=vid))
+   
+   # 新方式（键值化）
+   logger.info("log_video_detected", video_id=vid)
+   
+   # 或（向后兼容）
+   logger.info("检测到视频: {video_id}", video_id=vid)
+   ```
+
+**优势：**
+- 完全国际化
+- 保持日志系统独立性
+- 便于维护
+
+**实施步骤：**
+1. 识别核心日志消息（用户可见的）
+2. 添加到翻译文件
+3. 更新日志系统支持翻译
+4. 逐步迁移日志调用
+
+#### 方案 B：日志消息包装器
+
+**实现思路：**
+创建日志消息包装器，自动检测语言并翻译。
+
+**实现：**
+```python
+# core/logger.py
+from ui.i18n_manager import get_language, t
+
+def log_i18n(key: str, default: str = None, **kwargs) -> str:
+    """获取翻译后的日志消息"""
+    current_lang = get_language()
+    
+    # 尝试获取翻译
+    translated = t(f"log_{key}", default=None, **kwargs)
+    if translated and translated != f"log_{key}":
+        return translated
+    
+    # 如果没有翻译，使用默认值或键值
+    if default:
+        return default.format(**kwargs) if kwargs else default
+    return key
+```
+
+**使用方式：**
+```python
+logger.info(log_i18n("video_detected", "检测到视频: {video_id}", video_id=vid))
+```
+
+#### 方案 C：混合方案（推荐）
+
+**策略：**
+1. 核心消息使用键值化（方案 A）
+2. 临时/调试消息保持原样
+3. 渐进式迁移
+
+**优先级：**
+- **P0**：用户可见的状态消息
+- **P1**：错误和警告消息
+- **P2**：系统日志消息
+- **P3**：调试日志消息
+
+### 实施计划
+
+#### 第一阶段：核心消息国际化
+
+**目标：** 用户可见的日志消息支持国际化
+
+**任务：**
+1. 识别核心日志消息（约 50-100 条）
+2. 添加到翻译文件
+3. 修改日志系统支持翻译
+4. 更新核心模块的日志调用
+
+**涉及模块：**
+- `core/pipeline.py`
+- `core/staged_pipeline.py`
+- `core/translator.py`
+- `core/summarizer.py`
+- `ui/business_logic.py`
+
+#### 第二阶段：系统日志国际化
+
+**目标：** 系统级别的日志消息支持国际化
+
+**任务：**
+1. 扩展翻译文件
+2. 更新系统模块的日志调用
+
+**涉及模块：**
+- `core/fetcher.py`
+- `core/downloader.py`
+- `core/detector.py`
+- `core/output.py`
+
+#### 第三阶段：完善和优化
+
+**目标：** 完善翻译，优化性能
+
+**任务：**
+1. 统一日志消息格式
+2. 优化翻译质量
+3. 性能优化（翻译缓存）
+4. 添加缺失的翻译
+
+### 技术考虑
+
+1. **性能**：
+   - 翻译查找不应影响日志性能
+   - 考虑使用缓存机制
+
+2. **向后兼容**：
+   - 支持未翻译的消息
+   - 支持旧格式的日志调用
+
+3. **上下文**：
+   - 日志消息可能需要上下文信息
+   - 支持参数化消息
+
+4. **测试**：
+   - 确保翻译正确
+   - 确保性能不受影响
+

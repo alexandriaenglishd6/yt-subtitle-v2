@@ -299,6 +299,82 @@ core/pipeline.py
 
 ---
 
+## AI 供应商接入计划
+
+### 当前支持的供应商
+
+项目已实现统一的 `LLMClient` 协议，支持：
+
+1. **OpenAI 兼容协议** (`OpenAICompatibleClient`)
+   - OpenAI 官方、DeepSeek、Kimi、Qwen、GLM
+   - 本地 Ollama / vLLM（通过 `base_url`）
+
+2. **Google Gemini** (`GeminiClient`)
+3. **Anthropic Claude** (`AnthropicClient`)
+4. **Google Translate** (`GoogleTranslateClient`)
+
+### 接入新供应商
+
+**方式 1：通过 OpenAI 兼容协议（无需代码）**
+- 配置 `base_url` 和 `api_keys`
+- 使用现有的 `OpenAICompatibleClient`
+
+**方式 2：实现新的客户端类**
+- 实现 `LLMClient` 协议
+- 注册到 `_LLM_REGISTRY`
+- 更新配置和 UI
+
+### 优化方向
+
+1. **本地 AI 模型**：
+   - 资源监控和限制
+   - 性能优化
+   - 错误处理增强
+
+2. **现有供应商**：
+   - 流式输出支持
+   - 多模态支持
+   - 性能优化
+
+详细计划见 `docs/code_refactoring_analysis.md` 和 `docs/code_structure_analysis.md`。
+
+---
+
+## 日志国际化优化方案
+
+### 问题
+
+- ✅ UI 已实现国际化（中英文切换）
+- ❌ 日志输出仍为中文
+- 影响：英文界面下日志显示中文，体验不一致
+
+### 解决方案
+
+**方案 A：日志消息键值化（推荐）**
+- 为日志消息定义键值（如 `log_video_detected`）
+- 在翻译文件中添加翻译
+- 修改日志系统支持翻译
+
+**方案 B：日志消息包装器**
+- 创建包装器函数自动翻译
+- 保持现有调用方式
+
+**方案 C：混合方案**
+- 核心消息键值化
+- 临时消息保持原样
+- 渐进式迁移
+
+### 实施优先级
+
+1. **P0**：用户可见的状态消息
+2. **P1**：错误和警告消息
+3. **P2**：系统日志消息
+4. **P3**：调试日志消息
+
+详细方案见 `docs/code_refactoring_analysis.md` 和 `docs/code_structure_analysis.md`。
+
+---
+
 ## 文件清单
 
 ### 分析文档
