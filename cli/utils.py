@@ -48,7 +48,7 @@ def get_archive_path(
             parsed = urlparse(url)
             playlist_id = parse_qs(parsed.query).get("list", [None])[0]
             if playlist_id:
-                archive_path = incremental_manager.archives_dir / f"playlist_{playlist_id}.txt"
+                archive_path = incremental_manager.get_playlist_archive_path(playlist_id)
                 logger.info(f"播放列表模式：使用 archive 文件 {archive_path.name}")
                 return archive_path
             else:

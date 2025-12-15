@@ -11,7 +11,7 @@ FONT_SIZE_HEADING = 18  # 工具栏标题、分组标签、占位符文本
 FONT_SIZE_BODY = 14  # 侧边栏分组、统计标签、普通标签、状态文本、提示文本、日志内容、小号提示文本
 
 
-def get_font(size: Literal[22, 18, 14], weight: Literal["normal", "bold"] = "normal", family: str = None) -> ctk.CTkFont:
+def get_font(size: int, weight: Literal["normal", "bold"] = "normal", family: str = None) -> ctk.CTkFont:
     """获取字体对象
     
     Args:
@@ -46,3 +46,7 @@ def body_font(weight: Literal["normal", "bold"] = "normal", family: str = None) 
     """正文字体（14px）"""
     return get_font(FONT_SIZE_BODY, weight, family)
 
+
+def small_font(weight: Literal["normal", "bold"] = "normal", family: str = None) -> ctk.CTkFont:
+    """小号字体（11px），用于下拉框等紧凑控件"""
+    return get_font(11, weight, family)

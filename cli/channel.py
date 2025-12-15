@@ -260,6 +260,7 @@ def run_full_pipeline(url: str, logger, force: bool = False) -> int:
             incremental_manager,
             archive_path,
             force,
+            dry_run=False,  # CLI 正常处理模式，不是 Dry Run
             concurrency=config.concurrency,
             proxy_manager=proxy_manager,
             cookie_manager=cookie_manager,

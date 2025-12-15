@@ -50,6 +50,7 @@ class AIConfig:
     base_url: Optional[str] = None  # 可选，自定义 API 网关或代理
     timeout_seconds: int = 30  # 超时时间（秒）
     max_retries: int = 2  # 最大重试次数
+    max_concurrency: int = 5  # 最大并发数（用于内部限流）
     api_keys: dict[str, str] = field(default_factory=lambda: {
         "openai": "env:YTSUB_API_KEY",
         "anthropic": "env:YTSUB_API_KEY"
@@ -63,6 +64,7 @@ class AIConfig:
             "base_url": self.base_url,
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_retries,
+            "max_concurrency": self.max_concurrency,
             "api_keys": self.api_keys,
         }
     
@@ -89,6 +91,7 @@ class AIConfig:
             base_url=base_url,
             timeout_seconds=data.get("timeout_seconds", 30),
             max_retries=data.get("max_retries", 2),
+            max_concurrency=data.get("max_concurrency", 5),  # 默认 5
             api_keys=api_keys,
         )
 
@@ -100,7 +103,7 @@ class AppConfig:
     所有可持久化配置的统一入口
     """
     language: LanguageConfig = field(default_factory=LanguageConfig)
-    concurrency: int = 3  # 并发数，默认 3
+    concurrency: int = 10  # 下载并发数，默认 10
     retry_count: int = 2  # 重试次数，默认 2（用于网络错误、限流等可重试错误）
     proxies: list[str] = field(default_factory=list)  # 代理列表
     cookie: str = ""  # Cookie 字符串
@@ -156,7 +159,7 @@ class AppConfig:
         
         return cls(
             language=LanguageConfig.from_dict(data.get("language", {})),
-            concurrency=data.get("concurrency", 3),
+            concurrency=data.get("concurrency", 10),  # 默认下载并发数 10
             retry_count=data.get("retry_count", 2),
             proxies=data.get("proxies", []),
             cookie=data.get("cookie", ""),

@@ -9,4 +9,6 @@ customtkinter>=5.2.0
 # AI 翻译和摘要支持（可选，仅在需要 AI 功能时安装）
 # OpenAI: pip install openai>=1.0.0
 # Anthropic: pip install anthropic>=0.18.0
+# Google 翻译（免费版）: pip install deep-translator>=1.11.4
+deep-translator>=1.11.4
 

@@ -43,7 +43,8 @@ class SubtitleDownloader:
         video_info: VideoInfo,
         detection_result: DetectionResult,
         language_config: LanguageConfig,
-        output_path: Path
+        output_path: Path,
+        cancel_token=None
     ) -> Dict[str, Optional[Path]]:
         """下载字幕文件
         
@@ -76,8 +77,14 @@ class SubtitleDownloader:
             # 确保输出目录存在
             output_path.mkdir(parents=True, exist_ok=True)
             
-            # 步骤 1: 确定原始字幕语言（优先人工字幕，其次自动字幕）
-            source_lang = self._determine_source_language(detection_result)
+            # 步骤 1: 确定原始字幕语言（支持自动模式和指定模式）
+            source_lang = self._determine_source_language(detection_result, language_config)
+            
+            # 检查取消状态（在下载原始字幕前）
+            if cancel_token and cancel_token.is_cancelled():
+                from core.exceptions import TaskCancelledError
+                reason = cancel_token.get_reason() or "用户取消"
+                raise TaskCancelledError(reason)
             
             if source_lang:
                 # 下载原始字幕
@@ -86,7 +93,8 @@ class SubtitleDownloader:
                     source_lang,
                     output_path,
                     f"original.{source_lang}.srt",
-                    is_auto=False  # 优先使用人工字幕
+                    is_auto=False,  # 优先使用人工字幕
+                    cancel_token=cancel_token
                 )
                 result["original"] = original_path
                 
@@ -94,21 +102,68 @@ class SubtitleDownloader:
                     logger.info(f"已下载原始字幕: {original_path.name}", video_id=video_info.video_id)
             
             # 步骤 2: 下载官方翻译字幕（针对每个目标语言）
+            # 定义常见语言列表（按优先级排序，用于当目标语言没有官方字幕时的备用选择）
+            COMMON_LANGUAGES = ["en", "en-US", "de", "de-DE", "ja", "ja-JP", "es", "es-ES", "fr", "fr-FR", "pt", "pt-PT", "ru", "ru-RU", "ko", "ko-KR"]
+            
             for target_lang in language_config.subtitle_target_languages:
-                # 检查是否有官方字幕（人工或自动）匹配目标语言
-                has_official = (
-                    target_lang in detection_result.manual_languages or
-                    target_lang in detection_result.auto_languages
-                )
+                # 检查取消状态（在下载每个官方翻译字幕前）
+                if cancel_token and cancel_token.is_cancelled():
+                    from core.exceptions import TaskCancelledError
+                    reason = cancel_token.get_reason() or "用户取消"
+                    raise TaskCancelledError(reason)
                 
-                if has_official:
-                    # 下载官方翻译字幕
+                # 辅助函数：检查语言代码是否匹配（处理 en vs en-US 的情况）
+                def lang_matches(lang1: str, lang2: str) -> bool:
+                    """检查两个语言代码是否匹配（考虑主语言代码）
+                    
+                    特殊处理：
+                    - zh-CN 和 zh-TW 不互相匹配（需要精确匹配）
+                    - 其他语言使用主语言代码匹配（如 en-US 匹配 en）
+                    """
+                    if lang1 == lang2:
+                        return True
+                    
+                    # 特殊处理：zh-CN 和 zh-TW 不互相匹配
+                    lang1_lower = lang1.lower()
+                    lang2_lower = lang2.lower()
+                    if (lang1_lower in ["zh-cn", "zh_cn"] and lang2_lower in ["zh-tw", "zh_tw"]) or \
+                       (lang1_lower in ["zh-tw", "zh_tw"] and lang2_lower in ["zh-cn", "zh_cn"]):
+                        return False
+                    
+                    # 其他语言：提取主语言代码进行匹配
+                    main1 = lang1.split("-")[0].split("_")[0].lower()
+                    main2 = lang2.split("-")[0].split("_")[0].lower()
+                    return main1 == main2
+                
+                # 检查是否有官方字幕（人工或自动）匹配目标语言（支持 en vs en-US 匹配）
+                matched_lang = None
+                is_auto = False
+                
+                # 先检查人工字幕
+                if detection_result.manual_languages:
+                    for lang in detection_result.manual_languages:
+                        if lang_matches(lang, target_lang):
+                            matched_lang = lang
+                            is_auto = False
+                            break
+                
+                # 如果没找到，检查自动字幕
+                if not matched_lang and detection_result.auto_languages:
+                    for lang in detection_result.auto_languages:
+                        if lang_matches(lang, target_lang):
+                            matched_lang = lang
+                            is_auto = True
+                            break
+                
+                if matched_lang:
+                    # 找到匹配的语言，下载官方字幕（使用检测到的实际语言代码）
                     official_path = self._download_subtitle(
                         video_info.url,
-                        target_lang,
+                        matched_lang,  # 使用检测到的实际语言代码（如 en），而不是目标语言（如 en-US）
                         output_path,
-                        f"translated.{target_lang}.srt",
-                        is_auto=(target_lang not in detection_result.manual_languages)
+                        f"translated.{target_lang}.srt",  # 但文件名仍使用目标语言代码
+                        is_auto=is_auto,
+                        cancel_token=cancel_token
                     )
                     
                     if official_path:
@@ -135,6 +190,67 @@ class SubtitleDownloader:
                         f"目标语言 {target_lang} 无可用官方字幕",
                         video_id=video_info.video_id
                     )
+                    # 尝试下载常见语言的官方字幕（作为翻译的备用源语言）
+                    # 基于检测结果，优先下载常见语言的字幕作为 AI 翻译的源语言
+                    common_subtitle_downloaded = False
+                    
+                    # 辅助函数：检查语言代码是否匹配（处理 en vs en-US 的情况）
+                    def lang_matches(lang1: str, lang2: str) -> bool:
+                        """检查两个语言代码是否匹配（考虑主语言代码）"""
+                        if lang1 == lang2:
+                            return True
+                        main1 = lang1.split("-")[0].split("_")[0].lower()
+                        main2 = lang2.split("-")[0].split("_")[0].lower()
+                        return main1 == main2
+                    
+                    for common_lang in COMMON_LANGUAGES:
+                        # 在检测结果中查找匹配的语言（支持 en vs en-US 的匹配）
+                        matched_lang = None
+                        is_auto = False
+                        
+                        # 先检查人工字幕
+                        if detection_result.manual_languages:
+                            for lang in detection_result.manual_languages:
+                                if lang_matches(lang, common_lang):
+                                    matched_lang = lang
+                                    is_auto = False
+                                    break
+                        
+                        # 如果没找到，检查自动字幕
+                        if not matched_lang and detection_result.auto_languages:
+                            for lang in detection_result.auto_languages:
+                                if lang_matches(lang, common_lang):
+                                    matched_lang = lang
+                                    is_auto = True
+                                    break
+                        
+                        # 如果找到匹配的语言且未下载，下载它
+                        if matched_lang and matched_lang not in result["official_translations"]:
+                            # 使用检测结果中的实际语言代码下载
+                            common_path = self._download_subtitle(
+                                video_info.url,
+                                matched_lang,
+                                output_path,
+                                f"translated.{matched_lang}.srt",
+                                is_auto=is_auto,
+                                cancel_token=cancel_token
+                            )
+                            
+                            if common_path:
+                                # 使用检测结果中的实际语言代码作为 key
+                                result["official_translations"][matched_lang] = common_path
+                                logger.info(
+                                    f"已下载常见语言官方字幕 ({matched_lang}，匹配常见语言: {common_lang})，将作为翻译源: {common_path.name}",
+                                    video_id=video_info.video_id
+                                )
+                                common_subtitle_downloaded = True
+                                break  # 找到第一个常见语言的字幕即可
+                    
+                    if not common_subtitle_downloaded:
+                        logger.info(
+                            f"目标语言 {target_lang} 无可用官方字幕，且未找到常见语言备用字幕",
+                            video_id=video_info.video_id
+                        )
             
             return result
             
@@ -159,25 +275,87 @@ class SubtitleDownloader:
             )
             return result
     
-    def _determine_source_language(self, detection_result: DetectionResult) -> Optional[str]:
+    def _determine_source_language(
+        self, 
+        detection_result: DetectionResult,
+        language_config: LanguageConfig
+    ) -> Optional[str]:
         """确定原始字幕语言
         
-        优先使用人工字幕，如果没有则使用自动字幕
+        支持两种模式：
+        1. 自动模式（source_language 为 None）：按优先级列表匹配检测到的语言
+        2. 指定模式（source_language 有值）：使用指定的语言，如果不存在则回退到自动模式
         
         Args:
             detection_result: 字幕检测结果
+            language_config: 语言配置
         
         Returns:
             语言代码，如果没有字幕则返回 None
         """
+        # 定义优先级列表（按使用人数排序）
+        PRIORITY_LANGUAGES = [
+            "en", "zh-CN", "ja", "de", "fr", "es", "ru", "pt", "ko", "it", "ar", "hi"
+        ]
+        
+        # 如果指定了源语言
+        if language_config.source_language:
+            specified_lang = language_config.source_language
+            # 检查是否存在（先检查人工字幕，再检查自动字幕）
+            if specified_lang in detection_result.manual_languages:
+                logger.info(
+                    f"使用指定的源语言（人工字幕）: {specified_lang}",
+                    video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+                )
+                return specified_lang
+            elif specified_lang in detection_result.auto_languages:
+                logger.info(
+                    f"使用指定的源语言（自动字幕）: {specified_lang}",
+                    video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+                )
+                return specified_lang
+            else:
+                # 指定的源语言不存在，回退到自动模式
+                logger.warning(
+                    f"指定的源语言 {specified_lang} 不存在，回退到自动模式。"
+                    f"可用语言: 人工={detection_result.manual_languages}, 自动={detection_result.auto_languages}",
+                    video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+                )
+        
+        # 自动模式：按优先级匹配
+        # 先检查人工字幕
+        for priority_lang in PRIORITY_LANGUAGES:
+            if priority_lang in detection_result.manual_languages:
+                logger.debug(
+                    f"自动选择源语言（人工字幕，优先级匹配）: {priority_lang}",
+                    video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+                )
+                return priority_lang
+        
+        # 再检查自动字幕
+        for priority_lang in PRIORITY_LANGUAGES:
+            if priority_lang in detection_result.auto_languages:
+                logger.debug(
+                    f"自动选择源语言（自动字幕，优先级匹配）: {priority_lang}",
+                    video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+                )
+                return priority_lang
+        
+        # 如果优先级列表中没有，使用原来的逻辑（第一个人工/自动字幕）
         if detection_result.manual_languages:
-            # 优先使用第一个人工字幕语言
+            logger.debug(
+                f"自动选择源语言（人工字幕，第一个）: {detection_result.manual_languages[0]}",
+                video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+            )
             return detection_result.manual_languages[0]
         elif detection_result.auto_languages:
-            # 如果没有人工字幕，使用第一个自动字幕语言
+            logger.debug(
+                f"自动选择源语言（自动字幕，第一个）: {detection_result.auto_languages[0]}",
+                video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
+            )
             return detection_result.auto_languages[0]
-        else:
-            return None
+        
+        return None
     
     def _download_subtitle(
         self,
@@ -185,7 +363,8 @@ class SubtitleDownloader:
         lang_code: str,
         output_dir: Path,
         output_filename: str,
-        is_auto: bool = False
+        is_auto: bool = False,
+        cancel_token=None
     ) -> Optional[Path]:
         """使用 yt-dlp 下载字幕文件
         
@@ -199,6 +378,11 @@ class SubtitleDownloader:
         Returns:
             下载的字幕文件路径，如果失败则返回 None
         """
+        # 在 try 块外初始化 proxy，以便在 except 块中访问
+        proxy = None
+        if self.proxy_manager:
+            proxy = self.proxy_manager.get_next_proxy()
+        
         try:
             output_path = output_dir / output_filename
             
@@ -213,10 +397,6 @@ class SubtitleDownloader:
             # yt-dlp 输出格式：<output_template>.<lang>.srt
             # 我们使用临时文件名，然后重命名
             temp_output = output_dir / f"temp_{output_path.stem}"
-            
-            proxy = None
-            if self.proxy_manager:
-                proxy = self.proxy_manager.get_next_proxy()
             
             cmd = [
                 self.yt_dlp_path,
@@ -246,6 +426,12 @@ class SubtitleDownloader:
                 logger.debug("未配置 Cookie 管理器（字幕下载）")
             
             cmd.append(url)
+            
+            # 在调用 subprocess 前检查取消状态
+            if cancel_token and cancel_token.is_cancelled():
+                from core.exceptions import TaskCancelledError
+                reason = cancel_token.get_reason() or "用户取消"
+                raise TaskCancelledError(reason)
             
             # 根据是否为自动字幕选择不同的参数
             if is_auto:
@@ -404,6 +590,11 @@ class SubtitleDownloader:
                 return None
             
         except subprocess.TimeoutExpired:
+            # 超时错误：标记代理失败
+            if proxy and self.proxy_manager:
+                self.proxy_manager.mark_failure(proxy, "超时")
+                logger.warning(f"代理 {proxy} 超时（字幕下载）")
+            
             app_error = AppException(
                 message=f"下载字幕超时: {lang_code}",
                 error_type=ErrorType.TIMEOUT

@@ -60,9 +60,24 @@ class CookieManager:
             cookies = {}
             for item in cookie_string.split(';'):
                 item = item.strip()
+                if not item:
+                    continue
                 if '=' in item:
                     key, value = item.split('=', 1)
-                    cookies[key.strip()] = value.strip()
+                    key = key.strip()
+                    value = value.strip()
+                    if key:  # 确保 key 不为空
+                        cookies[key] = value
+                else:
+                    # 如果单个项目没有 '='，可能是格式错误，记录警告但继续
+                    logger.warning(f"Cookie 格式可能不正确（缺少 '='）: {item[:50]}")
+            
+            # 检查是否解析到了 Cookie
+            if not cookies:
+                logger.error("Cookie 字符串解析后为空，无法创建 Cookie 文件")
+                temp_file.close()
+                temp_path.unlink()  # 删除空文件
+                return None
             
             # 写入 Cookie（Netscape 格式）
             # Netscape 格式：domain, flag, path, secure, expiration, name, value

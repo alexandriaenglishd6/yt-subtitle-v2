@@ -291,6 +291,7 @@ def run_full_pipeline_for_urls(file_path: Path, logger, force: bool = False) -> 
             incremental_manager,
             archive_path,
             force,
+            dry_run=False,  # CLI 正常处理模式，不是 Dry Run
             concurrency=config.concurrency,
             proxy_manager=proxy_manager,
             cookie_manager=cookie_manager,

@@ -32,6 +32,16 @@ class Summarizer:
         """
         self.llm = llm
         self.language_config = language_config
+        # 保存摘要错误信息（用于 pipeline 记录失败时获取 error_type）
+        self._last_summary_error: Optional[AppException] = None
+    
+    def get_summary_error(self) -> Optional[AppException]:
+        """获取摘要错误信息
+        
+        Returns:
+            摘要错误信息，如果没有错误则返回 None
+        """
+        return self._last_summary_error
     
     def summarize(
         self,
@@ -57,6 +67,9 @@ class Summarizer:
         Returns:
             摘要文件路径，如果失败则返回 None
         """
+        # 清空之前的错误信息
+        self._last_summary_error = None
+        
         # 确保输出目录存在
         output_path.mkdir(parents=True, exist_ok=True)
         
@@ -149,6 +162,8 @@ class Summarizer:
                 video_id=video_info.video_id,
                 error_type=app_error.error_type.value
             )
+            # 保存错误信息，供 pipeline 使用
+            self._last_summary_error = app_error
             return None
         except (OSError, IOError, PermissionError) as e:
             # 文件IO错误
@@ -175,6 +190,8 @@ class Summarizer:
                 video_id=video_info.video_id,
                 error_type=app_error.error_type.value
             )
+            # 保存错误信息，供 pipeline 使用
+            self._last_summary_error = app_error
             return None
     
     def _select_summary_source(

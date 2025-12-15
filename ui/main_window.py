@@ -160,7 +160,7 @@ class MainWindow(ctk.CTk):
         self.page_container.pack(fill="both", expand=True)
         
         # 4. 底部日志框
-        self.log_panel = LogPanel(self, height=200)
+        self.log_panel = LogPanel(self, height=300)  # 200 * 1.5 = 300（增加 50%）
         self.log_panel.grid(row=2, column=0, columnspan=2, sticky="ew")
         
         # 5. 默认显示频道页面
@@ -173,6 +173,34 @@ class MainWindow(ctk.CTk):
     
     def _switch_page(self, page_name: str):
         """切换页面"""
+        # 在销毁页面之前，保存当前页面的输入内容
+        if hasattr(self, 'current_page') and self.current_page is not None:
+            try:
+                if isinstance(self.current_page, ChannelPage):
+                    # 保存频道URL（即使为空也要保存，以便区分空值和未设置）
+                    try:
+                        channel_url = self.current_page.channel_url_entry.get().strip()
+                        self.state_manager.set("channel_url", channel_url)
+                    except (AttributeError, Exception) as e:
+                        # 如果获取失败，忽略（可能是控件已被销毁）
+                        pass
+                elif isinstance(self.current_page, UrlListPage):
+                    # 保存URL列表（即使为空或占位符也要保存，以便区分）
+                    try:
+                        url_text = self.current_page.url_list_textbox.get("1.0", "end-1c").strip()
+                        placeholder = t("url_list_placeholder")
+                        # 如果文本是占位符，保存空字符串；否则保存实际内容
+                        if url_text == placeholder:
+                            self.state_manager.set("url_list_text", "")
+                        else:
+                            self.state_manager.set("url_list_text", url_text)
+                    except (AttributeError, Exception) as e:
+                        # 如果获取失败，忽略（可能是控件已被销毁）
+                        pass
+            except Exception as e:
+                # 捕获所有异常，确保不会影响页面切换
+                get_logger().debug(f"保存页面内容时出错: {e}")
+        
         # 清除当前页面
         for widget in self.page_container.winfo_children():
             widget.destroy()
@@ -181,34 +209,64 @@ class MainWindow(ctk.CTk):
         
         # 创建并显示目标页面
         if page_name == "channel":
+            # 恢复保存的频道URL
+            saved_channel_url = self.state_manager.get("channel_url", "")
+            # 调试日志（可移除）
+            if saved_channel_url:
+                get_logger().debug(f"恢复频道URL: {saved_channel_url[:50]}...")
             page = ChannelPage(
                 self.page_container,
                 on_check_new=self._on_check_new_videos,
                 on_start_processing=self._on_start_processing,
+                on_cancel_processing=self._on_cancel_task,
                 stats=self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0, "current": 0}),
                 running_status=self.state_manager.get("running_status", t("status_idle")),
                 language_config=self.app_config.language.to_dict() if self.app_config.language else {},
-                on_save_language_config=self._on_save_language_config
+                on_save_language_config=self._on_save_language_config,
+                translation_ai_config=self.app_config.translation_ai.to_dict(),
+                summary_ai_config=self.app_config.summary_ai.to_dict(),
+                on_save_translation_ai=self._on_save_translation_ai,
+                on_save_summary_ai=self._on_save_summary_ai,
+                initial_channel_url=saved_channel_url
             )
             page.pack(fill="both", expand=True)
             self.current_page = page
             self.toolbar.update_title(t("channel_mode"))
             self.state_manager.set("current_mode", t("channel_mode"))
+            # 立即更新按钮状态，确保正确渲染
+            self.after(10, lambda: self._update_processing_buttons(self.is_processing))
+            # 强制重新配置取消按钮的颜色，确保对比度正确
+            self.after(50, self._fix_cancel_button_contrast)
             
         elif page_name == "url_list":
+            # 恢复保存的URL列表
+            saved_url_list_text = self.state_manager.get("url_list_text", "")
+            # 调试日志（可移除）
+            if saved_url_list_text:
+                get_logger().debug(f"恢复URL列表文本，长度: {len(saved_url_list_text)}")
             page = UrlListPage(
                 self.page_container,
                 on_check_new=self._on_check_new_urls,
                 on_start_processing=self._on_start_processing_urls,
+                on_cancel_processing=self._on_cancel_task,
                 stats=self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0, "current": 0}),
                 running_status=self.state_manager.get("running_status", t("status_idle")),
                 language_config=self.app_config.language.to_dict() if self.app_config.language else {},
-                on_save_language_config=self._on_save_language_config
+                on_save_language_config=self._on_save_language_config,
+                translation_ai_config=self.app_config.translation_ai.to_dict(),
+                summary_ai_config=self.app_config.summary_ai.to_dict(),
+                on_save_translation_ai=self._on_save_translation_ai,
+                on_save_summary_ai=self._on_save_summary_ai,
+                initial_url_list_text=saved_url_list_text
             )
             page.pack(fill="both", expand=True)
             self.current_page = page
             self.toolbar.update_title(t("url_list_mode"))
             self.state_manager.set("current_mode", t("url_list_mode"))
+            # 立即更新按钮状态，确保正确渲染
+            self.after(10, lambda: self._update_processing_buttons(self.is_processing))
+            # 强制重新配置取消按钮的颜色，确保对比度正确
+            self.after(50, self._fix_cancel_button_contrast)
             
         elif page_name == "run_params":
             page = RunParamsPage(
@@ -314,6 +372,8 @@ class MainWindow(ctk.CTk):
         def safe_on_complete():
             """线程安全的完成回调"""
             self.after(0, lambda: setattr(self, 'is_processing', False))
+            # 恢复按钮状态（显示开始按钮，隐藏取消按钮）
+            self.after(0, self._restore_processing_buttons)
         
         return safe_on_log, safe_on_status, safe_on_stats, safe_on_complete
     
@@ -362,6 +422,9 @@ class MainWindow(ctk.CTk):
             return
         
         self.is_processing = True
+        # 更新按钮状态（显示取消按钮，隐藏开始按钮）
+        self._update_processing_buttons(True)
+        
         safe_on_log, safe_on_status, safe_on_stats, safe_on_complete = self._create_safe_callbacks()
         
         # 添加初始日志
@@ -382,6 +445,8 @@ class MainWindow(ctk.CTk):
         # 确认线程已启动
         if not (thread and thread.is_alive()):
             self.log_panel.append_log("ERROR", t("processing_failed", error="线程启动失败"))
+            self.is_processing = False
+            self._restore_processing_buttons()
     
     def _on_check_new_urls(self, urls_text: str, force: bool = False):
         """检查新视频按钮点击（URL 列表模式）"""
@@ -413,6 +478,9 @@ class MainWindow(ctk.CTk):
             return
         
         self.is_processing = True
+        # 更新按钮状态（显示取消按钮，隐藏开始按钮）
+        self._update_processing_buttons(True)
+        
         safe_on_log, safe_on_status, safe_on_stats, safe_on_complete = self._create_safe_callbacks()
         
         # 添加初始日志
@@ -433,6 +501,48 @@ class MainWindow(ctk.CTk):
         # 确认线程已启动
         if not (thread and thread.is_alive()):
             self.log_panel.append_log("ERROR", t("processing_failed", error="线程启动失败"))
+            self.is_processing = False
+            self._restore_processing_buttons()
+    
+    def _on_cancel_task(self):
+        """取消任务按钮点击"""
+        if not self.is_processing:
+            return
+        
+        # 调用 VideoProcessor 的停止方法
+        self.video_processor.stop_processing()
+        self.log_panel.append_log("INFO", t("task_cancelling"))
+    
+    def _update_processing_buttons(self, is_processing: bool):
+        """更新处理按钮状态
+        
+        Args:
+            is_processing: 是否正在处理
+        """
+        if hasattr(self, 'current_page') and self.current_page:
+            if hasattr(self.current_page, 'set_processing_state'):
+                self.current_page.set_processing_state(is_processing)
+    
+    def _restore_processing_buttons(self):
+        """恢复处理按钮状态（显示开始按钮，隐藏取消按钮）"""
+        self._update_processing_buttons(False)
+    
+    def _fix_cancel_button_contrast(self):
+        """修复取消按钮的对比度问题"""
+        if hasattr(self, 'current_page') and self.current_page:
+            if hasattr(self.current_page, 'cancel_processing_btn'):
+                btn = self.current_page.cancel_processing_btn
+                try:
+                    current_state = btn.cget("state")
+                    # 根据当前状态重新配置颜色
+                    if current_state == "disabled":
+                        btn.configure(
+                            fg_color=("#4A9EFF", "#4A9EFF"),  # 禁用状态下使用淡蓝色背景
+                            text_color=("white", "white")  # 使用白色文字，确保高对比度
+                        )
+                    btn.update_idletasks()
+                except Exception:
+                    pass
     
     def _save_config(
         self,

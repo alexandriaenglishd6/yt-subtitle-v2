@@ -251,12 +251,31 @@ def _apply_custom_colors(parent, tokens: ThemeTokens):
                     pass
             elif isinstance(widget, ctk.CTkComboBox):
                 try:
+                    # 获取当前高度，如果已经设置过（如height=10），则保持原高度
+                    current_height = widget.cget("height") if hasattr(widget, 'cget') else None
                     widget.configure(
                         fg_color=(tokens.bg_tertiary, tokens.bg_tertiary),
                         text_color=(tokens.text_primary, tokens.text_primary),
                         button_color=(tokens.accent, tokens.accent),
                         button_hover_color=(tokens.accent_hover, tokens.accent_hover)
                     )
+                    # 如果之前设置了自定义高度，恢复它（防止主题应用时覆盖）
+                    if current_height and current_height < 20:  # 如果高度小于20，说明是自定义的小高度
+                        try:
+                            widget.configure(height=current_height)
+                        except Exception:
+                            pass
+                    # 延迟再次设置高度，确保生效
+                    if current_height and current_height < 20:
+                        def restore_height():
+                            try:
+                                widget.configure(height=current_height)
+                            except Exception:
+                                pass
+                        try:
+                            widget.after(10, restore_height)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
             elif isinstance(widget, ctk.CTkScrollableFrame):

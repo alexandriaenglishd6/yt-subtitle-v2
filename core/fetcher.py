@@ -16,6 +16,41 @@ from core.exceptions import AppException, ErrorType
 logger = get_logger()
 
 
+def _extract_error_message(stderr: str) -> str:
+    """从 yt-dlp 的 stderr 中提取真正的错误消息，过滤掉警告
+    
+    Args:
+        stderr: yt-dlp 的错误输出（可能包含 WARNING 和 ERROR）
+    
+    Returns:
+        只包含 ERROR 消息的字符串
+    """
+    if not stderr:
+        return ""
+    
+    lines = stderr.split("\n")
+    error_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # 跳过 WARNING 消息
+        if line.startswith("WARNING:"):
+            continue
+        
+        # 保留 ERROR 消息和其他非警告消息
+        if line.startswith("ERROR:") or not line.startswith("WARNING"):
+            error_lines.append(line)
+    
+    # 如果没有找到 ERROR 消息，返回原始 stderr（可能包含其他重要信息）
+    if not error_lines:
+        return stderr
+    
+    return "\n".join(error_lines)
+
+
 def _map_ytdlp_error_to_app_error(
     returncode: int,
     stderr: str,
@@ -28,13 +63,15 @@ def _map_ytdlp_error_to_app_error(
     
     Args:
         returncode: yt-dlp 退出码
-        stderr: yt-dlp 错误输出
+        stderr: yt-dlp 错误输出（可能包含 WARNING 和 ERROR）
         timeout: 是否超时
     
     Returns:
         AppException 实例
     """
-    error_lower = stderr.lower() if stderr else ""
+    # 提取真正的错误消息（过滤掉警告）
+    error_message = _extract_error_message(stderr)
+    error_lower = error_message.lower() if error_message else (stderr.lower() if stderr else "")
     
     # 超时
     if timeout:
@@ -44,26 +81,59 @@ def _map_ytdlp_error_to_app_error(
         )
     
     # 网络错误
-    if any(keyword in error_lower for keyword in [
+    # 包括直接的网络连接错误，以及因网络问题导致的下载失败
+    network_keywords = [
         "network", "connection", "dns", "timeout", "unreachable",
-        "refused", "reset", "failed to connect"
-    ]):
+        "refused", "reset", "failed to connect", "connection error",
+        "connection refused", "connection timeout", "connection reset",
+        "unable to connect", "cannot connect", "connect failed",
+        # 下载失败相关（可能是网络问题导致）
+        "failed to download", "unable to download", "download failed",
+        "download error", "cannot download", "unable to fetch",
+        # 网页下载失败导致的认证检查失败（通常是网络问题）
+        "without a successful webpage download", "webpage download failed",
+        "unable to download webpage", "failed to download webpage"
+    ]
+    if any(keyword in error_lower for keyword in network_keywords):
+        # 使用提取的错误消息，如果没有则使用原始 stderr
+        msg = error_message[:200] if error_message else (stderr[:200] if stderr else '未知网络错误')
         return AppException(
-            message=f"网络错误: {stderr[:200] if stderr else '未知网络错误'}",
+            message=f"网络错误: {msg}",
+            error_type=ErrorType.NETWORK
+        )
+    
+    # 认证检查失败，但可能是由网络问题导致的（需要检查是否涉及网页下载失败）
+    # 如果错误信息包含 "authentication" 且涉及 "webpage download" 失败，归类为网络错误
+    if "authentication" in error_lower and any(keyword in error_lower for keyword in [
+        "webpage download", "download webpage", "webpage", "without a successful"
+    ]):
+        # 使用提取的错误消息，如果没有则使用原始 stderr
+        msg = error_message[:200] if error_message else (stderr[:200] if stderr else '未知网络错误')
+        return AppException(
+            message=f"网络错误（认证检查失败，可能由网络问题导致）: {msg}",
             error_type=ErrorType.NETWORK
         )
     
     # 限流（429）
     if "429" in stderr or "rate limit" in error_lower or "too many requests" in error_lower:
+        msg = error_message[:200] if error_message else (stderr[:200] if stderr else '429 Too Many Requests')
         return AppException(
-            message=f"请求频率限制: {stderr[:200] if stderr else '429 Too Many Requests'}",
+            message=f"请求频率限制: {msg}",
             error_type=ErrorType.RATE_LIMIT
         )
     
     # 认证错误（403, 401）
-    if "403" in stderr or "401" in stderr or "unauthorized" in error_lower:
+    # 包括 Cookie 认证失败（YouTube 要求登录）
+    auth_keywords = [
+        "403", "401", "unauthorized",
+        "sign in to confirm", "you're not a bot", "not a bot",
+        "use --cookies", "cookies for the authentication",
+        "authentication required", "login required"
+    ]
+    if any(keyword in error_lower for keyword in auth_keywords):
+        msg = error_message[:200] if error_message else (stderr[:200] if stderr else '认证失败')
         return AppException(
-            message=f"认证失败: {stderr[:200] if stderr else '403/401 Unauthorized'}",
+            message=f"认证失败（需要 Cookie）: {msg}",
             error_type=ErrorType.AUTH
         )
     
@@ -72,14 +142,24 @@ def _map_ytdlp_error_to_app_error(
         "404", "not found", "unavailable", "private", "deleted",
         "removed", "blocked", "region", "copyright"
     ]):
+        msg = error_message[:200] if error_message else (stderr[:200] if stderr else '内容受限或不存在')
         return AppException(
-            message=f"内容不可用: {stderr[:200] if stderr else '内容受限或不存在'}",
+            message=f"内容不可用: {msg}",
             error_type=ErrorType.CONTENT
         )
     
+    # Cookie 文件格式错误（归类为认证错误）
+    if "does not look like a netscape format" in error_lower or "cookie" in error_lower and "format" in error_lower:
+        msg = error_message[:200] if error_message else (stderr[:200] if stderr else 'Cookie 文件格式错误')
+        return AppException(
+            message=f"Cookie 文件格式错误: {msg}",
+            error_type=ErrorType.AUTH
+        )
+    
     # 其他 yt-dlp 错误（视为外部服务错误）
+    msg = error_message[:200] if error_message else (stderr[:200] if stderr else '未知错误')
     return AppException(
-        message=f"yt-dlp 执行失败 (退出码 {returncode}): {stderr[:200] if stderr else '未知错误'}",
+        message=f"yt-dlp 执行失败 (退出码 {returncode}): {msg}",
         error_type=ErrorType.EXTERNAL_SERVICE
     )
 
@@ -340,7 +420,7 @@ class VideoFetcher:
             return []
     
     def _get_video_info_ytdlp(self, url: str) -> Optional[VideoInfo]:
-        """使用 yt-dlp 获取单个视频信息
+        """使用 yt-dlp 获取单个视频信息（带代理重试逻辑）
         
         Args:
             url: 视频 URL
@@ -351,115 +431,167 @@ class VideoFetcher:
         import subprocess
         import json
         
-        proxy = None
-        if self.proxy_manager:
-            proxy = self.proxy_manager.get_next_proxy()
+        max_retries = 3  # 最多尝试 3 次（包括初始尝试）
+        tried_proxies = set()  # 记录已尝试的代理
+        last_error = None
         
-        try:
-            # 使用 yt-dlp 获取视频信息（JSON 格式）
-            cmd = [
-                self.yt_dlp_path,
-                "--dump-json",
-                "--no-warnings",
-            ]
-            
-            # 如果配置了代理，添加代理参数
-            if proxy:
-                cmd.extend(["--proxy", proxy])
-                logger.debug(f"使用代理: {proxy}")
-            
-            # 如果配置了 Cookie，添加 Cookie 参数
-            if self.cookie_manager:
-                cookie_file = self.cookie_manager.get_cookie_file_path()
-                if cookie_file:
-                    cmd.extend(["--cookies", cookie_file])
-                    logger.info(f"使用 Cookie 文件: {cookie_file}")
-                else:
-                    logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径")
-            else:
-                logger.debug("未配置 Cookie 管理器")
-            
-            cmd.append(url)
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode != 0:
-                error_msg = result.stderr
+        for attempt in range(max_retries):
+            proxy = None
+            if self.proxy_manager:
+                # 尝试获取下一个代理（自动跳过已标记为不健康的代理）
+                proxy = self.proxy_manager.get_next_proxy(allow_direct=True)
                 
-                # 映射为 AppException
-                app_error = _map_ytdlp_error_to_app_error(
-                    result.returncode,
-                    error_msg
+                # 如果已经尝试过这个代理，跳过（避免重复尝试同一个不健康的代理）
+                if proxy and proxy in tried_proxies:
+                    # 如果所有代理都尝试过了，尝试直连
+                    proxy = None
+                    logger.info(f"所有代理都已尝试，尝试直连")
+                
+                if proxy:
+                    tried_proxies.add(proxy)
+            
+            try:
+                # 使用 yt-dlp 获取视频信息（JSON 格式）
+                cmd = [
+                    self.yt_dlp_path,
+                    "--dump-json",
+                    "--no-warnings",
+                ]
+                
+                # 如果配置了代理，添加代理参数
+                if proxy:
+                    cmd.extend(["--proxy", proxy])
+                    logger.debug(f"使用代理: {proxy}")
+                else:
+                    logger.debug("使用直连")
+                
+                # 如果配置了 Cookie，添加 Cookie 参数
+                if self.cookie_manager:
+                    cookie_file = self.cookie_manager.get_cookie_file_path()
+                    if cookie_file:
+                        cmd.extend(["--cookies", cookie_file])
+                        if attempt == 0:  # 只在第一次尝试时记录 Cookie 使用
+                            logger.info(f"使用 Cookie 文件: {cookie_file}")
+                    else:
+                        if attempt == 0:
+                            logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径")
+                
+                cmd.append(url)
+                
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode != 0:
+                    error_msg = result.stderr
+                    
+                    # 映射为 AppException
+                    app_error = _map_ytdlp_error_to_app_error(
+                        result.returncode,
+                        error_msg
+                    )
+                    
+                    # 如果使用了代理，标记代理失败
+                    if proxy and self.proxy_manager:
+                        self.proxy_manager.mark_failure(proxy, error_msg[:200])
+                        logger.warning(f"代理 {proxy} 失败，将尝试下一个代理或直连")
+                    
+                    last_error = app_error
+                    # 如果不是最后一次尝试，继续重试
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        # 最后一次尝试失败，抛出异常
+                        logger.error(
+                            f"yt-dlp 执行失败（已尝试 {max_retries} 次）: {app_error}",
+                            error_type=app_error.error_type.value
+                        )
+                        raise app_error
+                
+                # 如果使用了代理且成功，标记代理成功
+                if proxy and self.proxy_manager:
+                    self.proxy_manager.mark_success(proxy)
+                
+                # 解析 JSON
+                data = json.loads(result.stdout)
+                
+                return VideoInfo(
+                    video_id=data.get("id", ""),
+                    url=data.get("webpage_url", url),
+                    title=data.get("title", ""),
+                    channel_id=data.get("channel_id"),
+                    channel_name=data.get("channel"),
+                    duration=data.get("duration"),
+                    upload_date=data.get("upload_date"),
+                    description=data.get("description")
+                )
+            except subprocess.TimeoutExpired:
+                # 超时错误：标记代理失败并重试
+                if proxy and self.proxy_manager:
+                    self.proxy_manager.mark_failure(proxy, "超时")
+                    logger.warning(f"代理 {proxy} 超时，将尝试下一个代理或直连")
+                
+                last_error = AppException(
+                    message=f"获取视频信息超时: {url}",
+                    error_type=ErrorType.TIMEOUT
+                )
+                
+                # 如果不是最后一次尝试，继续重试
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    # 最后一次尝试失败，抛出异常
+                    logger.error(
+                        f"获取视频信息超时（已尝试 {max_retries} 次）: {last_error}",
+                        error_type=last_error.error_type.value
+                    )
+                    raise last_error
+            except json.JSONDecodeError as e:
+                # JSON 解析错误通常不是代理问题，直接抛出
+                app_error = AppException(
+                    message=f"解析 yt-dlp 输出失败: {e}",
+                    error_type=ErrorType.PARSE,
+                    cause=e
                 )
                 logger.error(
-                    f"yt-dlp 执行失败: {app_error}",
+                    f"解析 yt-dlp 输出失败: {app_error}",
                     error_type=app_error.error_type.value
                 )
-                
-                # 如果使用了代理，标记代理失败
-                if proxy and self.proxy_manager:
-                    self.proxy_manager.mark_failure(proxy, error_msg[:200])
-                
-                # 抛出 AppException（由调用方处理）
                 raise app_error
-            
-            # 如果使用了代理且成功，标记代理成功
-            if proxy and self.proxy_manager:
-                self.proxy_manager.mark_success(proxy)
-            
-            # 解析 JSON
-            data = json.loads(result.stdout)
-            
-            return VideoInfo(
-                video_id=data.get("id", ""),
-                url=data.get("webpage_url", url),
-                title=data.get("title", ""),
-                channel_id=data.get("channel_id"),
-                channel_name=data.get("channel"),
-                duration=data.get("duration"),
-                upload_date=data.get("upload_date"),
-                description=data.get("description")
-            )
-        except subprocess.TimeoutExpired:
-            app_error = AppException(
-                message=f"获取视频信息超时: {url}",
-                error_type=ErrorType.TIMEOUT
-            )
-            logger.error(
-                f"获取视频信息超时: {app_error}",
-                error_type=app_error.error_type.value
-            )
-            raise app_error
-        except json.JSONDecodeError as e:
-            app_error = AppException(
-                message=f"解析 yt-dlp 输出失败: {e}",
-                error_type=ErrorType.PARSE,
-                cause=e
-            )
-            logger.error(
-                f"解析 yt-dlp 输出失败: {app_error}",
-                error_type=app_error.error_type.value
-            )
-            raise app_error
-        except AppException:
-            # 重新抛出 AppException
-            raise
-        except Exception as e:
-            app_error = AppException(
-                message=f"获取视频信息时出错: {e}",
-                error_type=ErrorType.UNKNOWN,
-                cause=e
-            )
-            logger.error(
-                f"获取视频信息时出错: {app_error}",
-                error_type=app_error.error_type.value
-            )
-            raise app_error
+            except AppException as e:
+                # 对于某些 AppException（如 CONTENT），不重试，直接抛出
+                if e.error_type in [ErrorType.CONTENT, ErrorType.AUTH]:
+                    raise
+                # 其他错误：如果还有重试机会，继续重试
+                if attempt < max_retries - 1:
+                    last_error = e
+                    continue
+                else:
+                    raise
+            except Exception as e:
+                app_error = AppException(
+                    message=f"获取视频信息时出错: {e}",
+                    error_type=ErrorType.UNKNOWN,
+                    cause=e
+                )
+                logger.error(
+                    f"获取视频信息时出错: {app_error}",
+                    error_type=app_error.error_type.value
+                )
+                raise app_error
+        
+        # 如果所有重试都失败，抛出最后的错误
+        if last_error:
+            raise last_error
+        
+        # 理论上不应该到达这里
+        raise AppException(
+            message=f"获取视频信息失败: {url}",
+            error_type=ErrorType.UNKNOWN
+        )
     
     def _get_channel_videos_ytdlp(self, channel_url: str) -> List[VideoInfo]:
         """使用 yt-dlp 获取频道所有视频
@@ -510,7 +642,16 @@ class VideoFetcher:
             
             if result.returncode != 0:
                 error_msg = result.stderr
-                logger.error(f"yt-dlp 执行失败: {error_msg}")
+                
+                # 映射为 AppException（使用改进的错误分类逻辑）
+                app_error = _map_ytdlp_error_to_app_error(
+                    result.returncode,
+                    error_msg
+                )
+                logger.error(
+                    f"yt-dlp 执行失败: {app_error}",
+                    error_type=app_error.error_type.value
+                )
                 
                 # 如果使用了代理，标记代理失败
                 if proxy and self.proxy_manager:
@@ -560,6 +701,11 @@ class VideoFetcher:
             
             return videos
         except subprocess.TimeoutExpired:
+            # 超时错误：标记代理失败
+            if proxy and self.proxy_manager:
+                self.proxy_manager.mark_failure(proxy, "超时")
+                logger.warning(f"代理 {proxy} 超时")
+            
             app_error = AppException(
                 message=f"获取频道视频列表超时: {channel_url}",
                 error_type=ErrorType.TIMEOUT
@@ -632,7 +778,16 @@ class VideoFetcher:
             
             if result.returncode != 0:
                 error_msg = result.stderr
-                logger.error(f"yt-dlp 执行失败: {error_msg}")
+                
+                # 映射为 AppException（使用改进的错误分类逻辑）
+                app_error = _map_ytdlp_error_to_app_error(
+                    result.returncode,
+                    error_msg
+                )
+                logger.error(
+                    f"yt-dlp 执行失败: {app_error}",
+                    error_type=app_error.error_type.value
+                )
                 
                 # 如果使用了代理，标记代理失败
                 if proxy and self.proxy_manager:
@@ -667,6 +822,11 @@ class VideoFetcher:
             
             return videos
         except subprocess.TimeoutExpired:
+            # 超时错误：标记代理失败
+            if proxy and self.proxy_manager:
+                self.proxy_manager.mark_failure(proxy, "超时")
+                logger.warning(f"代理 {proxy} 超时")
+            
             app_error = AppException(
                 message=f"获取播放列表视频超时: {playlist_url}",
                 error_type=ErrorType.TIMEOUT

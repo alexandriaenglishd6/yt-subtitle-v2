@@ -18,6 +18,7 @@ from core.proxy_manager import ProxyManager
 from core.cookie_manager import CookieManager
 from core.ai_providers import create_llm_client
 from core.llm_client import LLMException
+from core.cancel_token import CancelToken
 from core.models import VideoInfo
 from config.manager import ConfigManager
 from ui.i18n_manager import t
@@ -37,6 +38,8 @@ class VideoProcessor:
     def __init__(self, config_manager: ConfigManager, app_config):
         self.config_manager = config_manager
         self.app_config = app_config
+        # 初始化取消令牌（初始为 None，任务开始时创建）
+        self.cancel_token: Optional[CancelToken] = None
         self._init_components()
     
     def _init_components(self):
@@ -73,6 +76,8 @@ class VideoProcessor:
         self.failure_logger = FailureLogger(output_dir)
         
         # 初始化翻译 LLMClient（可能失败，允许为 None）
+        self.translation_llm_init_error = None  # 保存初始化失败的原因
+        self.translation_llm_init_error_type = None  # 保存初始化失败的错误类型
         if self.app_config.translation_ai.enabled:
             try:
                 self.translation_llm_client = create_llm_client(self.app_config.translation_ai)
@@ -82,9 +87,16 @@ class VideoProcessor:
             except LLMException as e:
                 logger.warning(t("translation_ai_client_init_failed", error=str(e)))
                 self.translation_llm_client = None
+                # 保存初始化失败的原因和错误类型（用于后续提示和错误分类）
+                self.translation_llm_init_error = str(e)
+                # 将 LLMErrorType 映射为 ErrorType
+                from core.exceptions import ErrorType, map_llm_error_to_app_error
+                self.translation_llm_init_error_type = map_llm_error_to_app_error(e.error_type.value)
         else:
             logger.info(t("translation_ai_disabled"))
             self.translation_llm_client = None
+            self.translation_llm_init_error = "翻译 AI 未启用"
+            self.translation_llm_init_error_type = None
         
         # 初始化摘要 LLMClient（可能失败，允许为 None）
         if self.app_config.summary_ai.enabled:
@@ -307,10 +319,10 @@ class VideoProcessor:
                 
                 on_log("INFO", t("videos_found", count=len(videos)))
                 
-                # 执行字幕检测
+                # 执行字幕检测（Dry Run 模式）
                 channel_name = videos[0].channel_name if videos else None
                 channel_id = videos[0].channel_id if videos else None
-                self._detect_subtitles(videos, on_log, source_url=url, channel_name=channel_name, channel_id=channel_id)
+                self._detect_subtitles(videos, on_log, source_url=url, channel_name=channel_name, channel_id=channel_id, dry_run=True)
             except Exception as e:
                 import traceback
                 error_msg = f"{t('dry_run_failed', error=str(e))}"
@@ -325,7 +337,8 @@ class VideoProcessor:
         on_log: Callable[[str, str, Optional[str]], None],
         source_url: Optional[str] = None,
         channel_name: Optional[str] = None,
-        channel_id: Optional[str] = None
+        channel_id: Optional[str] = None,
+        dry_run: bool = False
     ) -> Tuple[int, int]:
         """检测视频字幕（Dry Run 核心逻辑）
         
@@ -335,6 +348,7 @@ class VideoProcessor:
             source_url: 来源 URL（可选）
             channel_name: 频道名称（可选）
             channel_id: 频道 ID（可选）
+            dry_run: 是否为 Dry Run 模式（Dry Run 模式下不写入文件）
         
         Returns:
             (有字幕数, 无字幕数)
@@ -401,14 +415,15 @@ class VideoProcessor:
                 except Exception as log_err:
                     logger.error(f"on_log callback failed: {log_err}")
         
-        # 保存分类结果到文件（使用传入的参数）
+        # 保存分类结果到文件（使用传入的参数，Dry Run 模式下跳过）
         self._save_detection_results(
             videos_with_subtitle, 
             videos_without_subtitle, 
             on_log,
             source_url=source_url,
             channel_name=channel_name,
-            channel_id=channel_id
+            channel_id=channel_id,
+            dry_run=dry_run
         )
         
         # 显示统计结果
@@ -428,7 +443,8 @@ class VideoProcessor:
         on_log: Callable[[str, str, Optional[str]], None],
         source_url: Optional[str] = None,
         channel_name: Optional[str] = None,
-        channel_id: Optional[str] = None
+        channel_id: Optional[str] = None,
+        dry_run: bool = False
     ):
         """保存检测结果到文件（追加模式，带分隔符）
         
@@ -439,11 +455,17 @@ class VideoProcessor:
             source_url: 来源 URL（可选）
             channel_name: 频道名称（可选）
             channel_id: 频道 ID（可选）
+            dry_run: 是否为 Dry Run 模式（仅用于日志标记，不影响文件保存）
+        
+        说明：
+        - Dry Run 模式下也会保存检测结果（with_subtitle.txt / without_subtitle.txt）
+        - 这些文件是检测结果的记录，不属于"报告文件"，保存有助于用户了解检测情况
+        - Dry Run 模式下仍然不会：下载字幕、翻译、摘要、更新 Archive
         """
         from datetime import datetime
         from pathlib import Path
         from ui.i18n_manager import t
-        from core.failure_logger import _atomic_write
+        from core.failure_logger import _append_line_safe
         
         output_dir = Path(self.app_config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -456,6 +478,8 @@ class VideoProcessor:
         
         # 构建分隔符信息
         separator_parts = [f"# {timestamp}"]
+        if dry_run:
+            separator_parts.append("[Dry Run]")
         if channel_name and channel_id:
             separator_parts.append(f"频道: {channel_name} [{channel_id}]")
         elif channel_id:
@@ -468,22 +492,19 @@ class VideoProcessor:
         # 保存有字幕的视频链接（追加模式）
         if videos_with_subtitle:
             try:
-                content_lines = [
-                    "",
-                    separator,
-                    f"# {t('videos_with_subtitle')} ({len(videos_with_subtitle)} {t('count_unit')})",
-                    ""
-                ]
+                # 先写入分隔符和标题
+                _append_line_safe(with_subtitle_file, "\n")
+                _append_line_safe(with_subtitle_file, separator + "\n")
+                _append_line_safe(with_subtitle_file, f"# {t('videos_with_subtitle')} ({len(videos_with_subtitle)} {t('count_unit')})\n")
+                _append_line_safe(with_subtitle_file, "\n")
+                
+                # 逐行写入视频 URL（使用线程安全的追加写入）
                 for video in videos_with_subtitle:
-                    content_lines.append(video.url)
-                content_lines.append("# " + "=" * 80)  # 结束分隔符
-                content_lines.append("")
+                    _append_line_safe(with_subtitle_file, video.url + "\n")
                 
-                content = "\n".join(content_lines)
-                
-                # 使用原子写追加
-                if not _atomic_write(with_subtitle_file, content, mode="a"):
-                    raise Exception("原子写失败")
+                # 写入结束分隔符
+                _append_line_safe(with_subtitle_file, "# " + "=" * 80 + "\n")
+                _append_line_safe(with_subtitle_file, "\n")
                 
                 on_log("INFO", t("saved_with_subtitle_file", count=len(videos_with_subtitle), filename=with_subtitle_file.name))
             except Exception as e:
@@ -492,22 +513,19 @@ class VideoProcessor:
         # 保存无字幕的视频链接（追加模式）
         if videos_without_subtitle:
             try:
-                content_lines = [
-                    "",
-                    separator,
-                    f"# {t('videos_without_subtitle')} ({len(videos_without_subtitle)} {t('count_unit')})",
-                    ""
-                ]
+                # 先写入分隔符和标题
+                _append_line_safe(without_subtitle_file, "\n")
+                _append_line_safe(without_subtitle_file, separator + "\n")
+                _append_line_safe(without_subtitle_file, f"# {t('videos_without_subtitle')} ({len(videos_without_subtitle)} {t('count_unit')})\n")
+                _append_line_safe(without_subtitle_file, "\n")
+                
+                # 逐行写入视频 URL（使用线程安全的追加写入）
                 for video in videos_without_subtitle:
-                    content_lines.append(video.url)
-                content_lines.append("# " + "=" * 80)  # 结束分隔符
-                content_lines.append("")
+                    _append_line_safe(without_subtitle_file, video.url + "\n")
                 
-                content = "\n".join(content_lines)
-                
-                # 使用原子写追加
-                if not _atomic_write(without_subtitle_file, content, mode="a"):
-                    raise Exception("原子写失败")
+                # 写入结束分隔符
+                _append_line_safe(without_subtitle_file, "# " + "=" * 80 + "\n")
+                _append_line_safe(without_subtitle_file, "\n")
                 
                 on_log("INFO", t("saved_without_subtitle_file", count=len(videos_without_subtitle), filename=without_subtitle_file.name))
             except Exception as e:
@@ -576,6 +594,11 @@ class VideoProcessor:
                 # 先执行字幕检测，显示详细列表
                 self._detect_subtitles(videos, on_log, source_url=url, channel_name=channel_name, channel_id=channel_id)
                 
+                # 如果翻译 AI 初始化失败，提前提示
+                if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
+                    error_msg = f"翻译 AI 初始化失败: {self.translation_llm_init_error}，将跳过 AI 翻译"
+                    on_log("WARN", error_msg)
+                
                 # 执行完整处理流程
                 on_log("INFO", t("processing_starting"))
                 self._run_full_processing(videos, channel_id, on_log, on_stats, force)
@@ -587,6 +610,14 @@ class VideoProcessor:
         
         return self._run_task_in_thread(task, on_status, on_complete)
     
+    def stop_processing(self):
+        """停止处理（由 GUI 的停止按钮调用）"""
+        if self.cancel_token is not None:
+            self.cancel_token.cancel("用户点击停止按钮")
+            logger.info("用户请求停止处理")
+        else:
+            logger.warning("尝试取消任务，但 cancel_token 不存在（任务可能未开始或已结束）")
+    
     def _run_full_processing(
         self,
         videos: List[VideoInfo],
@@ -595,6 +626,8 @@ class VideoProcessor:
         on_stats: Callable[[dict], None],
         force: bool = False
     ):
+        # 重置取消令牌（开始新的处理任务）
+        self.cancel_token = CancelToken()
         """执行完整处理流程（下载、翻译、摘要）
         
         Args:
@@ -624,11 +657,15 @@ class VideoProcessor:
             incremental_manager=self.incremental_manager,
             archive_path=archive_path,
             force=force,
+            dry_run=False,  # 正常处理模式，不是 Dry Run
+            cancel_token=self.cancel_token,  # 传递取消令牌
             concurrency=self.app_config.concurrency,
             proxy_manager=self.proxy_manager,
             cookie_manager=self.cookie_manager,
             on_stats=on_stats,
-            on_log=on_log
+            on_log=on_log,
+            translation_llm_init_error_type=self.translation_llm_init_error_type,  # 传递初始化失败的错误类型
+            translation_llm_init_error=self.translation_llm_init_error,  # 传递初始化失败的错误信息
         )
         
         # 更新最终统计信息（包含错误分类）
@@ -706,7 +743,7 @@ class VideoProcessor:
                 on_log("INFO", t("videos_found", count=len(videos)))
                 
                 # 执行字幕检测
-                self._detect_subtitles(videos, on_log, source_url="URL列表", channel_name=None, channel_id=None)
+                self._detect_subtitles(videos, on_log, source_url="URL列表", channel_name=None, channel_id=None, dry_run=True)
             except Exception as e:
                 import traceback
                 error_msg = f"{t('dry_run_failed', error=str(e))}"
@@ -752,7 +789,12 @@ class VideoProcessor:
                 on_log("INFO", t("videos_found", count=len(videos)))
                 
                 # 先执行字幕检测，显示详细列表
-                self._detect_subtitles(videos, on_log, source_url="URL列表", channel_name=None, channel_id=None)
+                self._detect_subtitles(videos, on_log, source_url="URL列表", channel_name=None, channel_id=None, dry_run=True)
+                
+                # 如果翻译 AI 初始化失败，提前提示
+                if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
+                    error_msg = f"翻译 AI 初始化失败: {self.translation_llm_init_error}，将跳过 AI 翻译"
+                    on_log("WARN", error_msg)
                 
                 # 执行完整处理流程（URL 列表模式使用批次 archive）
                 on_log("INFO", t("processing_starting"))
@@ -772,6 +814,8 @@ class VideoProcessor:
         on_stats: Callable[[dict], None],
         force: bool = False
     ):
+        # 重置取消令牌（开始新的处理任务）
+        self.cancel_token = CancelToken()
         """执行完整处理流程（URL 列表模式）
         
         Args:
@@ -800,11 +844,15 @@ class VideoProcessor:
             incremental_manager=self.incremental_manager,
             archive_path=archive_path,
             force=force,
+            dry_run=False,  # 正常处理模式，不是 Dry Run
+            cancel_token=self.cancel_token,  # 传递取消令牌
             concurrency=self.app_config.concurrency,
             proxy_manager=self.proxy_manager,
             cookie_manager=self.cookie_manager,
             on_stats=on_stats,
-            on_log=on_log
+            on_log=on_log,
+            translation_llm_init_error_type=self.translation_llm_init_error_type,  # 传递初始化失败的错误类型
+            translation_llm_init_error=self.translation_llm_init_error,  # 传递初始化失败的错误信息
         )
         
         # 更新最终统计信息（包含错误分类）

@@ -30,6 +30,9 @@ class IncrementalManager:
         self.config_manager = config_manager
         self.archives_dir = config_manager.get_archives_dir()
         self.archives_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 迁移旧位置的 archive.txt 文件
+        self._migrate_old_archive()
     
     def get_channel_archive_path(self, channel_id: str) -> Path:
         """获取频道 archive 文件路径
@@ -54,6 +57,17 @@ class IncrementalManager:
         if batch_id is None:
             batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         return self.archives_dir / f"{batch_id}.txt"
+    
+    def get_playlist_archive_path(self, playlist_id: str) -> Path:
+        """获取播放列表 archive 文件路径
+        
+        Args:
+            playlist_id: 播放列表 ID
+        
+        Returns:
+            archive 文件路径
+        """
+        return self.archives_dir / f"playlist_{playlist_id}.txt"
     
     def is_processed(self, video_id: str, archive_path: Path) -> bool:
         """判断视频是否已处理过
@@ -86,11 +100,13 @@ class IncrementalManager:
             video_id: 视频 ID
             archive_path: archive 文件路径
         """
+        from core.failure_logger import _append_line_safe
+        
         try:
             # yt-dlp archive 格式：youtube <video_id>
-            # 使用追加模式写入
-            with open(archive_path, "a", encoding="utf-8") as f:
-                f.write(f"youtube {video_id}\n")
+            # 使用线程安全的追加写入
+            if not _append_line_safe(archive_path, f"youtube {video_id}\n"):
+                raise Exception("追加写入失败")
         except Exception as e:
             logger.error(f"写入 archive 文件失败: {e}")
     
@@ -189,4 +205,75 @@ class IncrementalManager:
         archive_path = self.get_channel_archive_path(channel_id)
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         return archive_path
+    
+    def _migrate_old_archive(self) -> None:
+        """迁移旧位置的 archive.txt 文件到新位置
+        
+        检查以下旧位置：
+        1. out/archive.txt（项目根目录下的 out 文件夹）
+        2. 其他可能的旧位置
+        
+        如果发现旧文件，将其内容合并到通用的迁移文件中，并备份旧文件。
+        """
+        import shutil
+        
+        # 可能的旧位置列表
+        old_locations = [
+            Path("out") / "archive.txt",  # 项目根目录下的 out/archive.txt
+            Path("archive.txt"),  # 项目根目录下的 archive.txt
+        ]
+        
+        migrated_file = self.archives_dir / "migrated_archive.txt"
+        migrated = False
+        
+        for old_path in old_locations:
+            if old_path.exists() and old_path.is_file():
+                try:
+                    logger.info(f"发现旧 archive 文件: {old_path}，开始迁移...")
+                    
+                    # 读取旧文件内容
+                    with open(old_path, "r", encoding="utf-8") as f:
+                        old_content = f.read()
+                    
+                    if old_content.strip():
+                        # 如果迁移文件已存在，合并内容（去重）
+                        if migrated_file.exists():
+                            with open(migrated_file, "r", encoding="utf-8") as f:
+                                existing_content = f.read()
+                            
+                            # 合并内容，去重
+                            existing_lines = set(existing_content.strip().split("\n"))
+                            new_lines = set(old_content.strip().split("\n"))
+                            merged_lines = sorted(existing_lines | new_lines)
+                            
+                            with open(migrated_file, "w", encoding="utf-8") as f:
+                                f.write("\n".join(merged_lines) + "\n")
+                        else:
+                            # 直接写入迁移文件
+                            with open(migrated_file, "w", encoding="utf-8") as f:
+                                f.write(old_content)
+                        
+                        # 备份旧文件（重命名为 .bak）
+                        backup_path = old_path.with_suffix(".txt.bak")
+                        shutil.copy2(old_path, backup_path)
+                        logger.info(f"已备份旧文件到: {backup_path}")
+                        
+                        # 删除旧文件
+                        old_path.unlink()
+                        logger.info(f"已删除旧文件: {old_path}")
+                        
+                        migrated = True
+                    else:
+                        # 空文件，直接删除
+                        old_path.unlink()
+                        logger.info(f"删除空的旧文件: {old_path}")
+                        
+                except Exception as e:
+                    logger.warning(f"迁移旧 archive 文件失败 ({old_path}): {e}")
+        
+        if migrated:
+            logger.info(
+                f"旧 archive 文件已迁移到: {migrated_file}\n"
+                f"注意：此文件包含所有历史记录，新的频道/批次 archive 文件将按来源隔离。"
+            )
 

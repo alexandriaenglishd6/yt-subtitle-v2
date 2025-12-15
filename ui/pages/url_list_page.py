@@ -7,7 +7,7 @@ from tkinter import filedialog
 from typing import Callable, Optional, Dict, Any
 from pathlib import Path
 from ui.i18n_manager import t
-from ui.fonts import title_font, body_font
+from ui.fonts import title_font, body_font, small_font
 
 
 class UrlListPage(ctk.CTkFrame):
@@ -18,19 +18,31 @@ class UrlListPage(ctk.CTkFrame):
         parent,
         on_check_new: Optional[Callable[[str, bool], None]] = None,
         on_start_processing: Optional[Callable[[str, bool], None]] = None,
+        on_cancel_processing: Optional[Callable[[], None]] = None,
         stats: Optional[Dict[str, int]] = None,
         running_status: str = "",
         language_config: Optional[dict] = None,
         on_save_language_config: Optional[Callable[[dict], None]] = None,
+        translation_ai_config: Optional[dict] = None,
+        summary_ai_config: Optional[dict] = None,
+        on_save_translation_ai: Optional[Callable[[dict], None]] = None,
+        on_save_summary_ai: Optional[Callable[[dict], None]] = None,
+        initial_url_list_text: str = "",
         **kwargs
     ):
         super().__init__(parent, **kwargs)
         self.on_check_new = on_check_new
         self.on_start_processing = on_start_processing
+        self.on_cancel_processing = on_cancel_processing
         self.stats = stats or {"total": 0, "success": 0, "failed": 0, "current": 0}
         self.running_status = running_status
         self.language_config = language_config or {}
         self.on_save_language_config = on_save_language_config
+        self.translation_ai_config = translation_ai_config or {}
+        self.summary_ai_config = summary_ai_config or {}
+        self.on_save_translation_ai = on_save_translation_ai
+        self.on_save_summary_ai = on_save_summary_ai
+        self.initial_url_list_text = initial_url_list_text or ""
         self.grid_columnconfigure(0, weight=1)
         self._build_ui()
     
@@ -71,7 +83,11 @@ class UrlListPage(ctk.CTkFrame):
             height=150  # 固定高度，避免占用过多空间
         )
         self.url_list_textbox.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
-        self.url_list_textbox.insert("1.0", t("url_list_placeholder"))
+        # 恢复保存的URL列表或使用占位符
+        if self.initial_url_list_text:
+            self.url_list_textbox.insert("1.0", self.initial_url_list_text)
+        else:
+            self.url_list_textbox.insert("1.0", t("url_list_placeholder"))
         
         # 按钮区域
         button_frame = ctk.CTkFrame(self.scrollable_frame, fg_color="transparent")
@@ -130,6 +146,23 @@ class UrlListPage(ctk.CTkFrame):
         )
         self.start_processing_btn.pack(side="left", padx=8)
         
+        # 取消任务按钮（始终显示，初始状态禁用）
+        # 使用蓝色背景和白色文字，提高对比度
+        self.cancel_processing_btn = ctk.CTkButton(
+            button_frame,
+            text=t("cancel_processing"),
+            command=self._on_cancel_processing,
+            width=150,
+            font=body_font(),  # 明确指定字体，避免页面切换后文字模糊
+            fg_color=("#4A9EFF", "#4A9EFF"),  # 禁用状态下使用淡蓝色背景
+            hover_color=("#6BB5FF", "#6BB5FF"),  # 悬停时使用稍亮的蓝色
+            text_color=("white", "white"),  # 使用白色文字，确保高对比度
+            state="disabled"  # 初始状态禁用
+        )
+        self.cancel_processing_btn.pack(side="left", padx=8)
+        # 强制刷新按钮，确保字体正确渲染
+        self.after(10, lambda: self.cancel_processing_btn.update_idletasks())
+        
         # 强制重跑选项
         self.force_rerun_checkbox = ctk.CTkCheckBox(
             button_frame,
@@ -150,22 +183,76 @@ class UrlListPage(ctk.CTkFrame):
         )
         self._config_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
         
-        # 字幕目标语言
-        self._subtitle_target_label = ctk.CTkLabel(config_frame, text=t("subtitle_target_languages_label"))
-        self._subtitle_target_label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
-        self.subtitle_target_textbox = ctk.CTkTextbox(config_frame, height=60, wrap="word")
-        self.subtitle_target_textbox.grid(row=1, column=1, sticky="ew", padx=16, pady=8)
-        if self.language_config.get("subtitle_target_languages"):
-            self.subtitle_target_textbox.insert("1.0", "\n".join(self.language_config["subtitle_target_languages"]))
-        self._subtitle_target_hint = ctk.CTkLabel(
-            config_frame,
-            text=t("subtitle_target_languages_hint"),
+        # 源语言（输入框 + 自动勾选框）- 放在上方
+        self._source_lang_label = ctk.CTkLabel(config_frame, text=t("source_language_label"))
+        self._source_lang_label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
+        
+        # 源语言输入区域（输入框 + 自动勾选框 + 提示）
+        source_lang_input_frame = ctk.CTkFrame(config_frame, fg_color="transparent")
+        source_lang_input_frame.grid(row=1, column=1, sticky="w", padx=16, pady=8)
+        
+        # 源语言输入框
+        self.source_language_entry = ctk.CTkEntry(source_lang_input_frame, width=120, placeholder_text=t("source_language_placeholder"))
+        self.source_language_entry.pack(side="left", padx=(0, 12))
+        
+        # 自动选择勾选框
+        self.source_language_auto_checkbox = ctk.CTkCheckBox(
+            source_lang_input_frame,
+            text=t("auto_select"),
+            font=body_font(),
+            command=self._on_source_language_auto_toggle
+        )
+        self.source_language_auto_checkbox.pack(side="left", padx=(0, 12))
+        
+        # 提示信息（与输入框同行）
+        source_lang_hint = ctk.CTkLabel(
+            source_lang_input_frame,
+            text=t("source_language_auto_hint"),
             font=body_font(),
             text_color=("gray50", "gray50")
         )
-        self._subtitle_target_hint.grid(row=2, column=1, sticky="w", padx=16, pady=(0, 8))
+        source_lang_hint.pack(side="left")
         
-        # 摘要语言
+        # 设置默认值
+        source_language = self.language_config.get("source_language")
+        if source_language:
+            # 有指定源语言，取消勾选自动，填入语言代码
+            self.source_language_entry.insert(0, source_language)
+            self.source_language_auto_checkbox.deselect()
+        else:
+            # 自动模式，勾选自动，禁用输入框
+            self.source_language_auto_checkbox.select()
+            self.source_language_entry.configure(state="disabled")
+        
+        # 目标语言（输入框）- 放在下方
+        self._subtitle_target_label = ctk.CTkLabel(config_frame, text=t("target_language_label"))
+        self._subtitle_target_label.grid(row=2, column=0, sticky="w", padx=16, pady=8)
+        
+        # 目标语言输入区域
+        subtitle_target_input_frame = ctk.CTkFrame(config_frame, fg_color="transparent")
+        subtitle_target_input_frame.grid(row=2, column=1, sticky="w", padx=16, pady=8)
+        
+        # 目标语言输入框
+        self.subtitle_target_entry = ctk.CTkEntry(subtitle_target_input_frame, width=120, placeholder_text=t("target_language_placeholder"))
+        self.subtitle_target_entry.pack(side="left", padx=(0, 12))
+        
+        # 提示信息（与输入框同行）
+        self._subtitle_target_hint = ctk.CTkLabel(
+            subtitle_target_input_frame,
+            text=t("target_language_hint"),
+            font=body_font(),
+            text_color=("gray50", "gray50")
+        )
+        self._subtitle_target_hint.pack(side="left")
+        
+        # 设置默认值
+        if self.language_config.get("subtitle_target_languages"):
+            first_lang = self.language_config["subtitle_target_languages"][0]
+            self.subtitle_target_entry.insert(0, first_lang)
+        else:
+            self.subtitle_target_entry.insert(0, "zh-CN")
+        
+        # 摘要语言（带启用勾选框）
         self._summary_lang_label = ctk.CTkLabel(config_frame, text=t("summary_language_label"))
         self._summary_lang_label.grid(row=3, column=0, sticky="w", padx=16, pady=8)
         summary_lang_entry_frame = ctk.CTkFrame(config_frame, fg_color="transparent")
@@ -178,7 +265,16 @@ class UrlListPage(ctk.CTkFrame):
             font=body_font(),
             text_color=("gray50", "gray50")
         )
-        self._summary_lang_hint.pack(side="left")
+        self._summary_lang_hint.pack(side="left", padx=(0, 12))
+        self.summary_enabled_checkbox = ctk.CTkCheckBox(
+            summary_lang_entry_frame,
+            text=t("enable_summary"),
+            font=body_font(),
+            command=self._on_summary_enabled_changed
+        )
+        self.summary_enabled_checkbox.pack(side="left")
+        if self.summary_ai_config.get("enabled", True):
+            self.summary_enabled_checkbox.select()
         if self.language_config.get("summary_language"):
             self.summary_language_entry.insert(0, self.language_config["summary_language"])
         
@@ -197,7 +293,7 @@ class UrlListPage(ctk.CTkFrame):
         else:
             self.bilingual_mode_combo.set(t("bilingual_mode_source_target"))
         
-        # 翻译策略
+        # 翻译策略（带启用勾选框）
         self._translation_strategy_label = ctk.CTkLabel(config_frame, text=t("translation_strategy_label"))
         self._translation_strategy_label.grid(row=5, column=0, sticky="w", padx=16, pady=8)
         translation_strategy_frame = ctk.CTkFrame(config_frame, fg_color="transparent")
@@ -218,7 +314,16 @@ class UrlListPage(ctk.CTkFrame):
             font=body_font(),
             text_color=("gray50", "gray50")
         )
-        self._translation_strategy_hint.pack(side="left")
+        self._translation_strategy_hint.pack(side="left", padx=(0, 12))
+        self.translation_enabled_checkbox = ctk.CTkCheckBox(
+            translation_strategy_frame,
+            text=t("enable_translation"),
+            font=body_font(),
+            command=self._on_translation_enabled_changed
+        )
+        self.translation_enabled_checkbox.pack(side="left")
+        if self.translation_ai_config.get("enabled", True):
+            self.translation_enabled_checkbox.select()
         strategy = self.language_config.get("translation_strategy", "OFFICIAL_AUTO_THEN_AI")
         if strategy == "AI_ONLY":
             self.translation_strategy_combo.set(t("translation_strategy_ai_only"))
@@ -227,9 +332,30 @@ class UrlListPage(ctk.CTkFrame):
         else:
             self.translation_strategy_combo.set(t("translation_strategy_official_auto_then_ai"))
         
+        # 字幕格式
+        subtitle_format_label = ctk.CTkLabel(config_frame, text=t("subtitle_format_label"))
+        subtitle_format_label.grid(row=6, column=0, sticky="w", padx=16, pady=8)
+        self.subtitle_format_combo = ctk.CTkComboBox(
+            config_frame,
+            values=[
+                t("subtitle_format_srt"),
+                t("subtitle_format_txt"),
+                t("subtitle_format_both")
+            ],
+            width=200
+        )
+        self.subtitle_format_combo.grid(row=6, column=1, sticky="w", padx=16, pady=8)
+        subtitle_format = self.language_config.get("subtitle_format", "srt")
+        if subtitle_format == "txt":
+            self.subtitle_format_combo.set(t("subtitle_format_txt"))
+        elif subtitle_format == "both":
+            self.subtitle_format_combo.set(t("subtitle_format_both"))
+        else:
+            self.subtitle_format_combo.set(t("subtitle_format_srt"))
+        
         # 保存按钮
         language_config_btn_frame = ctk.CTkFrame(config_frame, fg_color="transparent")
-        language_config_btn_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=16, pady=(8, 16))
+        language_config_btn_frame.grid(row=7, column=0, columnspan=2, sticky="ew", padx=16, pady=(8, 16))
         self.language_config_save_btn = ctk.CTkButton(
             language_config_btn_frame,
             text=t("language_config_save"),
@@ -275,7 +401,7 @@ class UrlListPage(ctk.CTkFrame):
                     
                     from core.logger import get_logger
                     logger = get_logger()
-                    logger.info(f"从文件导入 {len(urls)} 个 URL")
+                    logger.info(t("import_urls_success", count=len(urls)))
                 else:
                     from core.logger import get_logger
                     logger = get_logger()
@@ -283,7 +409,7 @@ class UrlListPage(ctk.CTkFrame):
             except Exception as e:
                 from core.logger import get_logger
                 logger = get_logger()
-                logger.error(f"导入文件失败: {e}")
+                logger.error(t("import_urls_failed", error=str(e)))
     
     def _extract_urls_from_text(self, text: str) -> list:
         """从文本中提取 YouTube URL
@@ -425,6 +551,72 @@ class UrlListPage(ctk.CTkFrame):
         if self.on_start_processing:
             self.on_start_processing(urls_text, force)
     
+    def _on_cancel_processing(self):
+        """取消处理按钮点击"""
+        if self.on_cancel_processing:
+            self.on_cancel_processing()
+    
+    def _on_source_language_auto_toggle(self):
+        """源语言自动选择勾选框状态变化"""
+        if self.source_language_auto_checkbox.get() == 1:
+            # 勾选了自动，禁用输入框
+            self.source_language_entry.configure(state="disabled")
+        else:
+            # 取消勾选，启用输入框
+            self.source_language_entry.configure(state="normal")
+    
+    def _on_translation_enabled_changed(self):
+        """翻译启用勾选框状态变化"""
+        enabled = self.translation_enabled_checkbox.get() == 1
+        if self.on_save_translation_ai:
+            # 更新配置并保存
+            updated_config = self.translation_ai_config.copy()
+            updated_config["enabled"] = enabled
+            self.on_save_translation_ai(updated_config)
+    
+    def _on_summary_enabled_changed(self):
+        """摘要启用勾选框状态变化"""
+        enabled = self.summary_enabled_checkbox.get() == 1
+        if self.on_save_summary_ai:
+            # 更新配置并保存
+            updated_config = self.summary_ai_config.copy()
+            updated_config["enabled"] = enabled
+            self.on_save_summary_ai(updated_config)
+    
+    def set_processing_state(self, is_processing: bool):
+        """设置处理状态（启用/禁用相应按钮）
+        
+        Args:
+            is_processing: 是否正在处理
+        """
+        if hasattr(self, 'start_processing_btn') and hasattr(self, 'cancel_processing_btn'):
+            if is_processing:
+                # 处理中：禁用开始按钮，启用取消按钮
+                self.start_processing_btn.configure(state="disabled")
+                # 重新配置取消按钮，确保字体正确渲染
+                self.cancel_processing_btn.configure(
+                    state="normal",
+                    font=body_font(),  # 重新设置字体
+                    text=t("cancel_processing"),  # 重新设置文本
+                    fg_color=("#0078D4", "#0078D4"),  # 启用状态下使用正常蓝色背景
+                    hover_color=("#005A9E", "#005A9E"),  # 悬停时使用深蓝色
+                    text_color=("white", "white")  # 使用白色文字，确保高对比度
+                )
+                self.cancel_processing_btn.update_idletasks()  # 强制刷新
+            else:
+                # 空闲：启用开始按钮，禁用取消按钮
+                self.start_processing_btn.configure(state="normal")
+                # 重新配置取消按钮，确保字体正确渲染
+                self.cancel_processing_btn.configure(
+                    state="disabled",
+                    font=body_font(),  # 重新设置字体
+                    text=t("cancel_processing"),  # 重新设置文本
+                    fg_color=("#4A9EFF", "#4A9EFF"),  # 禁用状态下使用淡蓝色背景
+                    hover_color=("#6BB5FF", "#6BB5FF"),  # 悬停时使用稍亮的蓝色
+                    text_color=("white", "white")  # 使用白色文字，确保高对比度
+                )
+                self.cancel_processing_btn.update_idletasks()  # 强制刷新
+    
     def _get_cleaned_urls_text(self) -> str:
         """获取清理后的 URL 文本（排除占位符）"""
         text = self.url_list_textbox.get("1.0", "end-1c").strip()
@@ -443,11 +635,19 @@ class UrlListPage(ctk.CTkFrame):
     def _on_save_language_config(self):
         """保存语言配置"""
         try:
-            # 获取字幕目标语言
-            subtitle_target_text = self.subtitle_target_textbox.get("1.0", "end-1c").strip()
-            subtitle_target_languages = [lang.strip() for lang in subtitle_target_text.split("\n") if lang.strip()]
-            if not subtitle_target_languages:
-                subtitle_target_languages = ["zh-CN"]  # 默认值
+            # 获取字幕目标语言（输入框）
+            subtitle_target_lang = self.subtitle_target_entry.get().strip()
+            if not subtitle_target_lang:
+                subtitle_target_lang = "zh-CN"  # 默认值
+            subtitle_target_languages = [subtitle_target_lang]
+            
+            # 获取源语言
+            if self.source_language_auto_checkbox.get() == 1:
+                # 自动模式
+                source_language = None
+            else:
+                # 手动指定
+                source_language = self.source_language_entry.get().strip() or None
             
             # 获取摘要语言
             summary_language = self.summary_language_entry.get().strip()
@@ -470,11 +670,22 @@ class UrlListPage(ctk.CTkFrame):
             else:
                 translation_strategy = "OFFICIAL_AUTO_THEN_AI"
             
+            # 获取字幕格式
+            format_text = self.subtitle_format_combo.get()
+            if format_text == t("subtitle_format_txt"):
+                subtitle_format = "txt"
+            elif format_text == t("subtitle_format_both"):
+                subtitle_format = "both"
+            else:
+                subtitle_format = "srt"
+            
             language_config = {
                 "subtitle_target_languages": subtitle_target_languages,
                 "summary_language": summary_language,
+                "source_language": source_language,
                 "bilingual_mode": bilingual_mode,
-                "translation_strategy": translation_strategy
+                "translation_strategy": translation_strategy,
+                "subtitle_format": subtitle_format
             }
             
             if self.on_save_language_config:
@@ -482,7 +693,7 @@ class UrlListPage(ctk.CTkFrame):
         except Exception as e:
             from core.logger import get_logger
             logger = get_logger()
-            logger.error(f"保存语言配置失败: {e}")
+            logger.error(t("save_language_config_failed", error=str(e)))
     
     def refresh_language(self):
         """刷新语言相关文本"""

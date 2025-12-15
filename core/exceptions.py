@@ -52,6 +52,27 @@ class AppException(Exception):
         return base
 
 
+class TaskCancelledError(AppException):
+    """任务已取消异常
+    
+    当用户主动取消任务时抛出此异常。
+    应该被捕获并记录"任务已取消"日志，然后清理临时资源。
+    """
+    
+    def __init__(self, reason: Optional[str] = None):
+        """初始化任务取消异常
+        
+        Args:
+            reason: 取消原因（可选）
+        """
+        message = f"任务已取消{f'：{reason}' if reason else ''}"
+        super().__init__(
+            message=message,
+            error_type=ErrorType.CANCELLED
+        )
+        self.reason = reason
+
+
 def map_llm_error_to_app_error(llm_error_type: str) -> ErrorType:
     """将 LLMErrorType 映射为 AppException 的 ErrorType
     

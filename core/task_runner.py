@@ -16,14 +16,14 @@ class TaskRunner:
     """并发任务执行器
     
     使用队列 + worker 池实现并发执行，支持配置并发数。
-    默认并发数保守（3），不在代码中硬锁死上限，对过高配置只做日志警告。
+    默认并发数 10（用于下载任务），不在代码中硬锁死上限，对过高配置只做日志警告。
     """
     
-    def __init__(self, concurrency: int = 3):
+    def __init__(self, concurrency: int = 10):
         """初始化任务执行器
         
         Args:
-            concurrency: 并发数，默认 3
+            concurrency: 并发数，默认 10（用于下载任务）
         """
         # 验证并发数
         if concurrency <= 0:

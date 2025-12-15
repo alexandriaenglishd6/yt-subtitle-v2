@@ -63,10 +63,13 @@ class StateManager:
             keys = key.split(".")
             value = self._state
             for k in keys:
-                if hasattr(value, k):
+                if isinstance(value, dict):
+                    if k in value:
+                        value = value[k]
+                    else:
+                        return default
+                elif hasattr(value, k):
                     value = getattr(value, k)
-                elif isinstance(value, dict) and k in value:
-                    value = value[k]
                 else:
                     return default
             return value
@@ -98,10 +101,11 @@ class StateManager:
             
             # 设置值
             final_key = keys[-1]
-            if hasattr(target, final_key):
-                setattr(target, final_key, value)
-            elif isinstance(target, dict):
+            if isinstance(target, dict):
                 target[final_key] = value
+            else:
+                # 对于对象，使用 setattr（即使是动态属性也可以设置）
+                setattr(target, final_key, value)
             
             # 通知监听者
             self._notify_listeners(key, value)

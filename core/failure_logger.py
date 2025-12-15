@@ -2,16 +2,58 @@
 失败记录模块
 符合 error_handling.md 规范的失败记录系统
 记录所有下载/翻译/摘要失败的视频，写入 out/failed_detail.log 和 out/failed_urls.txt
+同时写入结构化 JSON 记录到 out/failed_records.json（R2-1 任务）
 """
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 import os
+import threading
+import json
 
 from core.logger import get_logger
 from core.exceptions import ErrorType
 
 logger = get_logger()
+
+# 全局锁字典：每个文件路径对应一个 Lock，用于线程安全的追加写入
+_file_locks: dict[Path, threading.Lock] = {}
+_locks_lock = threading.Lock()  # 保护 _file_locks 字典本身的锁
+
+
+def _append_line_safe(file_path: Path, line: str) -> bool:
+    """线程安全的追加写入单行文本
+    
+    使用每个文件路径对应的 Lock 确保并发安全。
+    符合 R0-4 任务要求：所有追加写入统一调用此函数。
+    
+    Args:
+        file_path: 目标文件路径
+        line: 要追加的行（应包含换行符，如 "content\n"）
+    
+    Returns:
+        是否成功
+    """
+    # 确保目录存在
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # 获取或创建该文件对应的 Lock
+    with _locks_lock:
+        if file_path not in _file_locks:
+            _file_locks[file_path] = threading.Lock()
+        file_lock = _file_locks[file_path]
+    
+    # 使用文件锁进行线程安全的追加写入
+    try:
+        with file_lock:
+            with open(file_path, "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
+                os.fsync(f.fileno())  # 强制刷新到磁盘
+        return True
+    except Exception as e:
+        logger.error(f"线程安全追加写入失败 ({file_path}): {e}")
+        return False
 
 
 def _atomic_write(file_path: Path, content: str, mode: str = "a") -> bool:
@@ -87,6 +129,7 @@ class FailureLogger:
         
         self.detail_log_path = self.base_output_dir / "failed_detail.log"
         self.urls_file_path = self.base_output_dir / "failed_urls.txt"
+        self.json_records_path = self.base_output_dir / "failed_records.json"  # R2-1: 结构化 JSON 记录
     
     def log_failure(
         self,
@@ -142,8 +185,8 @@ class FailureLogger:
         detail_line = " ".join(detail_parts) + "\n"
         
         try:
-            # 原子写详细日志
-            _atomic_write(self.detail_log_path, detail_line, mode="a")
+            # 使用线程安全的追加写入详细日志
+            _append_line_safe(self.detail_log_path, detail_line)
             
             # 追加写入 URL 列表（如果 URL 不存在）
             # 检查是否已存在（避免重复）
@@ -156,8 +199,21 @@ class FailureLogger:
                     pass  # 读取失败不影响主流程
             
             if url not in existing_urls:
-                # 原子写 URL 列表
-                _atomic_write(self.urls_file_path, url + "\n", mode="a")
+                # 使用线程安全的追加写入
+                _append_line_safe(self.urls_file_path, url + "\n")
+            
+            # R2-1: 写入结构化 JSON 记录
+            self._write_json_record(
+                video_id=video_id,
+                url=url,
+                stage=stage or "unknown",
+                error_type=error_type.value,
+                timestamp=timestamp,
+                run_id=batch_id,
+                reason=reason,
+                channel_id=channel_id,
+                channel_name=channel_name
+            )
             
             # 静默记录（不阻塞主流程，不弹窗）
             logger.warning(
@@ -266,6 +322,63 @@ class FailureLogger:
             stage="summarize"
         )
     
+    def _write_json_record(
+        self,
+        video_id: str,
+        url: str,
+        stage: str,
+        error_type: str,
+        timestamp: str,
+        run_id: Optional[str],
+        reason: str,
+        channel_id: Optional[str] = None,
+        channel_name: Optional[str] = None
+    ) -> None:
+        """写入结构化 JSON 记录（R2-1 任务）
+        
+        使用 JSONL 格式（每行一个 JSON 对象），便于追加写入和解析。
+        
+        Args:
+            video_id: 视频 ID
+            url: 视频 URL
+            stage: 失败阶段（detect/download/translate/summarize/output）
+            error_type: 错误类型（字符串）
+            timestamp: 时间戳（格式：YYYY-MM-DD HH:MM:SS）
+            run_id: 批次ID（run_id，格式：YYYYMMDD_HHMMSS）
+            reason: 失败原因
+            channel_id: 频道 ID（可选）
+            channel_name: 频道名称（可选）
+        """
+        try:
+            # 构建 JSON 记录对象
+            record: Dict[str, Any] = {
+                "video_id": video_id,
+                "url": url,
+                "stage": stage,
+                "error_type": error_type,
+                "timestamp": timestamp,
+            }
+            
+            # 可选字段
+            if run_id:
+                record["run_id"] = run_id
+            if channel_id:
+                record["channel_id"] = channel_id
+            if channel_name:
+                record["channel_name"] = channel_name
+            if reason:
+                record["reason"] = reason
+            
+            # 将 JSON 对象序列化为字符串（紧凑格式，无缩进）
+            json_line = json.dumps(record, ensure_ascii=False) + "\n"
+            
+            # 使用线程安全的追加写入
+            _append_line_safe(self.json_records_path, json_line)
+            
+        except Exception as e:
+            # JSON 记录写入失败不应该影响主流程
+            logger.debug(f"写入 JSON 记录失败: {e}", video_id=video_id)
+    
     def clear_logs(self) -> None:
         """清空失败记录（谨慎使用）
         
@@ -276,6 +389,8 @@ class FailureLogger:
                 self.detail_log_path.unlink()
             if self.urls_file_path.exists():
                 self.urls_file_path.unlink()
+            if self.json_records_path.exists():
+                self.json_records_path.unlink()
             logger.info("失败记录已清空")
         except Exception as e:
             logger.error(f"清空失败记录失败: {e}")

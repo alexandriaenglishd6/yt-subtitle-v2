@@ -49,7 +49,20 @@ class LLMClient(Protocol):
     """LLM 客户端抽象接口
     
     所有 AI 提供商都必须实现这个接口
+    
+    所有实现类必须提供以下 4 个必需属性：
+    - supports_vision: bool - 是否支持视觉输入
+    - max_input_tokens: int - 最大输入 token 数
+    - max_output_tokens: int - 最大输出 token 数
+    - max_concurrency: int - 最大并发数（用于内部限流）
     """
+    
+    # ---- 能力属性：所有实现必须提供（字段或 @property 均可） ----
+    supports_vision: bool
+    max_input_tokens: int
+    max_output_tokens: int
+    max_concurrency: int
+    
     def generate(
         self,
         prompt: str,

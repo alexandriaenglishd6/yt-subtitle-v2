@@ -65,15 +65,18 @@ class SubtitleDetector:
             subtitles = subtitle_info.get("subtitles", {})
             automatic_captions = subtitle_info.get("automatic_captions", {})
             
-            # 提取人工字幕语言
+            # 提取人工字幕语言（标准化语言代码）
+            from core.language import normalize_language_code
             for lang_code in subtitles.keys():
-                if lang_code not in manual_languages:
-                    manual_languages.append(lang_code)
+                normalized_lang = normalize_language_code(lang_code)
+                if normalized_lang not in manual_languages:
+                    manual_languages.append(normalized_lang)
             
-            # 提取自动字幕语言
+            # 提取自动字幕语言（标准化语言代码）
             for lang_code in automatic_captions.keys():
-                if lang_code not in auto_languages:
-                    auto_languages.append(lang_code)
+                normalized_lang = normalize_language_code(lang_code)
+                if normalized_lang not in auto_languages:
+                    auto_languages.append(normalized_lang)
             
             has_subtitles = len(manual_languages) > 0 or len(auto_languages) > 0
             

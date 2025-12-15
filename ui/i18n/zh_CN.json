@@ -35,6 +35,7 @@
   "log_output": "日志输出",
   "log_filter_label": "过滤：",
   "log_filter_all": "全部",
+  "log_filter_debug": "DEBUG",
   "log_filter_info": "INFO",
   "log_filter_warn": "WARN",
   "log_filter_error": "ERROR",
@@ -45,6 +46,8 @@
   "channel_url_placeholder": "https://www.youtube.com/@channel_name",
   "check_new_videos": "检查新视频(Dry Run)",
   "start_processing": "开始处理",
+  "cancel_processing": "取消任务",
+  "task_cancelling": "正在取消任务，请稍候...",
   
   "config_options": "配置选项（P0-22 将接入真实配置）",
   "config_placeholder": "目标字幕语言、摘要语言、双语字幕等配置将在 P0-22 中接入",
@@ -264,5 +267,21 @@
   "error_type_invalid_input": "输入无效",
   "error_type_cancelled": "已取消",
   "error_type_external_service": "外部服务错误",
-  "error_type_unknown": "未知错误"
+  "error_type_unknown": "未知错误",
+  
+  "source_language_label": "源语言：",
+  "source_language_placeholder": "如: en, ja",
+  "auto_select": "自动选择",
+  "source_language_auto_hint": "（勾选\"自动\"按优先级选择：en > zh-CN > ja > de...，手动输入指定语言请先取消勾选自动）",
+  "target_language_label": "目标语言：",
+  "target_language_placeholder": "如: zh-CN",
+  "target_language_hint": "（输入语言代码，如：zh-CN、zh-TW、en、ja、ko、de）",
+  "import_urls_success": "从文件导入 {count} 个 URL",
+  "import_urls_failed": "导入文件失败: {error}",
+  "save_language_config_failed": "保存语言配置失败: {error}",
+  
+  "subtitle_format_label": "字幕格式：",
+  "subtitle_format_srt": "SRT（带时间轴）",
+  "subtitle_format_txt": "TXT（纯文本）",
+  "subtitle_format_both": "两种都输出"
 }

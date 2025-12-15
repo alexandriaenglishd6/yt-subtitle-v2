@@ -16,7 +16,7 @@ class LogPanel(ctk.CTkFrame):
     
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
-        # 日志级别过滤：ALL, INFO, WARN, ERROR
+        # 日志级别过滤：ALL, DEBUG, INFO, WARN, ERROR
         self.filter_level = "ALL"
         # 是否自动滚动
         self.auto_scroll = True
@@ -72,6 +72,7 @@ class LogPanel(ctk.CTkFrame):
         # 日志级别下拉框
         filter_values = [
             t("log_filter_all"),
+            t("log_filter_debug"),
             t("log_filter_info"),
             t("log_filter_warn"),
             t("log_filter_error")
@@ -98,7 +99,7 @@ class LogPanel(ctk.CTkFrame):
         # 日志文本框（只读）
         self.log_text = ctk.CTkTextbox(
             self,
-            height=170,
+            height=255,  # 170 * 1.5 = 255（增加 50%）
             state="disabled",
             font=body_font(family="Consolas")
         )
@@ -152,11 +153,18 @@ class LogPanel(ctk.CTkFrame):
         
         level_upper = level.upper()
         
-        if self.filter_level == "INFO":
-            return level_upper == "INFO"
+        # 日志级别优先级：ERROR > WARN > INFO > DEBUG
+        if self.filter_level == "DEBUG":
+            # DEBUG级别显示所有日志
+            return level_upper in ("DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL")
+        elif self.filter_level == "INFO":
+            # INFO级别显示INFO及以上
+            return level_upper in ("INFO", "WARN", "WARNING", "ERROR", "CRITICAL")
         elif self.filter_level == "WARN":
-            return level_upper in ("WARN", "WARNING")
+            # WARN级别显示WARN及以上
+            return level_upper in ("WARN", "WARNING", "ERROR", "CRITICAL")
         elif self.filter_level == "ERROR":
+            # ERROR级别只显示ERROR
             return level_upper in ("ERROR", "CRITICAL")
         
         return True
@@ -170,6 +178,7 @@ class LogPanel(ctk.CTkFrame):
         # 将显示文本映射到级别值
         filter_map = {
             t("log_filter_all"): "ALL",
+            t("log_filter_debug"): "DEBUG",
             t("log_filter_info"): "INFO",
             t("log_filter_warn"): "WARN",
             t("log_filter_error"): "ERROR"

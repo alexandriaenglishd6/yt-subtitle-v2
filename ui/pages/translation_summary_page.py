@@ -34,6 +34,14 @@ AI_PROVIDER_CONFIGS: Dict[str, Dict[str, any]] = {
             "claude-3-sonnet-20240229",
             "claude-3-haiku-20240307"
         ]
+    },
+    "google_translate": {
+        "model": "google_translate_free",
+        "base_url": "",  # Google 翻译免费版不需要 API 地址
+        "models": [
+            "google_translate_free"
+        ],
+        "requires_api_key": False  # 标记不需要 API Key
     }
 }
 
@@ -80,27 +88,13 @@ class TranslationSummaryPage(ctk.CTkFrame):
         translation_ai_frame.pack(fill="x", pady=(0, 24))
         translation_ai_frame.grid_columnconfigure(1, weight=1)
         
-        # 翻译 AI 标题和启用开关
-        translation_title_frame = ctk.CTkFrame(translation_ai_frame, fg_color="transparent")
-        translation_title_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=16, pady=(16, 8))
-        translation_title_frame.grid_columnconfigure(0, weight=1)
-        
+        # 翻译 AI 标题
         translation_ai_label = ctk.CTkLabel(
-            translation_title_frame,
+            translation_ai_frame,
             text=t("translation_ai_config_label"),
             font=heading_font(weight="bold")
         )
-        translation_ai_label.grid(row=0, column=0, sticky="w")
-        
-        self.translation_enabled_checkbox = ctk.CTkCheckBox(
-            translation_title_frame,
-            text=t("enable_translation"),
-            font=body_font()
-        )
-        self.translation_enabled_checkbox.grid(row=0, column=1, sticky="e")
-        # 设置默认值
-        if self.translation_ai_config.get("enabled", True):
-            self.translation_enabled_checkbox.select()
+        translation_ai_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
         
         # 翻译 AI 配置字段
         last_row = self._build_ai_config_fields(translation_ai_frame, self.translation_ai_config, "translation", start_row=1)
@@ -132,27 +126,13 @@ class TranslationSummaryPage(ctk.CTkFrame):
         summary_ai_frame.pack(fill="x", pady=(0, 24))
         summary_ai_frame.grid_columnconfigure(1, weight=1)
         
-        # 摘要 AI 标题和启用开关
-        summary_title_frame = ctk.CTkFrame(summary_ai_frame, fg_color="transparent")
-        summary_title_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=16, pady=(16, 8))
-        summary_title_frame.grid_columnconfigure(0, weight=1)
-        
+        # 摘要 AI 标题
         summary_ai_label = ctk.CTkLabel(
-            summary_title_frame,
+            summary_ai_frame,
             text=t("summary_ai_config_label"),
             font=heading_font(weight="bold")
         )
-        summary_ai_label.grid(row=0, column=0, sticky="w")
-        
-        self.summary_enabled_checkbox = ctk.CTkCheckBox(
-            summary_title_frame,
-            text=t("enable_summary"),
-            font=body_font()
-        )
-        self.summary_enabled_checkbox.grid(row=0, column=1, sticky="e")
-        # 设置默认值
-        if self.summary_ai_config.get("enabled", True):
-            self.summary_enabled_checkbox.select()
+        summary_ai_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 8))
         
         # 摘要 AI 配置字段
         last_row = self._build_ai_config_fields(summary_ai_frame, self.summary_ai_config, "summary", start_row=1)
@@ -379,7 +359,7 @@ class TranslationSummaryPage(ctk.CTkFrame):
         """获取翻译 AI 配置"""
         try:
             translation_ai_config = {
-                "enabled": self.translation_enabled_checkbox.get() == 1,
+                "enabled": self.translation_ai_config.get("enabled", True),  # 保持原有配置
                 "provider": getattr(self, "translation_ai_provider_combo").get().strip(),
                 "model": getattr(self, "translation_ai_model_combo").get().strip(),
                 "base_url": self._get_base_url_value("translation"),
@@ -404,7 +384,7 @@ class TranslationSummaryPage(ctk.CTkFrame):
         """获取摘要 AI 配置"""
         try:
             summary_ai_config = {
-                "enabled": self.summary_enabled_checkbox.get() == 1,
+                "enabled": self.summary_ai_config.get("enabled", True),  # 保持原有配置
                 "provider": getattr(self, "summary_ai_provider_combo").get().strip(),
                 "model": getattr(self, "summary_ai_model_combo").get().strip(),
                 "base_url": self._get_base_url_value("summary"),
@@ -479,8 +459,10 @@ class TranslationSummaryPage(ctk.CTkFrame):
                 client = create_llm_client(ai_config)
                 
                 # 发送一个简单的测试请求
+                # 对于 Google 翻译，使用简单的英文文本更合适
+                test_prompt = "测试" if ai_config.provider != "google_translate" else "Hello"
                 result = client.generate(
-                    prompt="测试",
+                    prompt=test_prompt,
                     max_tokens=10
                 )
                 
@@ -496,33 +478,36 @@ class TranslationSummaryPage(ctk.CTkFrame):
                 self.after(0, on_success)
                 
             except LLMException as e:
+                error_msg = str(e)
                 def on_error():
                     self.translation_test_btn.configure(
                         state="normal",
                         text=t("ai_test_connection")
                     )
                     if self.on_log_message:
-                        self.on_log_message("ERROR", t("ai_test_failed", error=str(e)))
+                        self.on_log_message("ERROR", t("ai_test_failed", error=error_msg))
                 
                 self.after(0, on_error)
             except ValueError as e:
+                error_msg = str(e)
                 def on_error():
                     self.translation_test_btn.configure(
                         state="normal",
                         text=t("ai_test_connection")
                     )
                     if self.on_log_message:
-                        self.on_log_message("ERROR", f"{t('ai_test_failed')}: {e}")
+                        self.on_log_message("ERROR", f"{t('ai_test_failed')}: {error_msg}")
                 
                 self.after(0, on_error)
             except Exception as e:
+                error_msg = str(e)
                 def on_error():
                     self.translation_test_btn.configure(
                         state="normal",
                         text=t("ai_test_connection")
                     )
                     if self.on_log_message:
-                        self.on_log_message("ERROR", t("ai_test_failed", error=str(e)))
+                        self.on_log_message("ERROR", t("ai_test_failed", error=error_msg))
                 
                 self.after(0, on_error)
         
@@ -549,8 +534,10 @@ class TranslationSummaryPage(ctk.CTkFrame):
                 client = create_llm_client(ai_config)
                 
                 # 发送一个简单的测试请求
+                # 对于 Google 翻译，使用简单的英文文本更合适
+                test_prompt = "测试" if ai_config.provider != "google_translate" else "Hello"
                 result = client.generate(
-                    prompt="测试",
+                    prompt=test_prompt,
                     max_tokens=10
                 )
                 
@@ -566,33 +553,36 @@ class TranslationSummaryPage(ctk.CTkFrame):
                 self.after(0, on_success)
                 
             except LLMException as e:
+                error_msg = str(e)
                 def on_error():
                     self.summary_test_btn.configure(
                         state="normal",
                         text=t("ai_test_connection")
                     )
                     if self.on_log_message:
-                        self.on_log_message("ERROR", t("ai_test_failed", error=str(e)))
+                        self.on_log_message("ERROR", t("ai_test_failed", error=error_msg))
                 
                 self.after(0, on_error)
             except ValueError as e:
+                error_msg = str(e)
                 def on_error():
                     self.summary_test_btn.configure(
                         state="normal",
                         text=t("ai_test_connection")
                     )
                     if self.on_log_message:
-                        self.on_log_message("ERROR", f"{t('ai_test_failed')}: {e}")
+                        self.on_log_message("ERROR", f"{t('ai_test_failed')}: {error_msg}")
                 
                 self.after(0, on_error)
             except Exception as e:
+                error_msg = str(e)
                 def on_error():
                     self.summary_test_btn.configure(
                         state="normal",
                         text=t("ai_test_connection")
                     )
                     if self.on_log_message:
-                        self.on_log_message("ERROR", t("ai_test_failed", error=str(e)))
+                        self.on_log_message("ERROR", t("ai_test_failed", error=error_msg))
                 
                 self.after(0, on_error)
         
