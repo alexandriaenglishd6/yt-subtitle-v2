@@ -18,7 +18,8 @@ from core.output import OutputWriter
 from core.incremental import IncrementalManager
 from core.failure_logger import FailureLogger
 from core.llm_client import LLMClient
-from core.exceptions import AppException, ErrorType, map_llm_error_to_app_error
+from core.exceptions import AppException, ErrorType, map_llm_error_to_app_error, TaskCancelledError
+from core.cancel_token import CancelToken
 from core.batch_id import generate_run_id
 from config.manager import ConfigManager
 
@@ -59,10 +60,14 @@ def process_single_video(
     incremental_manager: IncrementalManager,
     archive_path: Optional[Path],
     force: bool = False,
+    dry_run: bool = False,
+    cancel_token: Optional[CancelToken] = None,
     proxy_manager=None,
     cookie_manager=None,
     run_id: Optional[str] = None,
     on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    translation_llm_init_error_type: Optional[ErrorType] = None,
+    translation_llm_init_error: Optional[str] = None,
 ) -> bool:
     """处理单个视频的完整流程
     
@@ -74,7 +79,8 @@ def process_single_video(
     Args:
         video_info: 视频信息
         language_config: 语言配置
-        llm: LLM 客户端
+        translation_llm: 翻译 LLM 客户端（可选）
+        summary_llm: 摘要 LLM 客户端（可选）
         output_writer: 输出写入器
         failure_logger: 失败记录器
         incremental_manager: 增量管理器
@@ -91,13 +97,29 @@ def process_single_video(
     if run_id:
         set_log_context(run_id=run_id, task="process", video_id=video_info.video_id)
     
+    # 初始化临时目录变量（用于 finally 块清理）
+    temp_dir: Optional[Path] = None
+    temp_dir_created = False
+    processing_failed = False
+    
     try:
+        # 检查取消状态
+        if cancel_token and cancel_token.is_cancelled():
+            reason = cancel_token.get_reason() or "用户取消"
+            raise TaskCancelledError(reason)
+        
         vid = video_info.video_id
         title_preview = video_info.title[:MAX_TITLE_DISPLAY_LENGTH]
         
         # 步骤 1: 字幕检测
         set_log_context(run_id=run_id, task="detect", video_id=vid)
         logger.info(f"检测字幕: {vid} - {title_preview}...", video_id=vid)
+        
+        # 检查取消状态
+        if cancel_token and cancel_token.is_cancelled():
+            reason = cancel_token.get_reason() or "用户取消"
+            raise TaskCancelledError(reason)
+        
         detector = SubtitleDetector(cookie_manager=cookie_manager)
         detection_result = detector.detect(video_info)
         
@@ -105,62 +127,215 @@ def process_single_video(
             error_msg = "视频无可用字幕，跳过处理"
             logger.warning(error_msg, video_id=vid)
             _safe_log(on_log, "WARN", error_msg, vid)
-            failure_logger.log_failure(
-                video_id=vid,
-                url=video_info.url,
-                reason="无可用字幕",
-                error_type=ErrorType.CONTENT,
-                batch_id=run_id,
-                channel_id=video_info.channel_id,
-                channel_name=video_info.channel_name,
-                stage="detect"
-            )
+            if not dry_run:
+                failure_logger.log_failure(
+                    video_id=vid,
+                    url=video_info.url,
+                    reason="无可用字幕",
+                    error_type=ErrorType.CONTENT,
+                    batch_id=run_id,
+                    channel_id=video_info.channel_id,
+                    channel_name=video_info.channel_name,
+                    stage="detect"
+                )
+            processing_failed = True
             return False
         
         # 步骤 2: 字幕下载
         set_log_context(run_id=run_id, task="download", video_id=vid)
         logger.info(f"下载字幕: {vid}", video_id=vid)
+        
+        # 检查取消状态
+        if cancel_token and cancel_token.is_cancelled():
+            reason = cancel_token.get_reason() or "用户取消"
+            raise TaskCancelledError(reason)
+        
         downloader = SubtitleDownloader(proxy_manager=proxy_manager, cookie_manager=cookie_manager)
         temp_dir = Path("temp") / vid
         temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir_created = True
         
         download_result = downloader.download(
             video_info,
             detection_result,
             language_config,
-            temp_dir
+            temp_dir,
+            cancel_token=cancel_token  # 传递取消令牌
         )
         
         if not download_result.get("original"):
             error_msg = "下载原始字幕失败"
             logger.error(error_msg, video_id=vid)
             _safe_log(on_log, "ERROR", error_msg, vid)
-            failure_logger.log_download_failure(
-                video_id=vid,
-                url=video_info.url,
-                reason="下载原始字幕失败",
-                error_type=ErrorType.NETWORK,
-                batch_id=run_id,
-                channel_id=video_info.channel_id,
-                channel_name=video_info.channel_name
-            )
+            if not dry_run:
+                failure_logger.log_download_failure(
+                    video_id=vid,
+                    url=video_info.url,
+                    reason="下载原始字幕失败",
+                    error_type=ErrorType.NETWORK,
+                    batch_id=run_id,
+                    channel_id=video_info.channel_id,
+                    channel_name=video_info.channel_name
+                )
+            processing_failed = True
             return False
         
-        # 步骤 3: 字幕翻译
+        # 步骤 3: 字幕翻译（优化流程：在 pipeline 层面统一判断）
         set_log_context(run_id=run_id, task="translate", video_id=vid)
         logger.info(f"翻译字幕: {vid}", video_id=vid)
-        if not translation_llm:
-            logger.warning("翻译 LLM 客户端不可用，跳过翻译", video_id=vid)
-            translation_result = {}
+        
+        # 检查取消状态
+        if cancel_token and cancel_token.is_cancelled():
+            reason = cancel_token.get_reason() or "用户取消"
+            raise TaskCancelledError(reason)
+        
+        # 优化：先检查哪些语言有官方字幕，哪些需要翻译
+        translation_result = {}
+        official_translations = download_result.get("official_translations", {})
+        needs_translation = []  # 需要翻译的语言列表
+        
+        # 详细日志：记录下载到的所有官方字幕
+        logger.info(
+            f"翻译决策：已下载的官方字幕: {list(official_translations.keys())}, 目标语言: {language_config.subtitle_target_languages}, 策略: {language_config.translation_strategy}",
+            video_id=vid
+        )
+        
+        # AI_ONLY 策略特殊处理：即使有官方字幕也要调用 AI 翻译
+        if language_config.translation_strategy == "AI_ONLY" or force:
+            # AI_ONLY 模式或强制重译：所有语言都需要翻译（忽略官方字幕）
+            needs_translation = language_config.subtitle_target_languages.copy()
+            if language_config.translation_strategy == "AI_ONLY":
+                logger.info(
+                    f"翻译策略为 AI_ONLY，所有目标语言都需要 AI 翻译（忽略官方字幕）。需要翻译的语言: {needs_translation}",
+                    video_id=vid
+                )
+            else:
+                logger.info(
+                    f"强制重译模式，所有目标语言都需要重新翻译。需要翻译的语言: {needs_translation}",
+                    video_id=vid
+                )
         else:
-            translator = SubtitleTranslator(llm=translation_llm, language_config=language_config)
-            translation_result = translator.translate(
-                video_info,
-                detection_result,
-                language_config,
-                download_result,
-                temp_dir,
-                force_retranslate=force
+            # OFFICIAL_ONLY 或 OFFICIAL_AUTO_THEN_AI 策略：优先使用官方字幕
+            # 辅助函数：检查语言代码是否匹配（处理 en vs en-US 的情况）
+            def lang_matches(lang1: str, lang2: str) -> bool:
+                """检查两个语言代码是否匹配（考虑主语言代码）
+                
+                特殊处理：
+                - zh-CN 和 zh-TW 不互相匹配（需要精确匹配）
+                - 其他语言使用主语言代码匹配（如 en-US 匹配 en）
+                """
+                if lang1 == lang2:
+                    return True
+                
+                # 特殊处理：zh-CN 和 zh-TW 不互相匹配
+                lang1_lower = lang1.lower()
+                lang2_lower = lang2.lower()
+                if (lang1_lower in ["zh-cn", "zh_cn"] and lang2_lower in ["zh-tw", "zh_tw"]) or \
+                   (lang1_lower in ["zh-tw", "zh_tw"] and lang2_lower in ["zh-cn", "zh_cn"]):
+                    return False
+                
+                # 其他语言：提取主语言代码进行匹配
+                main1 = lang1.split("-")[0].split("_")[0].lower()
+                main2 = lang2.split("-")[0].split("_")[0].lower()
+                return main1 == main2
+            
+            for target_lang in language_config.subtitle_target_languages:
+                # 先尝试精确匹配
+                official_path = official_translations.get(target_lang)
+                
+                # 如果精确匹配失败，尝试模糊匹配（如 en-US 匹配 en）
+                if not official_path or not official_path.exists():
+                    for detected_lang, path in official_translations.items():
+                        if lang_matches(detected_lang, target_lang) and path and path.exists():
+                            official_path = path
+                            logger.debug(
+                                f"目标语言 {target_lang} 通过模糊匹配找到官方字幕（检测到的语言: {detected_lang}）",
+                                video_id=vid
+                            )
+                            break
+                
+                # 检查是否有官方字幕
+                if official_path and official_path.exists():
+                    # 有官方字幕，直接使用（文件已经在 translated.{lang}.srt，无需复制）
+                    translation_result[target_lang] = official_path
+                    logger.info(
+                        f"目标语言 {target_lang} 使用官方字幕: {official_path.name} (路径: {official_path}, 文件存在: {official_path.exists()})",
+                        video_id=vid
+                    )
+                else:
+                    # 没有官方字幕，需要翻译
+                    needs_translation.append(target_lang)
+                    logger.info(
+                        f"目标语言 {target_lang} 无官方字幕，需要 AI 翻译。已找到的备用源语言: {[k for k in official_translations.keys() if k != target_lang]}",
+                        video_id=vid
+                    )
+            
+            # 如果所有语言都有官方字幕，且策略允许，可以完全跳过翻译步骤
+            if not needs_translation:
+                logger.info(
+                    f"所有目标语言都有官方字幕，跳过翻译步骤（策略: {language_config.translation_strategy}）。翻译结果: {list(translation_result.keys())}, "
+                    f"文件路径: {[str(p) if p else None for p in translation_result.values()]}",
+                    video_id=vid
+                )
+        
+        # 如果有语言需要翻译，进入翻译步骤
+        if needs_translation:
+            logger.info(
+                f"开始翻译步骤，需要翻译的语言: {needs_translation}",
+                video_id=vid
+            )
+            if not translation_llm:
+                # LLM 不可用
+                needs_ai = (
+                    language_config.translation_strategy in ["AI_ONLY", "OFFICIAL_AUTO_THEN_AI"]
+                )
+                
+                if needs_ai:
+                    # 需要翻译但 LLM 不可用
+                    if translation_llm_init_error:
+                        if translation_llm_init_error_type == ErrorType.AUTH:
+                            warning_msg = f"翻译 AI 初始化失败（API Key 无效或权限不足）：{translation_llm_init_error}，以下语言无法翻译：{', '.join(needs_translation)}"
+                        else:
+                            warning_msg = f"翻译 AI 初始化失败：{translation_llm_init_error}，以下语言无法翻译：{', '.join(needs_translation)}"
+                    else:
+                        warning_msg = f"翻译 AI 不可用（可能是 API Key 无效或未启用），以下语言无法翻译：{', '.join(needs_translation)}"
+                    logger.warning(warning_msg, video_id=vid)
+                    _safe_log(on_log, "WARN", warning_msg, vid)
+                else:
+                    # OFFICIAL_ONLY 策略，但部分语言没有官方字幕
+                    logger.warning(f"翻译策略为 OFFICIAL_ONLY，但以下语言无官方字幕：{', '.join(needs_translation)}", video_id=vid)
+            else:
+                # LLM 可用，调用翻译
+                logger.info(
+                    f"调用翻译器，翻译目标语言: {needs_translation}",
+                    video_id=vid
+                )
+                translator = SubtitleTranslator(llm=translation_llm, language_config=language_config)
+                # 只翻译需要的语言（传入需要翻译的语言列表）
+                partial_result = translator.translate(
+                    video_info,
+                    detection_result,
+                    language_config,
+                    download_result,
+                    temp_dir,
+                    force_retranslate=force,
+                    target_languages=needs_translation,  # 新增参数：只翻译指定的语言
+                    cancel_token=cancel_token  # 传入 cancel_token
+                )
+                logger.info(
+                    f"翻译器返回结果: {list(partial_result.keys())}, 文件路径: {[str(p) if p else None for p in partial_result.values()]}",
+                    video_id=vid
+                )
+                # 合并翻译结果（已有官方字幕的保持不变）
+                translation_result.update(partial_result)
+                logger.info(
+                    f"合并后的翻译结果: {list(translation_result.keys())}, 文件路径: {[str(p) if p else None for p in translation_result.values()]}",
+                    video_id=vid
+                )
+        else:
+            logger.info(
+                f"无需翻译，直接使用官方字幕。翻译结果: {list(translation_result.keys())}",
+                video_id=vid
             )
         
         # 检查是否有翻译结果
@@ -185,35 +360,53 @@ def process_single_video(
                     f"请修改翻译策略为'优先官方字幕/自动翻译，无则用 AI'，或确保视频有对应的官方字幕。"
                 )
                 logger.error(error_msg, video_id=vid)
-                failure_logger.log_translation_failure(
-                    video_id=vid,
-                    url=video_info.url,
-                    reason=error_msg,
-                    error_type=ErrorType.CONTENT,
-                    batch_id=run_id,
-                    channel_id=video_info.channel_id,
-                    channel_name=video_info.channel_name
-                )
+                if not dry_run:
+                    failure_logger.log_translation_failure(
+                        video_id=vid,
+                        url=video_info.url,
+                        reason=error_msg,
+                        error_type=ErrorType.CONTENT,
+                        batch_id=run_id,
+                        channel_id=video_info.channel_id,
+                        channel_name=video_info.channel_name
+                    )
                 _safe_log(on_log, "ERROR", error_msg, vid)
                 raise AppException(message=error_msg, error_type=ErrorType.CONTENT)
             else:
                 # 其他策略下，翻译失败不视为整体失败，继续处理
                 logger.warning(f"以下目标语言翻译失败或无可用翻译：{missing_str}", video_id=vid)
-                failure_logger.log_translation_failure(
-                    video_id=vid,
-                    url=video_info.url,
-                    reason=f"翻译失败或无可用翻译：{missing_str}",
-                    error_type=ErrorType.UNKNOWN,
-                    batch_id=run_id,
-                    channel_id=video_info.channel_id,
-                    channel_name=video_info.channel_name
-                )
+                if not dry_run:
+                    # 如果有初始化失败的错误类型，使用它；否则使用 UNKNOWN
+                    error_type = translation_llm_init_error_type if translation_llm_init_error_type else ErrorType.UNKNOWN
+                    # 构建失败原因：如果有初始化错误信息，包含它
+                    if translation_llm_init_error:
+                        if error_type == ErrorType.AUTH:
+                            reason = f"翻译 AI 初始化失败（API Key 无效或权限不足）：{translation_llm_init_error}，目标语言翻译失败：{missing_str}"
+                        else:
+                            reason = f"翻译 AI 初始化失败：{translation_llm_init_error}，目标语言翻译失败：{missing_str}"
+                    else:
+                        reason = f"翻译失败或无可用翻译：{missing_str}"
+                    failure_logger.log_translation_failure(
+                        video_id=vid,
+                        url=video_info.url,
+                        reason=reason,
+                        error_type=error_type,
+                        batch_id=run_id,
+                        channel_id=video_info.channel_id,
+                        channel_name=video_info.channel_name
+                    )
         
         # 步骤 4: 生成摘要
         summary_path = None
         if (has_translation or download_result.get("original")) and summary_llm:
             set_log_context(run_id=run_id, task="summarize", video_id=vid)
             logger.info(f"生成摘要: {vid}", video_id=vid)
+            
+            # 检查取消状态
+            if cancel_token and cancel_token.is_cancelled():
+                reason = cancel_token.get_reason() or "用户取消"
+                raise TaskCancelledError(reason)
+            
             summarizer = Summarizer(llm=summary_llm, language_config=language_config)
             summary_path = summarizer.summarize(
                 video_info,
@@ -226,50 +419,86 @@ def process_single_video(
             
             if not summary_path:
                 logger.warning("摘要生成失败", video_id=vid)
-                failure_logger.log_summary_failure(
-                    video_id=vid,
-                    url=video_info.url,
-                    reason="摘要生成失败",
-                    error_type=ErrorType.UNKNOWN,
-                    batch_id=run_id,
-                    channel_id=video_info.channel_id,
-                    channel_name=video_info.channel_name
-                )
+                if not dry_run:
+                    # 尝试从 summarizer 获取错误类型
+                    summary_error = summarizer.get_summary_error()
+                    error_type = ErrorType.UNKNOWN
+                    if summary_error:
+                        error_type = summary_error.error_type
+                    
+                    failure_logger.log_summary_failure(
+                        video_id=vid,
+                        url=video_info.url,
+                        reason="摘要生成失败",
+                        error_type=error_type,
+                        batch_id=run_id,
+                        channel_id=video_info.channel_id,
+                        channel_name=video_info.channel_name
+                    )
                 # 摘要失败不视为整体失败
         
-        # 步骤 5: 写入输出文件
-        set_log_context(run_id=run_id, task="output", video_id=vid)
-        logger.info(f"写入输出文件: {vid}", video_id=vid)
-        output_writer.write_all(
-            video_info,
-            detection_result,
-            language_config,
-            download_result,
-            translation_result,
-            summary_path,
-            channel_name=video_info.channel_name,
-            channel_id=video_info.channel_id
-        )
+        # 步骤 5: 写入输出文件（Dry Run 模式下跳过）
+        # 注意：在写入之前，确保所有文件路径都是有效的（临时目录的文件在 finally 块之前是安全的）
+        if not dry_run:
+            set_log_context(run_id=run_id, task="output", video_id=vid)
+            logger.info(f"写入输出文件: {vid}", video_id=vid)
+            # 确保 translation_result 中包含所有需要的语言（包括官方字幕）
+            # 如果有官方字幕但没有在 translation_result 中，从 download_result 中补充
+            official_translations = download_result.get("official_translations", {})
+            for target_lang in language_config.subtitle_target_languages:
+                if target_lang not in translation_result and target_lang in official_translations:
+                    official_path = official_translations[target_lang]
+                    if official_path and official_path.exists():
+                        translation_result[target_lang] = official_path
+                        logger.debug(
+                            f"补充官方字幕到翻译结果: {target_lang} <- {official_path}",
+                            video_id=vid
+                        )
+            
+            output_writer.write_all(
+                video_info,
+                detection_result,
+                language_config,
+                download_result,
+                translation_result,
+                summary_path,
+                channel_name=video_info.channel_name,
+                channel_id=video_info.channel_id,
+                run_id=run_id,
+                translation_llm=translation_llm,
+                summary_llm=summary_llm
+            )
+        else:
+            logger.debug(f"[Dry Run] 跳过写入输出文件: {vid}", video_id=vid)
         
-        # 步骤 6: 更新增量记录（仅在成功时）
-        if archive_path:
+        # 步骤 6: 更新增量记录（仅在成功时，Dry Run 模式下跳过）
+        if archive_path and not dry_run:
             incremental_manager.mark_as_processed(vid, archive_path)
             logger.debug(f"已更新增量记录: {vid}", video_id=vid)
-        
-        # 清理临时文件
-        _cleanup_temp_dir(temp_dir)
+        elif archive_path and dry_run:
+            logger.debug(f"[Dry Run] 跳过更新增量记录: {vid}", video_id=vid)
         
         logger.info(f"处理完成: {vid}", video_id=vid)
         return True
         
+    except TaskCancelledError as e:
+        # 任务已取消，记录日志并清理临时资源
+        reason = e.reason or "用户取消"
+        logger.info(f"任务已取消: {vid} - {reason}", video_id=vid)
+        _safe_log(on_log, "INFO", f"任务已取消: {reason}", vid)
+        processing_failed = True
+        # 不记录到 failure_logger（取消不是失败）
+        return False
     except AppException as e:
         error_msg = f"处理视频失败: {e}"
+        processing_failed = True
         _handle_processing_error(
             error_msg, e.error_type, video_info, failure_logger,
-            run_id, on_log, str(e)
+            run_id, on_log, str(e), dry_run
         )
         return False
     except Exception as e:
+        processing_failed = True
         app_error = AppException(
             message=f"处理失败: {str(e)}",
             error_type=ErrorType.UNKNOWN,
@@ -278,10 +507,18 @@ def process_single_video(
         error_msg = f"处理视频失败: {app_error}"
         _handle_processing_error(
             error_msg, app_error.error_type, video_info, failure_logger,
-            run_id, on_log, str(app_error)
+            run_id, on_log, str(app_error), dry_run
         )
         return False
     finally:
+        # 清理临时目录（无论成功/失败/被取消都尝试清理）
+        # 注意：如果需要保留失败现场，可通过 keep_temp_on_error 配置项控制
+        if temp_dir_created and temp_dir is not None:
+            # 默认情况下，无论成功或失败都清理临时目录
+            # 如果需要保留失败现场，可以在这里添加配置检查
+            # 例如：if not (processing_failed and keep_temp_on_error):
+            _cleanup_temp_dir(temp_dir)
+        # 清理日志上下文
         clear_log_context()
 
 
@@ -302,7 +539,8 @@ def _handle_processing_error(
     failure_logger: FailureLogger,
     run_id: Optional[str],
     on_log: Optional[Callable],
-    reason: str
+    reason: str,
+    dry_run: bool = False
 ):
     """处理视频处理过程中的错误（统一错误处理）
     
@@ -326,15 +564,16 @@ def _handle_processing_error(
     
     _safe_log(on_log, "ERROR", detailed_msg, video_info.video_id)
     
-    failure_logger.log_failure(
-        video_id=video_info.video_id,
-        url=video_info.url,
-        reason=reason,
-        error_type=error_type,
-        batch_id=run_id,
-        channel_id=video_info.channel_id,
-        channel_name=video_info.channel_name
-    )
+    if not dry_run:
+        failure_logger.log_failure(
+            video_id=video_info.video_id,
+            url=video_info.url,
+            reason=reason,
+            error_type=error_type,
+            batch_id=run_id,
+            channel_id=video_info.channel_id,
+            channel_name=video_info.channel_name
+        )
 
 
 def _get_error_type_display_name(error_type: ErrorType) -> str:
@@ -365,18 +604,23 @@ def _get_error_type_display_name(error_type: ErrorType) -> str:
 def process_video_list(
     videos: List[VideoInfo],
     language_config: LanguageConfig,
-    llm: LLMClient,
+    translation_llm: Optional[LLMClient],
+    summary_llm: Optional[LLMClient],
     output_writer: OutputWriter,
     failure_logger: FailureLogger,
     incremental_manager: IncrementalManager,
     archive_path: Optional[Path],
     force: bool = False,
+    dry_run: bool = False,
+    cancel_token: Optional[CancelToken] = None,
     concurrency: int = 3,
     proxy_manager=None,
     cookie_manager=None,
     run_id: Optional[str] = None,
     on_stats: Optional[Callable[[dict], None]] = None,
     on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    translation_llm_init_error_type: Optional[ErrorType] = None,
+    translation_llm_init_error: Optional[str] = None,
 ) -> Dict[str, int]:
     """处理视频列表（支持并发）
     
@@ -447,10 +691,14 @@ def process_video_list(
                     incremental_manager,
                     archive_path,
                     force,
+                    dry_run,  # 传递 dry_run 参数
+                    cancel_token,  # 传递 cancel_token 参数
                     proxy_manager,
                     cookie_manager,
                     run_id,  # 传递 run_id
                     on_log,  # 传递日志回调，用于实时显示错误
+                    translation_llm_init_error_type,  # 传递初始化失败的错误类型
+                    translation_llm_init_error,  # 传递初始化失败的错误信息
                 )
             return task
         
@@ -467,7 +715,7 @@ def process_video_list(
     eta_update_interval = 5.0  # ETA 更新间隔（秒，降低到 5 秒以更频繁更新）
     
     def progress_callback(completed: int, total: int, running_tasks: List[str]):
-        """进度回调
+        """进度回调（每 ~0.5s 检查一次取消状态）
         
         Args:
             completed: 已完成数量
@@ -475,6 +723,14 @@ def process_video_list(
             running_tasks: 正在运行的任务列表
         """
         nonlocal last_eta_update
+        
+        # 检查取消状态（每 ~0.5s 检查一次）
+        if cancel_token and cancel_token.is_cancelled():
+            reason = cancel_token.get_reason() or "用户取消"
+            logger.info(f"任务已取消: {reason}", run_id=run_id)
+            _safe_log(on_log, "INFO", f"任务已取消: {reason}")
+            # 不抛出异常，让 TaskRunner 自然结束
+            return
         
         # 输出进度信息到日志（控制台和文件）
         # 对于少量视频，每次完成都显示；对于大量视频，每 10% 显示一次

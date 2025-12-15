@@ -5,6 +5,9 @@ AI Prompt 模板集中管理
 from typing import Optional
 from core.language import get_language_name
 
+# Prompt 版本号（当 Prompt 模板有重大变更时更新此版本号）
+PROMPT_VERSION = "1.0.0"
+
 
 def get_translation_prompt(
     source_language: str,
@@ -26,12 +29,20 @@ def get_translation_prompt(
     source_lang_name = get_language_name(source_language)
     target_lang_name = get_language_name(target_language)
     
-    prompt = f"""请将以下字幕从 {source_lang_name} 翻译成 {target_lang_name}。
+    # 如果是简体中文，在 prompt 中明确说明
+    target_lang_spec = target_lang_name
+    if target_language.lower() in ["zh-cn", "zh_cn", "zh"]:
+        target_lang_spec = "简体中文"
+    elif target_language.lower() in ["zh-tw", "zh_tw", "zh-hant"]:
+        target_lang_spec = "繁体中文"
+    
+    prompt = f"""请将以下字幕从 {source_lang_name} 翻译成 {target_lang_spec}。
 
 要求：
 1. 保持字幕的时间轴格式（时间码）
 2. 翻译要自然流畅，符合目标语言的表达习惯
 3. 保持字幕的原始结构和换行
+4. 如果目标语言是中文，请使用简体中文（不要使用繁体中文）
 
 字幕内容：
 {subtitle_text}
