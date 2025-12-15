@@ -117,6 +117,73 @@ class CookieManager:
             logger.error(f"转换 Cookie 字符串失败: {e}")
             return None
     
+    def _extract_region_from_cookie(self) -> Optional[str]:
+        """从 Cookie 字符串中提取地区信息
+        
+        尝试从 PREF Cookie 中提取 gl 参数（地区代码）
+        PREF 格式通常为：f4=4000000&gl=US&hl=en 等
+        
+        Returns:
+            地区代码（如 "US", "CN", "JP" 等），如果无法检测则返回 None
+        """
+        if not self.cookie_string:
+            return None
+        
+        try:
+            # 解析 Cookie 字符串，查找 PREF Cookie
+            cookies = {}
+            for item in self.cookie_string.split(';'):
+                item = item.strip()
+                if not item:
+                    continue
+                if '=' in item:
+                    key, value = item.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key:
+                        cookies[key] = value
+            
+            # 方法1：从 PREF Cookie 中提取 gl 参数
+            pref_value = cookies.get("PREF", "")
+            if pref_value:
+                # 解析 PREF 值（URL 编码的参数格式）
+                import urllib.parse
+                params = urllib.parse.parse_qs(pref_value)
+                
+                # 查找 gl 参数（地区代码）
+                gl_values = params.get("gl", [])
+                if gl_values and len(gl_values) > 0:
+                    region = gl_values[0].upper()  # 转换为大写（如 "us" -> "US"）
+                    logger.info(f"从 PREF Cookie 的 gl 参数中提取到地区代码: {region}")
+                    return region
+                else:
+                    logger.debug("PREF Cookie 中未找到 gl 参数")
+            else:
+                logger.debug("Cookie 中未找到 PREF 字段")
+            
+            # 方法2：尝试从其他可能的 Cookie 字段中提取地区信息
+            # 检查是否有其他包含地区信息的 Cookie
+            for key, value in cookies.items():
+                key_upper = key.upper()
+                if key_upper in ["GL", "LOCALE"]:
+                    region = value.upper()
+                    logger.info(f"从 Cookie 字段 {key} 中提取到地区代码: {region}")
+                    return region
+                # 检查 hl 参数（语言代码，可能包含地区信息）
+                elif key_upper == "HL" and len(value) >= 2:
+                    # hl 格式可能是 "en-US", "zh-CN" 等，提取国家代码部分
+                    if '-' in value:
+                        region = value.split('-')[-1].upper()
+                        logger.info(f"从 Cookie 字段 {key} 中提取到地区代码: {region}")
+                        return region
+            
+            logger.debug("未能从 Cookie 中提取地区信息")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"提取地区信息失败: {e}")
+            return None
+    
     def get_cookie_file_path(self) -> Optional[str]:
         """获取 Cookie 文件路径（用于 yt-dlp --cookies 参数）
         
@@ -212,18 +279,12 @@ class CookieManager:
             # 解析 JSON 输出，尝试提取地区信息
             try:
                 data = json.loads(result.stdout)
-                region = None
-                
-                # 尝试从视频信息中提取地区信息
-                # yt-dlp 可能在某些字段中包含地区信息
-                if "geo_restricted" in data:
-                    # 如果视频有地区限制，说明 Cookie 可能有效
-                    pass
-                
-                # 尝试从其他字段推断地区（如果可用）
-                # 注意：YouTube API 不直接返回用户地区，这里只是尝试
+                region = self._extract_region_from_cookie()
                 
                 logger.info("Cookie 测试成功：Cookie 可用")
+                if region:
+                    logger.info(f"检测到地区: {region}")
+                
                 return {
                     "available": True,
                     "region": region,

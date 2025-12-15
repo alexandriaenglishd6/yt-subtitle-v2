@@ -113,6 +113,8 @@ def create_llm_client(config, logger):
 def create_llm_clients(config, logger):
     """创建翻译和摘要 LLM 客户端
     
+    优先使用 AI Profile 配置，如果未配置则使用原有的 translation_ai / summary_ai 配置
+    
     Args:
         config: 配置对象
         logger: Logger 实例
@@ -121,25 +123,49 @@ def create_llm_clients(config, logger):
         tuple: (translation_llm, summary_llm)，如果创建失败则返回 (None, None)
     """
     from core.ai_providers import create_llm_client as _create_llm_client
+    from core.ai_profile_manager import get_profile_manager
     
     translation_llm = None
     summary_llm = None
     
+    # 获取 Profile 管理器
+    profile_manager = get_profile_manager()
+    
+    # 获取翻译 AI 配置（优先使用 Profile）
+    translation_ai_config = profile_manager.get_ai_config_for_task(
+        "subtitle_translate",
+        fallback_config=config.translation_ai if config.translation_ai.enabled else None
+    )
+    
     # 创建翻译 LLM 客户端
-    try:
-        translation_llm = _create_llm_client(config.translation_ai)
-        logger.info(f"翻译 AI 客户端已创建: {config.translation_ai.provider}/{config.translation_ai.model}")
-    except Exception as e:
-        logger.error(f"创建翻译 LLM 客户端失败: {e}")
-        logger.warning("AI 翻译功能将不可用，但会继续处理其他步骤")
+    if translation_ai_config and translation_ai_config.enabled:
+        try:
+            translation_llm = _create_llm_client(translation_ai_config)
+            profile_name = profile_manager.task_mapping.get("subtitle_translate", "默认配置")
+            logger.info(f"翻译 AI 客户端已创建: {translation_ai_config.provider}/{translation_ai_config.model} (Profile: {profile_name})")
+        except Exception as e:
+            logger.error(f"创建翻译 LLM 客户端失败: {e}")
+            logger.warning("AI 翻译功能将不可用，但会继续处理其他步骤")
+    else:
+        logger.debug("翻译 AI 未启用或未配置")
+    
+    # 获取摘要 AI 配置（优先使用 Profile）
+    summary_ai_config = profile_manager.get_ai_config_for_task(
+        "subtitle_summarize",
+        fallback_config=config.summary_ai if config.summary_ai.enabled else None
+    )
     
     # 创建摘要 LLM 客户端
-    try:
-        summary_llm = _create_llm_client(config.summary_ai)
-        logger.info(f"摘要 AI 客户端已创建: {config.summary_ai.provider}/{config.summary_ai.model}")
-    except Exception as e:
-        logger.error(f"创建摘要 LLM 客户端失败: {e}")
-        logger.warning("AI 摘要功能将不可用，但会继续处理其他步骤")
+    if summary_ai_config and summary_ai_config.enabled:
+        try:
+            summary_llm = _create_llm_client(summary_ai_config)
+            profile_name = profile_manager.task_mapping.get("subtitle_summarize", "默认配置")
+            logger.info(f"摘要 AI 客户端已创建: {summary_ai_config.provider}/{summary_ai_config.model} (Profile: {profile_name})")
+        except Exception as e:
+            logger.error(f"创建摘要 LLM 客户端失败: {e}")
+            logger.warning("AI 摘要功能将不可用，但会继续处理其他步骤")
+    else:
+        logger.debug("摘要 AI 未启用或未配置")
     
     return translation_llm, summary_llm
 

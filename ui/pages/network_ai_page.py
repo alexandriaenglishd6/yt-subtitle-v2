@@ -194,6 +194,9 @@ class NetworkAIPage(ctk.CTkFrame):
         )
         translation_summary_collapsible.pack(fill="x", pady=(0, 16))
         
+        # AI Profile 状态提示
+        self._build_ai_profile_status(translation_summary_collapsible.content_frame)
+        
         # 翻译 AI 配置区域
         translation_ai_frame = ctk.CTkFrame(translation_summary_collapsible.content_frame)
         translation_ai_frame.pack(fill="x", padx=0, pady=(0, 16))
@@ -343,6 +346,83 @@ class NetworkAIPage(ctk.CTkFrame):
                     self.on_log_message("ERROR", t("proxy_save_failed", error=str(e)))
         else:
             logger.warning("on_save_proxies 回调未设置")
+    
+    def _build_ai_profile_status(self, parent_frame):
+        """构建 AI Profile 状态显示
+        
+        Args:
+            parent_frame: 父框架
+        """
+        from core.ai_profile_manager import get_profile_manager
+        
+        profile_frame = ctk.CTkFrame(parent_frame)
+        profile_frame.pack(fill="x", padx=0, pady=(0, 16))
+        profile_frame.grid_columnconfigure(0, weight=1)
+        
+        try:
+            profile_manager = get_profile_manager()
+            profile_manager.load()
+            
+            # 检查是否有 Profile 配置
+            translation_profile = profile_manager.get_profile_for_task("subtitle_translate")
+            summary_profile = profile_manager.get_profile_for_task("subtitle_summarize")
+            
+            if translation_profile or summary_profile:
+                # 有 Profile 配置
+                status_text = "当前使用 AI Profile 配置"
+                status_color = ("green", "lightgreen")
+                
+                profile_info_lines = []
+                if translation_profile:
+                    profile_info_lines.append(
+                        f"翻译: {translation_profile.name} ({translation_profile.ai_config.provider}/{translation_profile.ai_config.model})"
+                    )
+                if summary_profile:
+                    profile_info_lines.append(
+                        f"摘要: {summary_profile.name} ({summary_profile.ai_config.provider}/{summary_profile.ai_config.model})"
+                    )
+                
+                profile_info = "\n".join(profile_info_lines)
+            else:
+                # 使用默认配置
+                status_text = "当前使用默认配置（config.json）"
+                status_color = ("gray50", "gray50")
+                profile_info = "未配置 AI Profile，使用下方配置"
+            
+            status_label = ctk.CTkLabel(
+                profile_frame,
+                text=status_text,
+                font=heading_font(weight="bold"),
+                text_color=status_color
+            )
+            status_label.grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
+            
+            info_label = ctk.CTkLabel(
+                profile_frame,
+                text=profile_info,
+                font=body_font(),
+                text_color=("gray50", "gray50"),
+                justify="left"
+            )
+            info_label.grid(row=1, column=0, sticky="w", padx=16, pady=(0, 8))
+            
+            help_text = (
+                "提示：AI Profile 允许你通过 ai_profiles.json 配置文件定义多个 AI 配置组合，"
+                "并根据任务类型选择不同的配置。详情请查看 docs/ai_profile_usage.md"
+            )
+            help_label = ctk.CTkLabel(
+                profile_frame,
+                text=help_text,
+                font=body_font(size=11),
+                text_color=("gray50", "gray50"),
+                justify="left",
+                wraplength=600
+            )
+            help_label.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 16))
+            
+        except Exception as e:
+            logger.debug(f"获取 AI Profile 状态失败: {e}")
+            # 如果获取失败，不显示状态信息（静默失败）
     
     def _build_ai_config_fields(self, parent_frame, ai_config: dict, prefix: str, start_row: int = 1):
         """构建 AI 配置字段（辅助方法，用于翻译和摘要配置）

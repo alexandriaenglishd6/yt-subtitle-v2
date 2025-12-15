@@ -76,14 +76,27 @@ class VideoProcessor:
         self.failure_logger = FailureLogger(output_dir)
         
         # 初始化翻译 LLMClient（可能失败，允许为 None）
+        # 优先使用 AI Profile 配置，如果未配置则使用原有的 translation_ai 配置
+        from core.ai_profile_manager import get_profile_manager
+        
+        profile_manager = get_profile_manager()
+        
         self.translation_llm_init_error = None  # 保存初始化失败的原因
         self.translation_llm_init_error_type = None  # 保存初始化失败的错误类型
-        if self.app_config.translation_ai.enabled:
+        
+        # 获取翻译 AI 配置（优先使用 Profile）
+        translation_ai_config = profile_manager.get_ai_config_for_task(
+            "subtitle_translate",
+            fallback_config=self.app_config.translation_ai if self.app_config.translation_ai.enabled else None
+        )
+        
+        if translation_ai_config and translation_ai_config.enabled:
             try:
-                self.translation_llm_client = create_llm_client(self.app_config.translation_ai)
+                self.translation_llm_client = create_llm_client(translation_ai_config)
+                profile_name = profile_manager.task_mapping.get("subtitle_translate", "默认配置")
                 logger.info(t("translation_ai_client_init_success", 
-                             provider=self.app_config.translation_ai.provider, 
-                             model=self.app_config.translation_ai.model))
+                             provider=translation_ai_config.provider, 
+                             model=translation_ai_config.model) + f" (Profile: {profile_name})")
             except LLMException as e:
                 logger.warning(t("translation_ai_client_init_failed", error=str(e)))
                 self.translation_llm_client = None
@@ -99,12 +112,19 @@ class VideoProcessor:
             self.translation_llm_init_error_type = None
         
         # 初始化摘要 LLMClient（可能失败，允许为 None）
-        if self.app_config.summary_ai.enabled:
+        # 优先使用 AI Profile 配置，如果未配置则使用原有的 summary_ai 配置
+        summary_ai_config = profile_manager.get_ai_config_for_task(
+            "subtitle_summarize",
+            fallback_config=self.app_config.summary_ai if self.app_config.summary_ai.enabled else None
+        )
+        
+        if summary_ai_config and summary_ai_config.enabled:
             try:
-                self.summary_llm_client = create_llm_client(self.app_config.summary_ai)
+                self.summary_llm_client = create_llm_client(summary_ai_config)
+                profile_name = profile_manager.task_mapping.get("subtitle_summarize", "默认配置")
                 logger.info(t("summary_ai_client_init_success", 
-                             provider=self.app_config.summary_ai.provider, 
-                             model=self.app_config.summary_ai.model))
+                             provider=summary_ai_config.provider, 
+                             model=summary_ai_config.model) + f" (Profile: {profile_name})")
             except LLMException as e:
                 logger.warning(t("summary_ai_client_init_failed", error=str(e)))
                 self.summary_llm_client = None

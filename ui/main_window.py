@@ -101,6 +101,9 @@ class MainWindow(ctk.CTk):
         self.state_manager.set("current_page", "channel")
         self.state_manager.set("current_theme", self.current_theme)
         self.state_manager.set("current_language", get_language())
+        
+        # 初始化 Cookie 状态显示
+        self._update_cookie_status()
     
     def _init_i18n(self):
         """初始化 i18n，从配置读取语言设置"""
@@ -308,9 +311,11 @@ class MainWindow(ctk.CTk):
                 self.page_container,
                 cookie=self.app_config.cookie,
                 proxies=self.app_config.proxies,
+                network_region=self.app_config.network_region,
                 on_save_cookie=self._on_save_cookie,
                 on_save_proxies=self._on_save_proxies,
-                on_log_message=self._on_log
+                on_log_message=self._on_log,
+                on_update_cookie_status=self._update_cookie_status
             )
             page.pack(fill="both", expand=True)
             self.current_page = page
@@ -570,14 +575,60 @@ class MainWindow(ctk.CTk):
             logger.error(f"{error_msg_prefix}: {e}")
             self.log_panel.append_log("ERROR", f"{error_msg_prefix}: {e}")
     
-    def _on_save_cookie(self, cookie: str):
-        """保存 Cookie"""
+    def _on_save_cookie(self, cookie: str, region: Optional[str] = None):
+        """保存 Cookie
+        
+        Args:
+            cookie: Cookie 字符串
+            region: 地区代码（可选，如果提供则同时保存地区信息）
+        """
+        def update_config(cfg):
+            cfg.cookie = cookie
+            if region is not None:
+                cfg.network_region = region
+        
         self._save_config(
-            update_fn=lambda cfg: setattr(cfg, 'cookie', cookie),
+            update_fn=update_config,
             success_msg=t("cookie_save_success"),
             error_msg_prefix=t("cookie_save_failed", error="").rstrip(": "),
             reinit_processor=True
         )
+        
+        # 更新 Cookie 状态显示
+        self._update_cookie_status(cookie, region)
+    
+    def _update_cookie_status(self, cookie: Optional[str] = None, region: Optional[str] = None, test_result: Optional[str] = None):
+        """更新 Cookie 状态显示
+        
+        Args:
+            cookie: Cookie 字符串（可选，如果为 None 则从配置读取）
+            region: 地区代码（可选）
+            test_result: 测试结果（可选，"success" 或 "failed"）
+        """
+        if cookie is None:
+            cookie = self.app_config.cookie
+        if region is None:
+            region = self.app_config.network_region
+        
+        if cookie:
+            if test_result == "failed":
+                cookie_status = "测试失败"
+            elif test_result == "success":
+                if region:
+                    cookie_status = f"测试成功 (地区: {region})"
+                else:
+                    cookie_status = "测试成功"
+            else:
+                # 未测试，只显示配置状态
+                if region:
+                    cookie_status = f"已配置 (地区: {region})"
+                else:
+                    cookie_status = "已配置"
+        else:
+            cookie_status = "未配置"
+        
+        if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_cookie_status'):
+            self.log_panel.update_cookie_status(cookie_status)
     
     def _on_save_proxies(self, proxies: list):
         """保存代理列表"""

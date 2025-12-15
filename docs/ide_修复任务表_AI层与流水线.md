@@ -71,11 +71,11 @@
 | 编号 | 任务名称 | 简要说明 | 依赖 | 预估工作量 | 状态 |
 |------|----------|----------|------|------------|------|
 | **R2-1** | 结构化失败记录 `failed_records.json` | 在现有 `failed_urls.txt` / `failed_detail.log` 基础上，新增一个 JSON 失败记录文件，每条记录包含 `video_id` / `url` / `stage`（detect/download/translate/summarize/output）/ `error_type` / `timestamp` / `run_id`。为将来"一键重试某类失败"或简单错误统计做准备。 | R1-1（错误类型已统一） | S | ✅ 已完成 |
-| **R2-2** | 扩展 `metadata.json` 中的 AI 与运行信息 | 为每个视频输出目录中的 `metadata.json` 增加：工具版本、生成时间、run_id、翻译/摘要的 provider / model / prompt_version / 语言设置等信息，以便后续判断是否需要重新生成、以及排查问题。 | P0-14（OutputWriter）、LanguageConfig | S | ⬜ 未开始 |
-| **R2-3** | 日志规范与日志滚动（轮转） | 根据 logging 计划文档（如无则新建 `docs/logging_spec.md`）：统一日志字段（run_id / task / video_id）与级别。实现文件日志的滚动策略（单文件大小上限 + 备份数），避免长时间运行日志无限增长。 | P0-3（日志系统）、R0-5 | M | ⬜ 未开始 |
-| **R2-4** | GUI 线程安全与事件流文档化 | 在 `docs/` 下补充/更新 GUI 线程与事件流说明：规定“所有 UI 更新必须在主线程（`after()`）执行；业务逻辑只在后台线程；UI 与 core 通过事件/回调交互”。对 `ui/business_logic.py` 等实现做一次自查，确保符合文档。 | 《新会话上下文恢复指南》 | S | ⬜ 未开始 |
-| **R2-5** | Cookie 地区测试结果缓存 | 根据 Grok 建议：在 Cookie 测试成功后，将检测到的地区/语言信息写入 config（如 `network_region` 字段），下次启动时直接显示“当前地区：XX（已缓存）”，并允许用户一键重新测试。减少每次重启都手动重测的麻烦。 | `docs/cookie_setup_guide.md` | S | ⬜ 未开始 |
-| **R2-6** | 并发默认值与 UI 控制优化 | 默认并发值从 3 调整为 10，并在 GUI 中提供滑块或输入框控制范围（如 1~50），同时在文档中说明高并发可能带来的风险（限流/本地模型压力）。与 R1-4 的 AI 并发限速配合使用。 | P0-16（TaskRunner）、R1-4 | XS | ⬜ 未开始 |
+| **R2-2** | 扩展 `metadata.json` 中的 AI 与运行信息 | 为每个视频输出目录中的 `metadata.json` 增加：工具版本、生成时间、run_id、翻译/摘要的 provider / model / prompt_version / 语言设置等信息，以便后续判断是否需要重新生成、以及排查问题。 | P0-14（OutputWriter）、LanguageConfig | S | ✅ 已完成 |
+| **R2-3** | 日志规范与日志滚动（轮转） | 根据 logging 计划文档（如无则新建 `docs/logging_spec.md`）：统一日志字段（run_id / task / video_id）与级别。实现文件日志的滚动策略（单文件大小上限 + 备份数），避免长时间运行日志无限增长。 | P0-3（日志系统）、R0-5 | M | ✅ 已完成 |
+| **R2-4** | GUI 线程安全与事件流文档化 | 在 `docs/` 下补充/更新 GUI 线程与事件流说明：规定"所有 UI 更新必须在主线程（`after()`）执行；业务逻辑只在后台线程；UI 与 core 通过事件/回调交互"。对 `ui/business_logic.py` 等实现做一次自查，确保符合文档。 | 《新会话上下文恢复指南》 | S | ✅ 已完成 |
+| **R2-5** | Cookie 地区测试结果缓存 | 根据 Grok 建议：在 Cookie 测试成功后，将检测到的地区/语言信息写入 config（如 `network_region` 字段），下次启动时直接显示"当前地区：XX（已缓存）"，并允许用户一键重新测试。减少每次重启都手动重测的麻烦。 | `docs/cookie_setup_guide.md` | S | ✅ 已完成 |
+| **R2-6** | 并发默认值与 UI 控制优化 | 默认并发值从 3 调整为 10，并在 GUI 中提供滑块或输入框控制范围（如 1~50），同时在文档中说明高并发可能带来的风险（限流/本地模型压力）。与 R1-4 的 AI 并发限速配合使用。 | P0-16（TaskRunner）、R1-4 | XS | ✅ 已完成 |
 
 ---
 
@@ -85,10 +85,10 @@
 
 | 编号 | 任务名称 | 简要说明 | 依赖 | 预估工作量 | 状态 |
 |------|----------|----------|------|------------|------|
-| **R3-1** | 流水线分阶段队列化 | 将当前单一 pipeline 拆分为多个阶段队列，如：“发现视频 → 检测字幕 → 下载 → 翻译 → 摘要 → 输出”。可选地为不同阶段使用不同 executor，使 I/O 密集和 AI 计算阶段更好地并行。需要保证行为与现有规范完全一致。 | P0-14、R1-4 | L | ⬜ 未开始 |
-| **R3-2** | AI Profile 配置与多供应商路由 | 引入 `ai_profiles.json`（或等效配置），将“任务类型 → 模型/供应商组合”的映射配置化，例如 `subtitle_translate_default` / `subtitle_summarize_fast` 等，由 `OpenAICompatibleClient` / `GeminiClient` / `AnthropicClient` 根据 profile 选择模型。便于在不改代码的前提下调整模型策略。 | `AI_PROVIDER_EXTENSION.md`、R0-1 | M | ⬜ 未开始 |
-| **R3-3** | 本地模型资源限制与预热 | 针对本地大模型 LLMClient（通过 `OpenAICompatibleClient` 的 `base_url` 配置接入，如 `http://localhost:11434/v1`），增加预热逻辑（启动时做一次轻量调用）等，避免初次调用冷启动太慢或并发过高导致机器卡死。与 R1-4 的并发限速（`Semaphore`）协同。 | R1-4（AI 并发控制） | M | ⬜ 未开始 |
-| **R3-4** | AI 供应商健康自检脚本 `ai_smoke_test` | 新增一个简单 CLI 命令或脚本，遍历当前配置中启用的所有 LLMClient（`OpenAICompatibleClient` / `GeminiClient` / `AnthropicClient` 等），分别发起一个极小请求，以验证 API Key / 代理 / 网络是否可用，并输出“健康报告”。建议在重大改版或用户首次配置时使用。 | R0-1、R1-3 | S | ⬜ 未开始 |
+| **R3-1** | 流水线分阶段队列化 | 将当前单一 pipeline 拆分为多个阶段队列，如：“发现视频 → 检测字幕 → 下载 → 翻译 → 摘要 → 输出”。可选地为不同阶段使用不同 executor，使 I/O 密集和 AI 计算阶段更好地并行。需要保证行为与现有规范完全一致。 | P0-14、R1-4 | L | ✅ 已完成 |
+| **R3-2** | AI Profile 配置与多供应商路由 | 引入 `ai_profiles.json`（或等效配置），将"任务类型 → 模型/供应商组合"的映射配置化，例如 `subtitle_translate_default` / `subtitle_summarize_fast` 等，由 `OpenAICompatibleClient` / `GeminiClient` / `AnthropicClient` 根据 profile 选择模型。便于在不改代码的前提下调整模型策略。 | `AI_PROVIDER_EXTENSION.md`、R0-1 | M | ✅ 已完成 |
+| **R3-3** | 本地模型资源限制与预热 | 针对本地大模型 LLMClient（通过 `OpenAICompatibleClient` 的 `base_url` 配置接入，如 `http://localhost:11434/v1`），增加预热逻辑（启动时做一次轻量调用）等，避免初次调用冷启动太慢或并发过高导致机器卡死。与 R1-4 的并发限速（`Semaphore`）协同。 | R1-4（AI 并发控制） | M | ✅ 已完成 |
+| **R3-4** | AI 供应商健康自检脚本 `ai_smoke_test` | 新增一个简单 CLI 命令或脚本，遍历当前配置中启用的所有 LLMClient（`OpenAICompatibleClient` / `GeminiClient` / `AnthropicClient` 等），分别发起一个极小请求，以验证 API Key / 代理 / 网络是否可用，并输出"健康报告"。建议在重大改版或用户首次配置时使用。 | R0-1、R1-3 | S | ✅ 已完成 |
 
 ---
 

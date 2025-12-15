@@ -14,6 +14,7 @@ from threading import Lock, local
 from logging.handlers import RotatingFileHandler
 
 from config.manager import get_user_data_dir
+import time
 
 # Windows 控制台编码修复
 if sys.platform == "win32":
@@ -176,6 +177,8 @@ class Logger:
         console_output: bool = True,
         file_output: bool = True,
         enable_json_events: bool = False,
+        cleanup_old_logs: bool = True,
+        max_log_age_days: int = 14,
     ):
         """初始化日志器
         
@@ -186,6 +189,8 @@ class Logger:
             console_output: 是否输出到控制台
             file_output: 是否输出到文件
             enable_json_events: 是否启用 JSON 事件输出（用于统计脚本）
+            cleanup_old_logs: 是否在初始化时清理过期日志（默认 True）
+            max_log_age_days: 日志最大保留天数（默认 14 天）
         """
         self.name = name
         self.level = self.LEVELS.get(level.upper(), logging.INFO)
@@ -204,6 +209,19 @@ class Logger:
         # 避免重复添加 handler（如果 logger 已经存在）
         if self.logger.handlers:
             return
+        
+        # 清理过期日志（在创建 handler 之前）
+        if cleanup_old_logs and file_output:
+            try:
+                log_dir = log_file.parent if log_file else get_user_data_dir() / "logs"
+                cleaned_count = cleanup_old_logs(log_dir, max_log_age_days)
+                if cleaned_count > 0:
+                    # 使用标准 logging 记录清理信息（此时还没有自定义 logger）
+                    temp_logger = logging.getLogger(f"{name}.cleanup")
+                    temp_logger.info(f"已清理 {cleaned_count} 个过期日志文件（超过 {max_log_age_days} 天）")
+            except Exception:
+                # 清理失败不影响日志系统初始化
+                pass
         
         # 创建格式化器
         formatter = ContextFormatter()
@@ -434,6 +452,8 @@ def get_logger(
     console_output: bool = True,
     file_output: bool = True,
     enable_json_events: bool = False,
+    cleanup_old_logs: bool = True,
+    max_log_age_days: int = 14,
 ) -> Logger:
     """获取全局 logger 实例（单例模式）
     
@@ -444,6 +464,8 @@ def get_logger(
         console_output: 是否输出到控制台
         file_output: 是否输出到文件
         enable_json_events: 是否启用 JSON 事件输出
+        cleanup_old_logs: 是否在初始化时清理过期日志（默认 True）
+        max_log_age_days: 日志最大保留天数（默认 14 天）
     
     Returns:
         Logger 实例
@@ -458,6 +480,8 @@ def get_logger(
             console_output=console_output,
             file_output=file_output,
             enable_json_events=enable_json_events,
+            cleanup_old_logs=cleanup_old_logs,
+            max_log_age_days=max_log_age_days,
         )
     
     return _global_logger
@@ -467,3 +491,52 @@ def set_global_logger(logger: Logger) -> None:
     """设置全局 logger 实例（用于测试或自定义配置）"""
     global _global_logger
     _global_logger = logger
+
+
+def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> int:
+    """清理过期的日志文件
+    
+    根据 logging_spec.md 规范：启动时清理超过 N 天（默认 14 天）的日志
+    
+    Args:
+        log_dir: 日志目录路径，如果为 None 则使用默认路径
+        max_age_days: 最大保留天数（默认 14 天）
+    
+    Returns:
+        清理的文件数量
+    """
+    if log_dir is None:
+        log_dir = get_user_data_dir() / "logs"
+    
+    if not log_dir.exists():
+        return 0
+    
+    try:
+        current_time = time.time()
+        max_age_seconds = max_age_days * 24 * 3600
+        cleaned_count = 0
+        
+        # 遍历日志目录中的所有文件
+        for log_file in log_dir.iterdir():
+            if not log_file.is_file():
+                continue
+            
+            # 检查文件是否匹配日志文件模式（app.log, app.log.1, app.log.2 等）
+            if log_file.name.startswith("app.log"):
+                try:
+                    # 获取文件修改时间
+                    file_mtime = log_file.stat().st_mtime
+                    age_seconds = current_time - file_mtime
+                    
+                    # 如果文件超过最大保留天数，删除它
+                    if age_seconds > max_age_seconds:
+                        log_file.unlink()
+                        cleaned_count += 1
+                except (OSError, PermissionError) as e:
+                    # 忽略无法删除的文件（可能被其他进程占用）
+                    pass
+        
+        return cleaned_count
+    except (OSError, PermissionError):
+        # 日志目录不可访问，返回 0
+        return 0

@@ -11,6 +11,7 @@ from core.logger import get_logger
 from cli.channel import channel_command
 from cli.urls import urls_command
 from cli.cookie import test_cookie_command
+from cli.ai_smoke_test import ai_smoke_test_command
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -38,6 +39,9 @@ def create_parser() -> argparse.ArgumentParser:
   
   # 测试 Cookie
   python cli.py test-cookie
+  
+  # AI 供应商健康自检
+  python cli.py ai-smoke-test
         """
     )
     
@@ -52,6 +56,9 @@ def create_parser() -> argparse.ArgumentParser:
     
     # test-cookie 子命令
     _add_test_cookie_parser(subparsers)
+    
+    # ai-smoke-test 子命令
+    _add_ai_smoke_test_parser(subparsers)
     
     return parser
 
@@ -121,6 +128,15 @@ def _add_test_cookie_parser(subparsers):
         help="测试 Cookie：检查 Cookie 是否可用、所在地区"
     )
     test_cookie_parser.set_defaults(func=test_cookie_command)
+
+
+def _add_ai_smoke_test_parser(subparsers):
+    """添加 ai-smoke-test 子命令解析器"""
+    ai_smoke_test_parser = subparsers.add_parser(
+        "ai-smoke-test",
+        help="AI 供应商健康自检：检查所有配置的 AI 供应商是否可用"
+    )
+    ai_smoke_test_parser.set_defaults(func=ai_smoke_test_command)
 
 
 def main() -> int:

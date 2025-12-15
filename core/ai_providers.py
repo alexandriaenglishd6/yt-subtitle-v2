@@ -61,6 +61,101 @@ class OpenAICompatibleClient:
         
         # 创建 Semaphore 用于并发限流
         self._sem = threading.Semaphore(self._max_concurrency)
+        
+        # 检测是否是本地模型，如果是则进行预热
+        self._is_local_model = self._is_local_base_url(ai_config.base_url)
+        if self._is_local_model:
+            self._warmup_in_background()
+    
+    def _is_local_base_url(self, base_url: Optional[str]) -> bool:
+        """检测是否是本地模型（通过 base_url 判断）
+        
+        Args:
+            base_url: API 基础 URL
+        
+        Returns:
+            如果是本地模型则返回 True
+        """
+        if not base_url:
+            return False
+        
+        base_url_lower = base_url.lower()
+        # 检测常见的本地地址模式
+        local_indicators = [
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "::1",  # IPv6 localhost
+        ]
+        
+        return any(indicator in base_url_lower for indicator in local_indicators)
+    
+    def _warmup_in_background(self) -> None:
+        """在后台线程中执行预热（不阻塞初始化）
+        
+        预热会发送一个轻量级的请求来"唤醒"本地模型，避免首次调用时的冷启动延迟。
+        预热失败不会影响客户端的使用，只会在日志中记录警告。
+        """
+        def warmup_thread():
+            try:
+                logger.info(f"检测到本地模型 ({self.ai_config.base_url})，开始预热...")
+                self._warmup()
+                logger.info(f"本地模型预热完成: {self.ai_config.model}")
+            except Exception as e:
+                # 预热失败不应该影响客户端使用，只记录警告
+                logger.warning(f"本地模型预热失败（不影响使用）: {e}")
+        
+        # 在后台线程中执行预热
+        thread = threading.Thread(target=warmup_thread, daemon=True, name="LLM-Warmup")
+        thread.start()
+    
+    def _warmup(self) -> None:
+        """执行预热：发送一个轻量级的请求
+        
+        使用 Semaphore 确保预热请求也受到并发控制。
+        预热请求使用最小的 token 数量，只发送一个简单的提示。
+        """
+        import openai
+        from openai import APIConnectionError, APIError
+        
+        try:
+            # 确定 base_url
+            base_url = self.ai_config.base_url or "https://api.openai.com/v1"
+            
+            client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=base_url,
+                timeout=min(self.ai_config.timeout_seconds, 30)  # 预热使用较短的超时时间
+            )
+            
+            # 使用 Semaphore 进行并发限流（预热也受并发控制）
+            with self._sem:
+                # 发送一个极轻量的请求（只包含一个单词）
+                response = client.chat.completions.create(
+                    model=self.ai_config.model,
+                    messages=[{"role": "user", "content": "Hi"}],
+                    max_tokens=5,  # 最小输出 token
+                    temperature=0.0,  # 最低温度，减少计算
+                )
+                
+                # 验证响应
+                if response.choices and response.choices[0].message.content:
+                    logger.debug(f"预热请求成功: {response.choices[0].message.content[:20]}")
+                else:
+                    logger.debug("预热请求完成（无内容返回）")
+                    
+        except APIConnectionError as e:
+            # 连接错误可能是本地服务未启动，这是可以接受的
+            logger.debug(f"预热连接失败（可能服务未启动）: {e}")
+            raise
+        except APIError as e:
+            # API 错误可能是配置问题，记录但不影响使用
+            logger.debug(f"预热 API 错误: {e}")
+            raise
+        except Exception as e:
+            # 其他错误也记录但不影响使用
+            logger.debug(f"预热过程中出现错误: {e}")
+            raise
     
     @property
     def supports_vision(self) -> bool:

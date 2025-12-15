@@ -613,7 +613,7 @@ def process_video_list(
     force: bool = False,
     dry_run: bool = False,
     cancel_token: Optional[CancelToken] = None,
-    concurrency: int = 3,
+    concurrency: int = 10,
     proxy_manager=None,
     cookie_manager=None,
     run_id: Optional[str] = None,
@@ -621,6 +621,7 @@ def process_video_list(
     on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
     translation_llm_init_error_type: Optional[ErrorType] = None,
     translation_llm_init_error: Optional[str] = None,
+    use_staged_pipeline: bool = True,  # 是否使用分阶段队列化 Pipeline（默认启用）
 ) -> Dict[str, int]:
     """处理视频列表（支持并发）
     
@@ -638,18 +639,19 @@ def process_video_list(
         incremental_manager: 增量管理器
         archive_path: archive 文件路径
         force: 是否强制重跑
-        concurrency: 并发数，默认 3
+        concurrency: 并发数，默认 10（用于旧模式，新模式使用各阶段的独立并发配置）
         proxy_manager: 代理管理器
         cookie_manager: Cookie管理器
         run_id: 批次ID（run_id），如果为 None 则自动生成
         on_stats: 统计信息更新回调 (stats_dict)，可选
         on_log: 日志回调 (level, message, video_id)，可选
+        translation_llm_init_error_type: 翻译 LLM 初始化错误类型
+        translation_llm_init_error: 翻译 LLM 初始化错误信息
+        use_staged_pipeline: 是否使用分阶段队列化 Pipeline（默认 True，使用新的架构）
     
     Returns:
         统计信息：{"total": 总数, "success": 成功数, "failed": 失败数, "errors": 错误列表}
     """
-    from core.task_runner import TaskRunner
-    
     # 生成 run_id（如果未提供）
     if run_id is None:
         run_id = generate_run_id()
@@ -668,7 +670,34 @@ def process_video_list(
             "failed": 0
         }
     
-    logger.info(f"开始处理 {total} 个视频，并发数: {concurrency}", run_id=run_id)
+    # 如果使用分阶段 Pipeline，调用新的实现
+    if use_staged_pipeline:
+        return _process_video_list_staged(
+            videos=videos,
+            language_config=language_config,
+            translation_llm=translation_llm,
+            summary_llm=summary_llm,
+            output_writer=output_writer,
+            failure_logger=failure_logger,
+            incremental_manager=incremental_manager,
+            archive_path=archive_path,
+            force=force,
+            dry_run=dry_run,
+            cancel_token=cancel_token,
+            concurrency=concurrency,  # 用于配置各阶段的并发数
+            proxy_manager=proxy_manager,
+            cookie_manager=cookie_manager,
+            run_id=run_id,
+            on_stats=on_stats,
+            on_log=on_log,
+            translation_llm_init_error_type=translation_llm_init_error_type,
+            translation_llm_init_error=translation_llm_init_error,
+        )
+    
+    # 否则使用旧的实现（TaskRunner 方式）
+    from core.task_runner import TaskRunner
+    
+    logger.info(f"开始处理 {total} 个视频，并发数: {concurrency}（旧模式）", run_id=run_id)
     
     # 创建任务列表
     tasks = []
@@ -850,3 +879,184 @@ def process_video_list(
         "errors": result.get("errors", []),
         "error_counts": error_counts  # 错误分类统计
     }
+
+
+def _process_video_list_staged(
+    videos: List[VideoInfo],
+    language_config: LanguageConfig,
+    translation_llm: Optional[LLMClient],
+    summary_llm: Optional[LLMClient],
+    output_writer: OutputWriter,
+    failure_logger: FailureLogger,
+    incremental_manager: IncrementalManager,
+    archive_path: Optional[Path],
+    force: bool = False,
+    dry_run: bool = False,
+    cancel_token: Optional[CancelToken] = None,
+    concurrency: int = 10,
+    proxy_manager=None,
+    cookie_manager=None,
+    run_id: Optional[str] = None,
+    on_stats: Optional[Callable[[dict], None]] = None,
+    on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    translation_llm_init_error_type: Optional[ErrorType] = None,
+    translation_llm_init_error: Optional[str] = None,
+) -> Dict[str, int]:
+    """使用分阶段队列化 Pipeline 处理视频列表
+    
+    这是新的实现，使用分阶段队列架构，支持不同阶段配置不同的并发数。
+    
+    Args:
+        与 process_video_list 相同
+    
+    Returns:
+        统计信息：{"total": 总数, "success": 成功数, "failed": 失败数}
+    """
+    from core.staged_pipeline import StagedPipeline
+    
+    total = len(videos)
+    
+    # 根据总并发数配置各阶段的并发数
+    # 策略：DETECT 和 DOWNLOAD 使用较高并发（I/O 密集），TRANSLATE 和 SUMMARIZE 使用较低并发（AI 计算）
+    detect_concurrency = max(1, concurrency)
+    download_concurrency = max(1, concurrency)
+    translate_concurrency = max(1, concurrency // 2)  # AI 计算，降低并发
+    summarize_concurrency = max(1, concurrency // 2)  # AI 计算，降低并发
+    output_concurrency = max(1, concurrency)
+    
+    logger.info(
+        f"开始处理 {total} 个视频（分阶段队列模式），"
+        f"各阶段并发数: DETECT={detect_concurrency}, DOWNLOAD={download_concurrency}, "
+        f"TRANSLATE={translate_concurrency}, SUMMARIZE={summarize_concurrency}, OUTPUT={output_concurrency}",
+        run_id=run_id
+    )
+    
+    # 创建分阶段 Pipeline
+    pipeline = StagedPipeline(
+        language_config=language_config,
+        translation_llm=translation_llm,
+        summary_llm=summary_llm,
+        output_writer=output_writer,
+        failure_logger=failure_logger,
+        incremental_manager=incremental_manager,
+        archive_path=archive_path,
+        force=force,
+        dry_run=dry_run,
+        cancel_token=cancel_token,
+        proxy_manager=proxy_manager,
+        cookie_manager=cookie_manager,
+        run_id=run_id,
+        on_log=on_log,
+        detect_concurrency=detect_concurrency,
+        download_concurrency=download_concurrency,
+        translate_concurrency=translate_concurrency,
+        summarize_concurrency=summarize_concurrency,
+        output_concurrency=output_concurrency,
+        translation_llm_init_error_type=translation_llm_init_error_type,
+        translation_llm_init_error=translation_llm_init_error,
+    )
+    
+    # 处理视频
+    try:
+        # 如果需要实时统计更新，启动一个后台线程定期更新
+        if on_stats:
+            import threading
+            import time
+            
+            stats_update_thread = None
+            stop_stats_update = threading.Event()
+            
+            def stats_updater():
+                """定期更新统计信息"""
+                while not stop_stats_update.is_set():
+                    try:
+                        # 获取各阶段统计
+                        detect_stats = pipeline.detect_queue.get_stats()
+                        download_stats = pipeline.download_queue.get_stats()
+                        translate_stats = pipeline.translate_queue.get_stats()
+                        summarize_stats = pipeline.summarize_queue.get_stats()
+                        output_stats = pipeline.output_queue.get_stats()
+                        
+                        # 计算总进度
+                        total_processed = (
+                            detect_stats["processed"] + detect_stats["failed"] +
+                            download_stats["processed"] + download_stats["failed"] +
+                            translate_stats["processed"] + translate_stats["failed"] +
+                            summarize_stats["processed"] + summarize_stats["failed"] +
+                            output_stats["processed"] + output_stats["failed"]
+                        )
+                        
+                        # 计算成功数（OUTPUT 阶段的成功数）
+                        success_count = output_stats["processed"]
+                        # 计算失败数（所有阶段的失败数之和）
+                        failed_count = (
+                            detect_stats["failed"] +
+                            download_stats["failed"] +
+                            translate_stats["failed"] +
+                            summarize_stats["failed"] +
+                            output_stats["failed"]
+                        )
+                        
+                        stats = {
+                            "total": total,
+                            "success": success_count,
+                            "failed": failed_count,
+                            "current": total_processed,
+                            "running": [],  # 分阶段模式下难以追踪单个视频的进度
+                            "eta_seconds": None  # 分阶段模式下 ETA 计算较复杂
+                        }
+                        
+                        try:
+                            on_stats(stats)
+                        except Exception as e:
+                            logger.warning(f"统计信息更新回调失败: {e}")
+                        
+                        # 每 0.5 秒更新一次
+                        if stop_stats_update.wait(0.5):
+                            break
+                    except Exception as e:
+                        logger.warning(f"统计信息更新线程异常: {e}")
+                        break
+            
+            stats_update_thread = threading.Thread(target=stats_updater, daemon=True)
+            stats_update_thread.start()
+        
+        # 执行处理
+        stats = pipeline.process_videos(videos)
+        
+        # 停止统计更新线程
+        if on_stats and stats_update_thread:
+            stop_stats_update.set()
+            stats_update_thread.join(timeout=1.0)
+        
+        # 返回统计信息（格式与旧版本兼容）
+        return {
+            "total": stats.get("total", total),
+            "success": stats.get("success", 0),
+            "failed": stats.get("failed", 0),
+            "errors": [],  # 分阶段模式下错误信息在失败记录中
+            "error_counts": {}  # 分阶段模式下错误分类在失败记录中
+        }
+        
+    except Exception as e:
+        logger.error(f"分阶段 Pipeline 处理失败: {e}", run_id=run_id)
+        import traceback
+        logger.debug(traceback.format_exc(), run_id=run_id)
+        if on_log:
+            try:
+                on_log("ERROR", f"处理失败: {e}")
+            except Exception:
+                pass
+        
+        # 返回错误统计
+        return {
+            "total": total,
+            "success": 0,
+            "failed": total,
+            "errors": [{"error": str(e), "error_type": "unknown"}],
+            "error_counts": {"unknown": total}
+        }
+    
+    finally:
+        # 清理日志上下文
+        clear_log_context()

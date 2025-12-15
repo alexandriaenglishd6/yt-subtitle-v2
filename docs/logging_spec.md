@@ -105,11 +105,27 @@ ini
 复制代码
 [2025-12-09 14:39:02.110] [ERROR] [run:20251209_140000] [task:translate] [video:AbCdEfGh] error=RATE_LIMIT retries=3 provider=openai model=gpt-4.1-mini msg=429 Too Many Requests
 7. 轮转与保留
-文件日志：按大小（20MB）轮转，保留 5 份（可配置）
 
-过期清理：启动时清理超过 N 天（默认 14 天）的日志（可选）
+### 7.1 文件大小轮转
+- **实现方式**：使用 Python `RotatingFileHandler`
+- **单文件大小上限**：20MB
+- **备份数量**：5 份（`app.log`, `app.log.1`, `app.log.2`, `app.log.3`, `app.log.4`, `app.log.5`）
+- **轮转策略**：当日志文件达到 20MB 时，自动轮转
 
-日志目录不可写时：回退到控制台，输出 CRITICAL 警告
+### 7.2 过期清理
+- **实现方式**：启动时自动清理（`core/logger.py` 中的 `cleanup_old_logs()` 函数）
+- **默认保留天数**：14 天
+- **清理时机**：Logger 初始化时（如果 `cleanup_old_logs=True`）
+- **清理范围**：所有匹配 `app.log*` 模式的日志文件
+
+### 7.3 回退策略
+- **日志目录不可写时**：自动回退到控制台输出
+- **错误处理**：输出 CRITICAL 级别警告，程序继续运行
+
+### 7.4 日志文件位置
+- **默认路径**：`<用户数据目录>/logs/app.log`
+  - Windows: `%APPDATA%\yt-subtitle-v2\logs\app.log`
+  - Linux/Mac: `~/.config/yt-subtitle-v2/logs/app.log`
 
 8. UI 日志面板（LogPanel）行为
 仅展示 INFO+（开发者可切换到 DEBUG）
@@ -118,30 +134,50 @@ ini
 
 不在 UI 线程长时间格式化字符串（handler 内部应轻量，必要时异步）
 
-9. 初始化示例（伪代码）
-python
-复制代码
-# core/logger.py
-def init_logging(level="INFO", log_dir="logs"):
-    logger = logging.getLogger("app")
-    logger.setLevel(level)
+9. 实现细节
 
-    fmt = "[%(asctime)s] [%(levelname)5s] [run:%(run_id)s] [task:%(task)s] [video:%(video_id)s] %(message)s"
-    datefmt = "%Y-%m-%d %H:%M:%S.%f"
+### 9.1 初始化方式
+```python
+from core.logger import get_logger, set_log_context
 
-    # console
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setFormatter(logging.Formatter(fmt, datefmt))
+# 获取全局 logger 实例（单例模式）
+logger = get_logger(
+    name="yt-subtitle-v2",
+    level="INFO",
+    console_output=True,
+    file_output=True,
+    cleanup_old_logs=True,      # 启动时清理过期日志
+    max_log_age_days=14,        # 日志最大保留天数
+)
 
-    # file with rotation
-    fh = RotatingFileHandler(os.path.join(log_dir, "app.log"), maxBytes=20*1024*1024, backupCount=5, encoding="utf-8")
-    fh.setFormatter(logging.Formatter(fmt, datefmt))
+# 设置日志上下文（线程本地）
+set_log_context(
+    run_id="20251209_140000",
+    task="download",
+    video_id="dQw4w9WgXcQ",
+    provider="openai",
+    model="gpt-4",
+)
 
-    logger.addHandler(ch)
-    logger.addHandler(fh)
+# 记录日志（自动包含上下文信息）
+logger.info("开始下载字幕")
+```
 
-    return logger
-规范：通过 LoggerAdapter 或自定义 filter 注入 run_id/task/video_id，避免每条日志手填。
+### 9.2 上下文管理
+- **线程本地存储**：使用 `threading.local()` 实现线程安全的上下文存储
+- **上下文字段**：`run_id`, `task`, `video_id`, `extra_fields`
+- **上下文设置**：通过 `set_log_context()` 函数设置
+- **上下文清除**：通过 `clear_log_context()` 函数清除
+
+### 9.3 格式化器
+- **实现类**：`ContextFormatter`（继承自 `logging.Formatter`）
+- **功能**：自动脱敏、注入上下文字段、格式化时间戳
+
+### 9.4 敏感信息脱敏
+- **脱敏规则**（`_sanitize_message()` 函数）：
+  - API Key（`sk-` 开头）：替换为 `sk-***REDACTED***`
+  - Cookie 头、Authorization 头：自动脱敏
+  - 过长消息（>500 字符）：截断并添加 `... [truncated]`
 
 10. 与失败记录的关系（重要）
 失败记录文件不是日志轮转的一部分，位置固定在 out/ 根目录。
@@ -151,14 +187,50 @@ def init_logging(level="INFO", log_dir="logs"):
 日志中可有“失败事件”，但不替代失败记录文件的职责。
 
 11. 验收清单
- CLI 与 GUI 同时运行时，日志无重复（确保 handler 仅绑定一次）
 
- 关键路径日志包含 run/task/video 字段
+- [x] CLI 与 GUI 同时运行时，日志无重复（确保 handler 仅绑定一次）
+- [x] 关键路径日志包含 run/task/video 字段
+- [x] 日志格式统一，符合规范
+- [x] 敏感数据从不出现在日志（自动脱敏）
+- [x] 日志目录写满或不可写时，程序不会崩溃（回退控制台）
+- [x] 日志轮转功能正常（20MB x 5份）
+- [x] 过期日志自动清理（默认 14 天）
+- [x] 与 `error_handling.md` 的失败记录文件行为一致
 
- JSON 事件（若开启）字段规范一致，不夹杂换行/无效 JSON
+---
 
- 敏感数据从不出现在日志
+## 12. 实现状态（2025-12-14）
 
- 日志目录写满或不可写时，程序不会崩溃（回退控制台）
+### 12.1 已实现功能
+- ✅ 统一日志格式（包含 run_id/task/video_id 字段）
+- ✅ 日志轮转（20MB x 5份）
+- ✅ 过期日志清理（默认 14 天）
+- ✅ 敏感信息脱敏
+- ✅ 线程本地上下文管理
+- ✅ 回退策略（目录不可写时回退到控制台）
+- ✅ UI 回调支持
 
- 与 error_handling.md 的失败记录文件行为一致
+### 12.2 实现位置
+- **核心实现**：`core/logger.py`
+- **上下文管理**：`set_log_context()`, `clear_log_context()`
+- **过期清理**：`cleanup_old_logs()` 函数
+- **格式化器**：`ContextFormatter` 类
+- **日志管理器**：`Logger` 类
+
+### 12.3 使用示例
+所有模块应通过 `get_logger()` 获取 logger 实例，并通过 `set_log_context()` 设置上下文：
+
+```python
+from core.logger import get_logger, set_log_context
+
+logger = get_logger()
+
+# 在流水线开始时设置上下文
+set_log_context(run_id="20251209_140000", task="pipeline")
+
+# 在处理单个视频时更新上下文
+set_log_context(run_id="20251209_140000", task="download", video_id="dQw4w9WgXcQ")
+
+# 记录日志（自动包含上下文）
+logger.info("开始下载字幕")
+```

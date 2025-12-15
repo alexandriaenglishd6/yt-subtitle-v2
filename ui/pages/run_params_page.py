@@ -16,7 +16,7 @@ class RunParamsPage(ctk.CTkFrame):
     def __init__(
         self,
         parent,
-        concurrency: int = 3,
+        concurrency: int = 10,
         retry_count: int = 2,
         output_dir: str = "out",
         on_save: Optional[Callable[[int, int, str], None]] = None,
@@ -43,29 +43,61 @@ class RunParamsPage(ctk.CTkFrame):
         # 并发数量设置
         concurrency_frame = ctk.CTkFrame(self)
         concurrency_frame.pack(fill="x", padx=32, pady=16)
+        concurrency_frame.grid_columnconfigure(1, weight=1)
         
+        # 左侧：标签
         concurrency_label = ctk.CTkLabel(
             concurrency_frame,
             text=t("concurrency_label"),
             font=body_font()
         )
-        concurrency_label.pack(side="left", padx=8, pady=8)
+        concurrency_label.grid(row=0, column=0, padx=8, pady=8, sticky="w")
         
-        self.concurrency_entry = ctk.CTkEntry(
-            concurrency_frame,
-            width=100,
-            placeholder_text="3"
+        # 中间：滑块和输入框
+        concurrency_control_frame = ctk.CTkFrame(concurrency_frame, fg_color="transparent")
+        concurrency_control_frame.grid(row=0, column=1, padx=8, pady=8, sticky="ew")
+        concurrency_control_frame.grid_columnconfigure(0, weight=1)
+        
+        # 滑块
+        self.concurrency_slider = ctk.CTkSlider(
+            concurrency_control_frame,
+            from_=1,
+            to=50,
+            number_of_steps=49,
+            command=self._on_concurrency_slider_changed
         )
-        self.concurrency_entry.pack(side="left", padx=8, pady=8)
-        self.concurrency_entry.insert(0, str(self.concurrency))
+        self.concurrency_slider.set(self.concurrency)
+        self.concurrency_slider.grid(row=0, column=0, padx=(0, 8), sticky="ew")
         
-        concurrency_hint = ctk.CTkLabel(
-            concurrency_frame,
-            text=t("concurrency_hint"),
+        # 输入框
+        self.concurrency_entry = ctk.CTkEntry(
+            concurrency_control_frame,
+            width=60
+        )
+        self.concurrency_entry.insert(0, str(self.concurrency))
+        self.concurrency_entry.grid(row=0, column=1, padx=(0, 8))
+        self.concurrency_entry.bind("<KeyRelease>", self._on_concurrency_entry_changed)
+        
+        # 范围提示
+        range_label = ctk.CTkLabel(
+            concurrency_control_frame,
+            text="(1-50)",
             font=body_font(),
             text_color=("gray50", "gray50")
         )
-        concurrency_hint.pack(side="left", padx=8, pady=8)
+        range_label.grid(row=0, column=2, padx=(0, 8))
+        
+        # 警告提示（第二行）
+        self.concurrency_warning = ctk.CTkLabel(
+            concurrency_frame,
+            text="",
+            font=body_font(),
+            text_color=("orange", "orange")
+        )
+        self.concurrency_warning.grid(row=1, column=0, columnspan=2, padx=8, pady=(0, 8), sticky="w")
+        
+        # 更新警告提示
+        self._update_concurrency_warning(self.concurrency)
         
         # 重试次数设置
         retry_frame = ctk.CTkFrame(self)
@@ -151,6 +183,62 @@ class RunParamsPage(ctk.CTkFrame):
         )
         hint_label.pack(side="left", padx=8, pady=8)
     
+    def _on_concurrency_slider_changed(self, value):
+        """滑块值改变回调"""
+        concurrency = int(value)
+        # 更新输入框（不触发输入框回调）
+        current_text = self.concurrency_entry.get().strip()
+        if current_text != str(concurrency):
+            self.concurrency_entry.delete(0, "end")
+            self.concurrency_entry.insert(0, str(concurrency))
+        # 更新警告提示
+        self._update_concurrency_warning(concurrency)
+    
+    def _on_concurrency_entry_changed(self, event=None):
+        """输入框值改变回调"""
+        try:
+            concurrency_str = self.concurrency_entry.get().strip()
+            if not concurrency_str:
+                return
+            concurrency = int(concurrency_str)
+            # 限制范围
+            if concurrency < 1:
+                concurrency = 1
+                self.concurrency_entry.delete(0, "end")
+                self.concurrency_entry.insert(0, "1")
+            elif concurrency > 50:
+                concurrency = 50
+                self.concurrency_entry.delete(0, "end")
+                self.concurrency_entry.insert(0, "50")
+            # 更新滑块
+            if self.concurrency_slider.get() != concurrency:
+                self.concurrency_slider.set(concurrency)
+            # 更新警告提示
+            self._update_concurrency_warning(concurrency)
+        except ValueError:
+            # 输入无效，忽略
+            pass
+    
+    def _update_concurrency_warning(self, concurrency: int):
+        """更新并发数警告提示"""
+        if concurrency > 30:
+            self.concurrency_warning.configure(
+                text="⚠️ 警告：并发数过高可能导致 IP 封锁、429 错误或本地模型压力过大，建议降低并发数",
+                text_color=("red", "red")
+            )
+        elif concurrency > 20:
+            self.concurrency_warning.configure(
+                text="⚠️ 提示：高并发可能导致限流，建议监控网络请求频率",
+                text_color=("orange", "orange")
+            )
+        elif concurrency > 10:
+            self.concurrency_warning.configure(
+                text="💡 提示：并发数较高，建议监控网络请求，避免触发限流",
+                text_color=("gray50", "gray50")
+            )
+        else:
+            self.concurrency_warning.configure(text="")
+    
     def _on_save(self):
         """保存运行参数"""
         if self.on_save:
@@ -159,10 +247,15 @@ class RunParamsPage(ctk.CTkFrame):
                 if not concurrency_str:
                     return
                 concurrency = int(concurrency_str)
-                if concurrency <= 0:
+                # 验证范围
+                if concurrency < 1:
                     concurrency = 1
                     self.concurrency_entry.delete(0, "end")
                     self.concurrency_entry.insert(0, "1")
+                elif concurrency > 50:
+                    concurrency = 50
+                    self.concurrency_entry.delete(0, "end")
+                    self.concurrency_entry.insert(0, "50")
                 
                 retry_count_str = self.retry_count_entry.get().strip()
                 retry_count = 2  # 默认值

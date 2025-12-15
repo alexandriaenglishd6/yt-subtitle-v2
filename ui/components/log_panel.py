@@ -25,6 +25,7 @@ class LogPanel(ctk.CTkFrame):
         # 统计信息
         self.stats = {"total": 0, "success": 0, "failed": 0}
         self.running_status = ""
+        self.cookie_status = ""  # Cookie 状态（如 "已配置"、"未配置"、"测试成功"、"测试失败" 等）
         self._build_ui()
     
     def _build_ui(self):
@@ -233,6 +234,16 @@ class LogPanel(ctk.CTkFrame):
         if hasattr(self, 'stats_label'):
             self.stats_label.configure(text=self._format_stats())
     
+    def update_cookie_status(self, cookie_status: str):
+        """更新 Cookie 状态
+        
+        Args:
+            cookie_status: Cookie 状态文本（如 "已配置"、"未配置"、"测试成功"、"测试失败" 等）
+        """
+        self.cookie_status = cookie_status
+        if hasattr(self, 'stats_label'):
+            self.stats_label.configure(text=self._format_stats())
+    
     def _format_stats(self) -> str:
         """格式化统计信息文本"""
         total = self.stats.get("total", 0)
@@ -248,7 +259,11 @@ class LogPanel(ctk.CTkFrame):
         else:
             status_display = t("status_idle")
         
-        return f"计划：{total} | 已处理：成功 {success} / 失败 {failed} | 状态：{status_display}"
+        # 格式化 Cookie 状态
+        cookie_display = self.cookie_status if self.cookie_status else "未配置"
+        
+        # 使用更清晰的分隔符，增加间隔（至少3个空格）
+        return f"计划：{total}   ••   已处理：成功 {success} / 失败 {failed}   ••   状态：{status_display}   ••   Cookie：{cookie_display}"
     
     def refresh_language(self):
         """刷新语言相关文本"""

@@ -21,18 +21,22 @@ class NetworkSettingsPage(ctk.CTkFrame):
         parent,
         cookie: str = "",
         proxies: list = None,
-        on_save_cookie: Optional[Callable[[str], None]] = None,
+        network_region: Optional[str] = None,
+        on_save_cookie: Optional[Callable[[str, Optional[str]], None]] = None,
         on_save_proxies: Optional[Callable[[list], None]] = None,
         on_log_message: Optional[Callable[[str, str], None]] = None,
+        on_update_cookie_status: Optional[Callable[[str, Optional[str], Optional[str]], None]] = None,
         **kwargs
     ):
         super().__init__(parent, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.cookie = cookie
         self.proxies = proxies or []
+        self.network_region = network_region
         self.on_save_cookie = on_save_cookie
         self.on_save_proxies = on_save_proxies
         self.on_log_message = on_log_message
+        self.on_update_cookie_status = on_update_cookie_status
         self._build_ui()
     
     def _build_ui(self):
@@ -118,6 +122,16 @@ class NetworkSettingsPage(ctk.CTkFrame):
             width=120
         )
         self.cookie_save_btn.pack(side="left", padx=(0, 8))
+        
+        # 地区信息显示（如果有缓存的地区信息）
+        self.region_label = ctk.CTkLabel(
+            cookie_frame,
+            text="",
+            font=body_font(),
+            text_color="gray"
+        )
+        self.region_label.grid(row=3, column=0, columnspan=3, sticky="w", padx=16, pady=(0, 16))
+        self._update_region_display()
         
         # 移除 Cookie 帮助文本（已移到输入框内作为占位符）
         
@@ -263,14 +277,58 @@ class NetworkSettingsPage(ctk.CTkFrame):
                 
                 if result["available"]:
                     msg = t("cookie_test_success")
-                    if result.get("region"):
-                        msg += f" (地区: {result['region']})"
+                    region = result.get("region")
+                    if region:
+                        msg += f" (地区: {region})"
+                        # 如果检测到地区信息，自动保存到配置并更新显示
+                        if self.on_save_cookie:
+                            # 保存 Cookie 和地区信息
+                            def save_with_region():
+                                try:
+                                    self.on_save_cookie(cookie_text, region)
+                                    self.network_region = region
+                                    self._update_region_display()
+                                    # 更新 Cookie 状态显示
+                                    if self.on_update_cookie_status:
+                                        self.on_update_cookie_status(cookie_text, region, "success")
+                                    if self.on_log_message:
+                                        self.on_log_message("INFO", f"已保存 Cookie 和地区信息: {region}")
+                                except Exception as e:
+                                    logger.error(f"保存地区信息失败: {e}")
+                            self.after(0, save_with_region)
+                    else:
+                        # 如果未检测到地区信息，提示用户并只保存 Cookie（保留现有地区信息）
+                        msg += " (未检测到地区信息，Cookie 中可能没有 PREF 字段或 gl 参数)"
+                        if self.on_save_cookie:
+                            def save_cookie_only():
+                                try:
+                                    self.on_save_cookie(cookie_text, self.network_region)
+                                    # 更新 Cookie 状态显示
+                                    if self.on_update_cookie_status:
+                                        self.on_update_cookie_status(cookie_text, self.network_region, "success")
+                                except Exception as e:
+                                    logger.error(f"保存 Cookie 失败: {e}")
+                            self.after(0, save_cookie_only)
+                        else:
+                            # 即使不保存，也更新状态显示（测试成功）
+                            if self.on_update_cookie_status:
+                                def update_status():
+                                    self.on_update_cookie_status(cookie_text, self.network_region, "success")
+                                self.after(0, update_status)
+                    
                     if self.on_log_message:
                         self.on_log_message("INFO", msg)
                 else:
+                    # 测试失败，更新状态显示
                     error_msg = result.get("error", "未知错误")
                     if self.on_log_message:
                         self.on_log_message("ERROR", f"{t('cookie_test_failed')}: {error_msg}")
+                    # 更新 Cookie 状态显示为测试失败
+                    if self.on_update_cookie_status:
+                        def update_status_failed():
+                            # 测试失败，显示测试失败状态
+                            self.on_update_cookie_status(cookie_text, None, "failed")
+                        self.after(0, update_status_failed)
                 
                 cookie_manager.cleanup()
             except Exception as e:
@@ -294,6 +352,16 @@ class NetworkSettingsPage(ctk.CTkFrame):
         thread = threading.Thread(target=test_in_thread, daemon=True)
         thread.start()
     
+    def _update_region_display(self):
+        """更新地区信息显示"""
+        if self.network_region:
+            self.region_label.configure(
+                text=f"当前地区: {self.network_region} (已缓存) - 点击'测试 Cookie'可重新检测",
+                text_color="gray"
+            )
+        else:
+            self.region_label.configure(text="", text_color="gray")
+    
     def _on_save_cookie(self):
         """保存 Cookie"""
         cookie_text = self.cookie_textbox.get("1.0", "end-1c").strip()
@@ -304,7 +372,11 @@ class NetworkSettingsPage(ctk.CTkFrame):
         
         if self.on_save_cookie:
             try:
-                self.on_save_cookie(cookie_text)
+                # 保存时保留现有的地区信息（如果未在测试中更新）
+                self.on_save_cookie(cookie_text, self.network_region)
+                # 更新 Cookie 状态显示
+                if self.on_update_cookie_status:
+                    self.on_update_cookie_status(cookie_text, self.network_region)
                 if self.on_log_message:
                     self.on_log_message("INFO", t("cookie_save_success"))
             except Exception as e:

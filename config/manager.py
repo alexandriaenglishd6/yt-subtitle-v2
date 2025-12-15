@@ -107,6 +107,7 @@ class AppConfig:
     retry_count: int = 2  # 重试次数，默认 2（用于网络错误、限流等可重试错误）
     proxies: list[str] = field(default_factory=list)  # 代理列表
     cookie: str = ""  # Cookie 字符串
+    network_region: Optional[str] = None  # 网络地区（从 Cookie 测试中检测，格式如 "US", "CN" 等）
     output_dir: str = "out"  # 输出目录（相对路径）
     translation_ai: AIConfig = field(default_factory=AIConfig)  # 翻译 AI 配置
     summary_ai: AIConfig = field(default_factory=AIConfig)  # 摘要 AI 配置
@@ -123,6 +124,7 @@ class AppConfig:
             "retry_count": self.retry_count,
             "proxies": self.proxies,
             "cookie": self.cookie,
+            "network_region": self.network_region,
             "output_dir": self.output_dir,
             "translation_ai": self.translation_ai.to_dict(),
             "summary_ai": self.summary_ai.to_dict(),
@@ -163,6 +165,7 @@ class AppConfig:
             retry_count=data.get("retry_count", 2),
             proxies=data.get("proxies", []),
             cookie=data.get("cookie", ""),
+            network_region=data.get("network_region"),  # 可选字段，默认为 None
             output_dir=data.get("output_dir", "out"),
             translation_ai=AIConfig.from_dict(translation_ai_data or {}),
             summary_ai=AIConfig.from_dict(summary_ai_data or {}),
