@@ -1,0 +1,6 @@
+# 正常有字幕视频
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
+# 故意写错的 URL
+https://www.youtube.com/watch?v=invalid123456
+# 另一个正常视频（如果有）
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
