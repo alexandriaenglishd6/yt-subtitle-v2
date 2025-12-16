@@ -1,7 +1,7 @@
 """
 统一日志系统
 符合 logging_spec.md 规范的日志系统
-支持：文件输出、控制台输出、UI回调、敏感信息脱敏、上下文字段
+支持：文件输出、控制台输出、UI回调、敏感信息脱敏、上下文字段、国际化
 """
 import logging
 import sys
@@ -15,6 +15,115 @@ from logging.handlers import RotatingFileHandler
 
 from config.manager import get_user_data_dir
 import time
+
+# ============ 国际化支持 ============
+
+_i18n_module = None
+_i18n_lock = Lock()
+
+
+def _get_i18n():
+    """延迟加载 i18n 模块，避免循环依赖
+    
+    Returns:
+        i18n_manager 模块，如果不可用则返回 None
+    """
+    global _i18n_module
+    if _i18n_module is None:
+        with _i18n_lock:
+            if _i18n_module is None:
+                try:
+                    from ui import i18n_manager
+                    _i18n_module = i18n_manager
+                except ImportError:
+                    # CLI 模式下 ui 模块不可用，标记为 False
+                    _i18n_module = False
+    return _i18n_module if _i18n_module else None
+
+
+def translate_log(key: str, **kwargs) -> str:
+    """翻译日志消息
+    
+    Args:
+        key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
+        **kwargs: 格式化参数（用于 {placeholder} 替换）
+    
+    Returns:
+        翻译后的消息，如果翻译失败则返回原 key
+    
+    Example:
+        >>> translate_log("video_detected", video_id="abc123")
+        "检测到视频: abc123"  # 中文环境
+        "Video detected: abc123"  # 英文环境
+    """
+    i18n = _get_i18n()
+    
+    if i18n is None:
+        # i18n 不可用（CLI 模式），返回原 key 或简单格式化
+        if kwargs:
+            try:
+                return f"{key}: {', '.join(f'{k}={v}' for k, v in kwargs.items())}"
+            except Exception:
+                pass
+        return key
+    
+    try:
+        # 确保 key 有 log. 前缀
+        if not key.startswith("log."):
+            full_key = f"log.{key}"
+        else:
+            full_key = key
+        
+        # 调用 i18n_manager 的 t() 函数
+        text = i18n.t(full_key, default=key)
+        
+        # 格式化参数
+        if kwargs:
+            try:
+                text = text.format(**kwargs)
+            except (KeyError, ValueError):
+                # 格式化失败，返回原文本
+                pass
+        
+        return text
+    except Exception:
+        # 翻译失败，返回原 key
+        return key
+
+
+def translate_exception(key: str, **kwargs) -> str:
+    """翻译异常消息
+    
+    Args:
+        key: 翻译键（支持 "exception.xxx" 或 "xxx" 格式）
+        **kwargs: 格式化参数
+    
+    Returns:
+        翻译后的消息，如果翻译失败则返回原 key
+    """
+    i18n = _get_i18n()
+    
+    if i18n is None:
+        return key
+    
+    try:
+        # 确保 key 有 exception. 前缀
+        if not key.startswith("exception."):
+            full_key = f"exception.{key}"
+        else:
+            full_key = key
+        
+        text = i18n.t(full_key, default=key)
+        
+        if kwargs:
+            try:
+                text = text.format(**kwargs)
+            except (KeyError, ValueError):
+                pass
+        
+        return text
+    except Exception:
+        return key
 
 # Windows 控制台编码修复
 if sys.platform == "win32":
@@ -409,28 +518,123 @@ class Logger:
         except Exception:
             pass  # JSON 输出失败不影响主日志
     
+    def _translate_if_key(self, message: str, **kwargs) -> str:
+        """如果 message 是翻译键，则自动翻译（启发式判断）
+        
+        判断规则：
+        - 全 ASCII 字符
+        - 不包含中文字符
+        - 包含下划线或点号（常见于翻译键格式）
+        - 不以空格开头
+        
+        Args:
+            message: 可能是翻译键或普通消息
+            **kwargs: 格式化参数
+        
+        Returns:
+            翻译后的消息或原消息
+        """
+        # 启发式判断：是否为翻译键
+        is_key = (
+            message.isascii() and
+            not message.startswith(" ") and
+            ("_" in message or "." in message) and
+            not any('\u4e00' <= c <= '\u9fff' for c in message) and
+            len(message) > 3  # 太短的不可能是翻译键
+        )
+        
+        if is_key:
+            # 尝试翻译
+            translated = translate_log(message, **kwargs)
+            # 如果翻译成功（返回的不是原 key），使用翻译结果
+            if translated != message:
+                return translated
+        
+        # 不是翻译键或翻译失败，返回原消息
+        return message
+    
     def debug(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 DEBUG 级别日志"""
-        self._log_with_context(logging.DEBUG, message, video_id, **kwargs)
+        """记录 DEBUG 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.DEBUG, translated_message, video_id, **kwargs)
     
     def info(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 INFO 级别日志"""
-        self._log_with_context(logging.INFO, message, video_id, **kwargs)
+        """记录 INFO 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.INFO, translated_message, video_id, **kwargs)
     
     def warning(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 WARNING 级别日志"""
-        self._log_with_context(logging.WARNING, message, video_id, **kwargs)
+        """记录 WARNING 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.WARNING, translated_message, video_id, **kwargs)
     
     def warn(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 WARNING 级别日志（别名）"""
+        """记录 WARNING 级别日志（别名，支持自动翻译）"""
         self.warning(message, video_id, **kwargs)
     
     def error(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 ERROR 级别日志"""
-        self._log_with_context(logging.ERROR, message, video_id, **kwargs)
+        """记录 ERROR 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.ERROR, translated_message, video_id, **kwargs)
     
     def critical(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 CRITICAL 级别日志"""
+        """记录 CRITICAL 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.CRITICAL, translated_message, video_id, **kwargs)
+    
+    # ============ 显式国际化方法（推荐用于 P0/P1 关键路径）============
+    
+    def debug_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 DEBUG 日志（不做启发式判断，直接翻译 key）
+        
+        Args:
+            key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
+            video_id: 视频ID（可选）
+            **kwargs: 格式化参数
+        """
+        message = translate_log(key, **kwargs)
+        self._log_with_context(logging.DEBUG, message, video_id, **kwargs)
+    
+    def info_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 INFO 日志（不做启发式判断，直接翻译 key）
+        
+        推荐用于 P0/P1 关键路径（用户直接看到的日志）
+        
+        Args:
+            key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
+            video_id: 视频ID（可选）
+            **kwargs: 格式化参数
+        
+        Example:
+            >>> logger.info_i18n("video_detected", video_id="abc123")
+            # 中文环境：输出 "检测到视频: abc123"
+            # 英文环境：输出 "Video detected: abc123"
+        """
+        message = translate_log(key, **kwargs)
+        self._log_with_context(logging.INFO, message, video_id, **kwargs)
+    
+    def warning_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 WARNING 日志"""
+        message = translate_log(key, **kwargs)
+        self._log_with_context(logging.WARNING, message, video_id, **kwargs)
+    
+    def warn_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 WARNING 日志（别名）"""
+        self.warning_i18n(key, video_id, **kwargs)
+    
+    def error_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 ERROR 日志"""
+        message = translate_log(key, **kwargs)
+        self._log_with_context(logging.ERROR, message, video_id, **kwargs)
+    
+    def critical_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 CRITICAL 日志"""
+        message = translate_log(key, **kwargs)
         self._log_with_context(logging.CRITICAL, message, video_id, **kwargs)
     
     def set_level(self, level: str) -> None:
