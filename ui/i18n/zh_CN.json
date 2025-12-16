@@ -451,6 +451,7 @@
   "log.proxy_connection_failed_refused": "连接失败：代理服务器拒绝连接",
   "log.proxy_connection_failed_auth": "连接失败：SOCKS 代理认证失败（请检查用户名和密码）",
   "log.proxy_connection_failed_socks": "连接失败：SOCKS 代理连接失败（请检查代理地址和端口）",
+  "log.proxy_connection_failed_socks_detail": "SOCKS代理：请检查代理地址、端口、用户名和密码是否正确，以及防火墙设置",
   "log.proxy_connection_failed_slow": "连接超时（代理可能较慢或不可用）",
   
   "log.ai_extract_language_failed": "无法从 prompt 中提取语言信息，使用默认值（auto -> zh-CN）",
