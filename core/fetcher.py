@@ -256,7 +256,7 @@ class VideoFetcher:
             VideoInfo 列表
         """
         url_type = self.identify_url_type(url)
-        logger.info(f"识别 URL 类型: {url_type}, URL: {url}")
+        logger.info_i18n("url_type_identified", url_type=url_type, url=url)
         
         if url_type == "video":
             return self.fetch_single_video(url)
@@ -265,7 +265,7 @@ class VideoFetcher:
         elif url_type == "playlist":
             return self.fetch_playlist(url)
         else:
-            logger.error(f"无法识别的 URL 类型: {url}")
+            logger.error_i18n("url_type_unknown", url=url)
             return []
     
     def fetch_single_video(self, url: str) -> List[VideoInfo]:
@@ -283,11 +283,7 @@ class VideoFetcher:
                 return [video_info]
             return []
         except AppException as e:
-            logger.error(
-                f"获取视频信息失败: {e}",
-                video_id=self.extract_video_id(url),
-                error_type=e.error_type.value
-            )
+            error_msg = logger.error_i18n("fetch_video_info_failed", error=str(e), video_id=self.extract_video_id(url))
             return []
         except Exception as e:
             # 未映射的异常，转换为 AppException
@@ -296,11 +292,7 @@ class VideoFetcher:
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
-            logger.error(
-                f"获取视频信息失败: {app_error}",
-                video_id=self.extract_video_id(url),
-                error_type=app_error.error_type.value
-            )
+            error_msg = logger.error_i18n("fetch_video_info_failed", error=str(app_error), video_id=self.extract_video_id(url))
             return []
     
     def fetch_channel(self, channel_url: str) -> List[VideoInfo]:
@@ -315,15 +307,12 @@ class VideoFetcher:
         try:
             logger.info(f"开始获取频道视频列表: {channel_url}")
             videos = self._get_channel_videos_ytdlp(channel_url)
-            logger.info(f"频道共 {len(videos)} 个视频")
+            logger.info_i18n("channel_video_count", count=len(videos))
             if len(videos) == 0:
-                logger.warning(f"频道视频列表为空，可能的原因：1. 频道无视频 2. 需要 Cookie 3. 网络问题 4. yt-dlp 执行失败")
+                logger.warning_i18n("channel_video_list_empty")
             return videos
         except AppException as e:
-            logger.error(
-                f"获取频道视频列表失败: {e}",
-                error_type=e.error_type.value
-            )
+            logger.error_i18n("fetch_channel_videos_failed", error=str(e), error_type=e.error_type.value)
             return []
         except Exception as e:
             # 未映射的异常，转换为 AppException
@@ -333,10 +322,7 @@ class VideoFetcher:
                 cause=e
             )
             import traceback
-            logger.error(
-                f"获取频道视频列表失败: {app_error}\n{traceback.format_exc()}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("fetch_channel_videos_failed", error=str(app_error), error_type=app_error.error_type.value)
             return []
     
     def fetch_playlist(self, playlist_url: str) -> List[VideoInfo]:
@@ -351,13 +337,10 @@ class VideoFetcher:
         try:
             logger.info(f"开始获取播放列表视频: {playlist_url}")
             videos = self._get_playlist_videos_ytdlp(playlist_url)
-            logger.info(f"播放列表共 {len(videos)} 个视频")
+            logger.info_i18n("playlist_video_count", count=len(videos))
             return videos
         except AppException as e:
-            logger.error(
-                f"获取播放列表视频失败: {e}",
-                error_type=e.error_type.value
-            )
+            logger.error_i18n("fetch_playlist_videos_failed", error=str(e), error_type=e.error_type.value)
             return []
         except Exception as e:
             # 未映射的异常，转换为 AppException
@@ -366,10 +349,7 @@ class VideoFetcher:
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
-            logger.error(
-                f"获取播放列表视频失败: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("fetch_playlist_videos_failed", error=str(app_error), error_type=app_error.error_type.value)
             return []
     
     def fetch_from_file(self, file_path: Path) -> List[VideoInfo]:
@@ -505,10 +485,7 @@ class VideoFetcher:
                         continue
                     else:
                         # 最后一次尝试失败，抛出异常
-                        logger.error(
-                            f"yt-dlp 执行失败（已尝试 {max_retries} 次）: {app_error}",
-                            error_type=app_error.error_type.value
-                        )
+                        logger.error_i18n("ytdlp_execution_failed_retries", retries=max_retries, error=str(app_error), error_type=app_error.error_type.value)
                         raise app_error
                 
                 # 如果使用了代理且成功，标记代理成功
@@ -648,10 +625,7 @@ class VideoFetcher:
                     result.returncode,
                     error_msg
                 )
-                logger.error(
-                    f"yt-dlp 执行失败: {app_error}",
-                    error_type=app_error.error_type.value
-                )
+                logger.error_i18n("ytdlp_execution_failed", error=str(app_error), error_type=app_error.error_type.value)
                 
                 # 如果使用了代理，标记代理失败
                 if proxy and self.proxy_manager:
@@ -784,10 +758,7 @@ class VideoFetcher:
                     result.returncode,
                     error_msg
                 )
-                logger.error(
-                    f"yt-dlp 执行失败: {app_error}",
-                    error_type=app_error.error_type.value
-                )
+                logger.error_i18n("ytdlp_execution_failed", error=str(app_error), error_type=app_error.error_type.value)
                 
                 # 如果使用了代理，标记代理失败
                 if proxy and self.proxy_manager:

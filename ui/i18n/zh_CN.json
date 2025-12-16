@@ -84,8 +84,6 @@
   "detection_complete": "检测完成：有字幕 {has_count} 个，无字幕 {no_count} 个",
   "dry_run_failed": "Dry Run 失败：{error}",
   
-  "no_subtitles_short": "无字幕",
-  
   "processing_start": "开始处理：{url}",
   "processing_failed": "处理失败：{error}",
   "video_list_saved": "已保存 {count} 个视频链接到: {filename}",
@@ -147,7 +145,6 @@
   "ai_retries_label": "最大重试次数：",
   "ai_api_keys_label": "API Keys（每行一个，格式：provider=env:VAR_NAME 或 provider=key_value）",
   "ai_save": "保存 AI 配置",
-  "ai_save_all": "保存所有 AI 配置",
   "ai_save_translation": "保存翻译 AI 配置",
   "ai_save_summary": "保存摘要 AI 配置",
   "ai_save_success": "AI 配置已保存",
@@ -216,7 +213,6 @@
   "manual_subtitles": "人工字幕",
   "auto_subtitles": "自动字幕",
   "no_subtitle_available": "无可用字幕",
-  "no_subtitles_short": "无字幕",
   "subtitle_detect_failed_short": "检测失败: {error}",
   "videos_with_subtitle": "有字幕的视频",
   "videos_without_subtitle": "无字幕的视频",
@@ -361,6 +357,16 @@
   "log.stats_update_callback_failed": "统计信息更新回调失败: {error}",
   "log.stats_update_thread_error": "统计信息更新线程异常: {error}",
   "log.pipeline_staged_failed": "分阶段 Pipeline 处理失败: {error}",
+  
+  "log.url_type_identified": "识别 URL 类型: {url_type}, URL: {url}",
+  "log.url_type_unknown": "无法识别的 URL 类型: {url}",
+  "log.fetch_video_info_failed": "获取视频信息失败: {error}",
+  "log.ytdlp_execution_failed": "yt-dlp 执行失败: {error}",
+  "log.ytdlp_execution_failed_retries": "yt-dlp 执行失败（已尝试 {retries} 次）: {error}",
+  "log.channel_video_list_empty": "频道视频列表为空，可能的原因：1. 频道无视频 2. 需要 Cookie 3. 网络问题 4. yt-dlp 执行失败",
+  "log.channel_video_count": "频道共 {count} 个视频",
+  "log.fetch_channel_videos_failed": "获取频道视频列表失败: {error}",
+  "log.fetch_playlist_videos_failed": "获取播放列表视频失败: {error}",
   
   "exception.download_failed": "下载失败: {reason}",
   "exception.translation_failed": "翻译失败: {reason}",

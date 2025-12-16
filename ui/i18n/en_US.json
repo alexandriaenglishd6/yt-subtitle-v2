@@ -362,6 +362,17 @@
   "log.stats_update_thread_error": "Statistics update thread error: {error}",
   "log.pipeline_staged_failed": "Staged pipeline processing failed: {error}",
   
+  "log.url_type_identified": "URL type identified: {url_type}, URL: {url}",
+  "log.url_type_unknown": "Unknown URL type: {url}",
+  "log.fetch_video_info_failed": "Failed to fetch video info: {error}",
+  "log.ytdlp_execution_failed": "yt-dlp execution failed: {error}",
+  "log.ytdlp_execution_failed_retries": "yt-dlp execution failed (attempted {retries} times): {error}",
+  "log.channel_video_list_empty": "Channel video list is empty. Possible reasons: 1. Channel has no videos 2. Cookie required 3. Network issue 4. yt-dlp execution failed",
+  "log.channel_video_count": "Channel has {count} videos",
+  "log.playlist_video_count": "Playlist has {count} videos",
+  "log.fetch_channel_videos_failed": "Failed to fetch channel videos: {error}",
+  "log.fetch_playlist_videos_failed": "Failed to fetch playlist videos: {error}",
+  
   "exception.download_failed": "Download failed: {reason}",
   "exception.translation_failed": "Translation failed: {reason}",
   "exception.summary_failed": "Summary generation failed: {reason}",
