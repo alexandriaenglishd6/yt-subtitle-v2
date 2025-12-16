@@ -83,7 +83,8 @@ class DetectProcessor:
             if not self.force and self.archive_path:
                 if self.incremental_manager.is_processed(vid, self.archive_path):
                     data.is_processed = True
-                    data.skip_reason = "已处理（增量模式）"
+                    from ui.i18n_manager import t
+                    data.skip_reason = t("log.video_already_processed_skip", video_id=vid)
                     skip_msg = logger.info_i18n("video_already_processed_skip", video_id=vid)
                     if self.on_log:
                         try:
