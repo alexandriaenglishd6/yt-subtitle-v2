@@ -716,7 +716,7 @@ class Logger:
         message = translate_log(key, **kwargs)
         self._log_with_context(logging.DEBUG, message, video_id, **kwargs)
     
-    def info_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+    def info_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
         """显式国际化 INFO 日志（不做启发式判断，直接翻译 key）
         
         推荐用于 P0/P1 关键路径（用户直接看到的日志）
@@ -726,32 +726,55 @@ class Logger:
             video_id: 视频ID（可选）
             **kwargs: 格式化参数
         
+        Returns:
+            翻译后的消息（用于传递给 safe_log 等回调）
+        
         Example:
-            >>> logger.info_i18n("video_detected", video_id="abc123")
-            # 中文环境：输出 "检测到视频: abc123"
-            # 英文环境：输出 "Video detected: abc123"
+            >>> msg = logger.info_i18n("video_detected", video_id="abc123")
+            # 中文环境：msg = "检测到视频: abc123"
+            # 英文环境：msg = "Video detected: abc123"
         """
         message = translate_log(key, **kwargs)
         self._log_with_context(logging.INFO, message, video_id, **kwargs)
+        return message
     
-    def warning_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """显式国际化 WARNING 日志"""
+    def warning_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 WARNING 日志
+        
+        Returns:
+            翻译后的消息
+        """
         message = translate_log(key, **kwargs)
         self._log_with_context(logging.WARNING, message, video_id, **kwargs)
+        return message
     
-    def warn_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """显式国际化 WARNING 日志（别名）"""
-        self.warning_i18n(key, video_id, **kwargs)
+    def warn_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 WARNING 日志（别名）
+        
+        Returns:
+            翻译后的消息
+        """
+        return self.warning_i18n(key, video_id, **kwargs)
     
-    def error_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """显式国际化 ERROR 日志"""
+    def error_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 ERROR 日志
+        
+        Returns:
+            翻译后的消息
+        """
         message = translate_log(key, **kwargs)
         self._log_with_context(logging.ERROR, message, video_id, **kwargs)
+        return message
     
-    def critical_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """显式国际化 CRITICAL 日志"""
+    def critical_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 CRITICAL 日志
+        
+        Returns:
+            翻译后的消息
+        """
         message = translate_log(key, **kwargs)
         self._log_with_context(logging.CRITICAL, message, video_id, **kwargs)
+        return message
     
     def set_level(self, level: str) -> None:
         """设置日志级别"""
