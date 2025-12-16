@@ -84,10 +84,10 @@ class DetectProcessor:
                 if self.incremental_manager.is_processed(vid, self.archive_path):
                     data.is_processed = True
                     data.skip_reason = "已处理（增量模式）"
-                    logger.info_i18n("video_already_processed_skip", video_id=vid)
+                    skip_msg = logger.info_i18n("video_already_processed_skip", video_id=vid)
                     if self.on_log:
                         try:
-                            self.on_log("INFO", logger.translate_log("video_already_processed_skip", video_id=vid), vid)
+                            self.on_log("INFO", skip_msg, vid)
                         except Exception:
                             pass
                     return data
