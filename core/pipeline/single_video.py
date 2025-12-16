@@ -252,8 +252,7 @@ def process_single_video(
                 safe_log(on_log, "INFO", msg, video_info.video_id)
             except AppException as e:
                 if e.error_type == ErrorType.AI_QUOTA_EXCEEDED:
-                    error_msg = f"AI 配额已用尽: {e.message}"
-                    logger.error(error_msg, video_id=video_info.video_id)
+                    error_msg = logger.error_i18n("summary_quota_exceeded", error=e.message, video_id=video_info.video_id)
                     safe_log(on_log, "ERROR", error_msg, video_info.video_id)
                     failure_logger.log_failure(
                         video_id=video_info.video_id,
