@@ -397,5 +397,20 @@
   "exception.file_not_found": "File not found: {path}",
   "exception.invalid_config": "Invalid configuration: {detail}",
   "exception.processing_failed": "Processing failed: {error}",
-  "exception.unknown_error": "Unknown error: {error}"
+  "exception.unknown_error": "Unknown error: {error}",
+  
+  "stats_planned": "Planned",
+  "stats_processed": "Processed",
+  "stats_success": "Success",
+  "stats_failed": "Failed",
+  "stats_status": "Status",
+  "stats_cookie": "Cookie",
+  "cookie_status_configured": "Configured",
+  "cookie_status_not_configured": "Not configured",
+  "cookie_status_test_success": "Test successful",
+  "cookie_status_test_failed": "Test failed",
+  "cookie_status_configured_with_region": "Configured (Region: {region})",
+  "cookie_status_test_success_with_region": "Test successful (Region: {region})",
+  "profile_default": "Default Config",
+  "exception.ytdlp_execution_failed": "yt-dlp execution failed (exit code {returncode}): {error}"
 }

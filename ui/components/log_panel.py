@@ -260,10 +260,10 @@ class LogPanel(ctk.CTkFrame):
             status_display = t("status_idle")
         
         # 格式化 Cookie 状态
-        cookie_display = self.cookie_status if self.cookie_status else "未配置"
+        cookie_display = self.cookie_status if self.cookie_status else t("cookie_status_not_configured")
         
         # 使用更清晰的分隔符，增加间隔（至少3个空格）
-        return f"计划：{total}   ••   已处理：成功 {success} / 失败 {failed}   ••   状态：{status_display}   ••   Cookie：{cookie_display}"
+        return f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{t('stats_success')} {success} / {t('stats_failed')} {failed}   ••   {t('stats_status')}：{status_display}   ••   {t('stats_cookie')}：{cookie_display}"
     
     def refresh_language(self):
         """刷新语言相关文本"""

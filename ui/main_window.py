@@ -612,20 +612,20 @@ class MainWindow(ctk.CTk):
         
         if cookie:
             if test_result == "failed":
-                cookie_status = "测试失败"
+                cookie_status = t("cookie_status_test_failed")
             elif test_result == "success":
                 if region:
-                    cookie_status = f"测试成功 (地区: {region})"
+                    cookie_status = t("cookie_status_test_success_with_region", region=region)
                 else:
-                    cookie_status = "测试成功"
+                    cookie_status = t("cookie_status_test_success")
             else:
                 # 未测试，只显示配置状态
                 if region:
-                    cookie_status = f"已配置 (地区: {region})"
+                    cookie_status = t("cookie_status_configured_with_region", region=region)
                 else:
-                    cookie_status = "已配置"
+                    cookie_status = t("cookie_status_configured")
         else:
-            cookie_status = "未配置"
+            cookie_status = t("cookie_status_not_configured")
         
         if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_cookie_status'):
             self.log_panel.update_cookie_status(cookie_status)

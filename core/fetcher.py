@@ -158,8 +158,11 @@ def _map_ytdlp_error_to_app_error(
     
     # 其他 yt-dlp 错误（视为外部服务错误）
     msg = error_message[:200] if error_message else (stderr[:200] if stderr else '未知错误')
+    # 使用翻译键格式，日志系统会自动翻译
+    from core.logger import translate_exception
+    translated_msg = translate_exception("ytdlp_execution_failed", returncode=returncode, error=msg)
     return AppException(
-        message=f"yt-dlp 执行失败 (退出码 {returncode}): {msg}",
+        message=translated_msg,
         error_type=ErrorType.EXTERNAL_SERVICE
     )
 

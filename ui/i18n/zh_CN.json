@@ -392,5 +392,20 @@
   "exception.file_not_found": "文件未找到: {path}",
   "exception.invalid_config": "配置无效: {detail}",
   "exception.processing_failed": "处理失败: {error}",
-  "exception.unknown_error": "未知错误: {error}"
+  "exception.unknown_error": "未知错误: {error}",
+  
+  "stats_planned": "计划",
+  "stats_processed": "已处理",
+  "stats_success": "成功",
+  "stats_failed": "失败",
+  "stats_status": "状态",
+  "stats_cookie": "Cookie",
+  "cookie_status_configured": "已配置",
+  "cookie_status_not_configured": "未配置",
+  "cookie_status_test_success": "测试成功",
+  "cookie_status_test_failed": "测试失败",
+  "cookie_status_configured_with_region": "已配置 (地区: {region})",
+  "cookie_status_test_success_with_region": "测试成功 (地区: {region})",
+  "profile_default": "默认配置",
+  "exception.ytdlp_execution_failed": "yt-dlp 执行失败 (退出码 {returncode}): {error}"
 }

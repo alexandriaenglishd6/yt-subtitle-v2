@@ -93,12 +93,31 @@ class VideoProcessor:
         if translation_ai_config and translation_ai_config.enabled:
             try:
                 self.translation_llm_client = create_llm_client(translation_ai_config)
-                profile_name = profile_manager.task_mapping.get("subtitle_translate", "默认配置")
+                profile_name = profile_manager.task_mapping.get("subtitle_translate", t("profile_default"))
                 logger.info(t("translation_ai_client_init_success", 
                              provider=translation_ai_config.provider, 
                              model=translation_ai_config.model) + f" (Profile: {profile_name})")
             except LLMException as e:
-                logger.warning(t("translation_ai_client_init_failed", error=str(e)))
+                # 翻译异常消息
+                error_msg = str(e)
+                # 如果异常消息看起来像翻译键，尝试翻译
+                if error_msg.startswith("exception."):
+                    from core.logger import translate_exception
+                    # 尝试解析翻译键和参数
+                    if ":" in error_msg:
+                        key_part = error_msg.split(":")[0]
+                        # 简单解析参数（格式：key:param1=value1,param2=value2）
+                        params = {}
+                        if ":" in error_msg:
+                            param_str = error_msg.split(":", 1)[1]
+                            for param in param_str.split(","):
+                                if "=" in param:
+                                    k, v = param.split("=", 1)
+                                    params[k.strip()] = v.strip()
+                        error_msg = translate_exception(key_part, **params)
+                    else:
+                        error_msg = translate_exception(error_msg)
+                logger.warning(t("translation_ai_client_init_failed", error=error_msg))
                 self.translation_llm_client = None
                 # 保存初始化失败的原因和错误类型（用于后续提示和错误分类）
                 self.translation_llm_init_error = str(e)
@@ -121,12 +140,31 @@ class VideoProcessor:
         if summary_ai_config and summary_ai_config.enabled:
             try:
                 self.summary_llm_client = create_llm_client(summary_ai_config)
-                profile_name = profile_manager.task_mapping.get("subtitle_summarize", "默认配置")
+                profile_name = profile_manager.task_mapping.get("subtitle_summarize", t("profile_default"))
                 logger.info(t("summary_ai_client_init_success", 
                              provider=summary_ai_config.provider, 
                              model=summary_ai_config.model) + f" (Profile: {profile_name})")
             except LLMException as e:
-                logger.warning(t("summary_ai_client_init_failed", error=str(e)))
+                # 翻译异常消息
+                error_msg = str(e)
+                # 如果异常消息看起来像翻译键，尝试翻译
+                if error_msg.startswith("exception."):
+                    from core.logger import translate_exception
+                    # 尝试解析翻译键和参数
+                    if ":" in error_msg:
+                        key_part = error_msg.split(":")[0]
+                        # 简单解析参数（格式：key:param1=value1,param2=value2）
+                        params = {}
+                        if ":" in error_msg:
+                            param_str = error_msg.split(":", 1)[1]
+                            for param in param_str.split(","):
+                                if "=" in param:
+                                    k, v = param.split("=", 1)
+                                    params[k.strip()] = v.strip()
+                        error_msg = translate_exception(key_part, **params)
+                    else:
+                        error_msg = translate_exception(error_msg)
+                logger.warning(t("summary_ai_client_init_failed", error=error_msg))
                 self.summary_llm_client = None
         else:
             logger.info(t("summary_ai_disabled"))
