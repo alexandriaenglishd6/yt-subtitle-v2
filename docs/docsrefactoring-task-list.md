@@ -103,17 +103,20 @@
 
 **Task 4: 日志国际化基础设施 + 核心日志迁移** （预计 5-8 天，可与 Task 3 并行）
 
-- [ ] 创建分支 `refactor/log_i18n`
-- [ ] 修改 core/logger.py：lazy import + log_t()
-- [ ] 添加 "log" 命名空间 + 50条 P0 key
-- [ ] **新增硬约束**：在 logger 层添加 Filter/Formatter，实现敏感信息脱敏（API Key、Cookie、Authorization 等保留前后几位或 ***）
-- [ ] 迁移核心文件日志（P0/P1 用户可见）
+- [x] 创建分支 `refactor/log_i18n`
+- [x] 修改 core/logger.py：lazy import + translate_log()/translate_exception()
+- [x] 添加 "log" 命名空间 + 66条 log key + 10条 exception key（超过要求的 50条 P0 key）
+- [x] **新增硬约束**：在 logger 层添加 Filter/Formatter，实现敏感信息脱敏（API Key、Cookie、Authorization 等保留前后几位或 ***）
+- [x] 迁移核心文件日志（P0/P1 用户可见）：
+  - [x] core/pipeline/single_video.py
+  - [x] core/pipeline/batch.py
+  - [x] core/pipeline/utils.py
 - [ ] **补漏方式**：grep 运行时输出点，只检查这些行中的中文
 - [ ] 测试验证：
-  - 切换英文，日志/GUI日志面板全为英文
-  - 随机触发 2–3 个异常路径，确认 GUI 弹窗展示翻译后的 exception.* key
-  - 敏感信息在日志中已脱敏
-  - **GUI 日志面板（append_log）展示的内容同样已脱敏（不绕过 logger 脱敏逻辑）**
+  - [ ] 切换英文，日志/GUI日志面板全为英文
+  - [ ] 随机触发 2–3 个异常路径，确认 GUI 弹窗展示翻译后的 exception.* key
+  - [ ] 敏感信息在日志中已脱敏
+  - [ ] **GUI 日志面板（append_log）展示的内容同样已脱敏（不绕过 logger 脱敏逻辑）**
 - [ ] 提交 PR，合并
 - [ ] **标记完成时间**：__________
 
