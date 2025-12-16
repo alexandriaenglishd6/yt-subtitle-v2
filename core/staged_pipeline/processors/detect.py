@@ -72,7 +72,7 @@ class DetectProcessor:
             if data.run_id:
                 set_log_context(run_id=data.run_id, task="detect", video_id=vid)
             
-            logger.info(f"检测字幕: {vid} - {title_preview}...", video_id=vid)
+            logger.info_i18n("detect_subtitle_info", video_id=vid, title_preview=title_preview)
             
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():

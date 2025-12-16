@@ -448,6 +448,7 @@
   "log.proxy_failed_try_next": "Proxy {proxy} failed, will try next proxy or direct connection",
   
   "log.detect_subtitle_start": "Starting subtitle detection: {video_id}",
+  "log.detect_subtitle_info": "Detecting subtitles: {video_id} - {title_preview}...",
   "log.detect_subtitle_complete": "Subtitle detection complete: {video_id} - Manual subtitles: {manual_count} types, Auto subtitles: {auto_count} types",
   "log.detect_manual_languages": "Manual subtitle languages: {languages}",
   "log.detect_auto_languages": "Auto subtitle languages: {languages}",

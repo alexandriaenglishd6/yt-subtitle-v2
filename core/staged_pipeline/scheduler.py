@@ -286,7 +286,7 @@ class StagedPipeline:
             )
             
             logger.info(
-                f"处理完成: 总计 {self._total_count}, 成功 {self._success_count}, 失败 {self._failed_count}",
+                t("log.task_complete", total=self._total_count, success=self._success_count, failed=self._failed_count),
                 run_id=self.run_id
             )
             
