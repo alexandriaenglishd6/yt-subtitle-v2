@@ -723,7 +723,7 @@ class Logger:
         
         Args:
             key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
-            video_id: 视频ID（可选）
+            video_id: 视频ID（可选，也会传递给 translate_log 作为格式化参数）
             **kwargs: 格式化参数
         
         Returns:
@@ -734,7 +734,12 @@ class Logger:
             # 中文环境：msg = "检测到视频: abc123"
             # 英文环境：msg = "Video detected: abc123"
         """
-        message = translate_log(key, **kwargs)
+        # 将 video_id 也传递给 translate_log（如果提供）
+        # 注意：需要创建一个新的 kwargs 副本，避免修改原始 kwargs
+        translate_kwargs = kwargs.copy()
+        if video_id is not None:
+            translate_kwargs['video_id'] = video_id
+        message = translate_log(key, **translate_kwargs)
         self._log_with_context(logging.INFO, message, video_id, **kwargs)
         return message
     
@@ -744,7 +749,11 @@ class Logger:
         Returns:
             翻译后的消息
         """
-        message = translate_log(key, **kwargs)
+        # 将 video_id 也传递给 translate_log（如果提供）
+        translate_kwargs = kwargs.copy()
+        if video_id is not None:
+            translate_kwargs['video_id'] = video_id
+        message = translate_log(key, **translate_kwargs)
         self._log_with_context(logging.WARNING, message, video_id, **kwargs)
         return message
     
@@ -762,7 +771,11 @@ class Logger:
         Returns:
             翻译后的消息
         """
-        message = translate_log(key, **kwargs)
+        # 将 video_id 也传递给 translate_log（如果提供）
+        translate_kwargs = kwargs.copy()
+        if video_id is not None:
+            translate_kwargs['video_id'] = video_id
+        message = translate_log(key, **translate_kwargs)
         self._log_with_context(logging.ERROR, message, video_id, **kwargs)
         return message
     
