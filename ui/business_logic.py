@@ -702,7 +702,7 @@ class VideoProcessor:
         on_stats(stats)
         
         on_log("INFO", t("videos_found", count=len(videos)))
-        on_log("INFO", f"开始处理 {len(videos)} 个视频，并发数: {self.app_config.concurrency}")
+        on_log("INFO", t("log.task_start", total=len(videos), concurrency=self.app_config.concurrency))
         
         # 调用核心流水线
         result = process_video_list(
@@ -889,7 +889,7 @@ class VideoProcessor:
         on_stats(stats)
         
         on_log("INFO", t("videos_found", count=len(videos)))
-        on_log("INFO", f"开始处理 {len(videos)} 个视频，并发数: {self.app_config.concurrency}")
+        on_log("INFO", t("log.task_start", total=len(videos), concurrency=self.app_config.concurrency))
         
         # 调用核心流水线
         result = process_video_list(

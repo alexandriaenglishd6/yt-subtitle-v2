@@ -265,7 +265,7 @@ class CookieManager:
             
             if result.returncode != 0:
                 error_msg = result.stderr[:200] if result.stderr else "未知错误"
-                logger.warning(f"Cookie 测试失败: {error_msg}")
+                logger.warning_i18n("cookie_test_failed", error=error_msg)
                 return {
                     "available": False,
                     "region": None,

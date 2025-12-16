@@ -293,10 +293,14 @@ def _process_video_list_staged(
     summarize_concurrency = max(1, concurrency // 2)
     output_concurrency = max(1, concurrency)
     
-    logger.info(
-        f"开始处理 {total} 个视频（分阶段队列模式），"
-        f"各阶段并发数: DETECT={detect_concurrency}, DOWNLOAD={download_concurrency}, "
-        f"TRANSLATE={translate_concurrency}, SUMMARIZE={summarize_concurrency}, OUTPUT={output_concurrency}",
+    logger.info_i18n(
+        "task_start_staged",
+        total=total,
+        detect=detect_concurrency,
+        download=download_concurrency,
+        translate=translate_concurrency,
+        summarize=summarize_concurrency,
+        output=output_concurrency,
         run_id=run_id
     )
     

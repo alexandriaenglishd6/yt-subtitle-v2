@@ -480,7 +480,7 @@ class VideoFetcher:
                     # 如果使用了代理，标记代理失败
                     if proxy and self.proxy_manager:
                         self.proxy_manager.mark_failure(proxy, error_msg[:200])
-                        logger.warning(f"代理 {proxy} 失败，将尝试下一个代理或直连")
+                        logger.warning_i18n("proxy_failed_try_next", proxy=proxy)
                     
                     last_error = app_error
                     # 如果不是最后一次尝试，继续重试

@@ -571,7 +571,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         
                         # 验证代理URL格式（包含认证信息）
                         if has_auth:
-                            log_debug(f"代理包含认证信息: 用户名={parsed.username}, 密码={'已设置' if parsed.password else '未设置'}")
+                            log_debug(t("log.proxy_has_auth", username=parsed.username, password_status="已设置" if parsed.password else "未设置"))
                             # 验证URL解析是否正确
                             if parsed.username and not parsed.password:
                                 log_error(f"警告: 代理包含用户名但缺少密码，可能导致认证失败")
@@ -584,7 +584,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         # 对于SOCKS代理，验证URL格式是否正确
                         if parsed.scheme.lower() in ["socks4", "socks5", "socks5h"]:
                             if has_auth:
-                                log_debug(f"使用带认证的SOCKS代理: {parsed.scheme}://{parsed.username}:***@{parsed.hostname}:{parsed.port}")
+                                log_debug(t("log.proxy_socks_with_auth", proxy=f"{parsed.scheme}://{parsed.username}:***@{parsed.hostname}:{parsed.port}"))
                                 # 验证URL是否包含完整的认证信息
                                 if not parsed.username or not parsed.password:
                                     log_error(f"警告: SOCKS代理认证信息不完整（用户名: {'有' if parsed.username else '无'}, 密码: {'有' if parsed.password else '无'}）")
@@ -627,7 +627,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     )
                                     if response.status_code in [200, 301, 302, 303, 307, 308]:
                                         safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                        log_info(f"代理 {i} 测试成功: {safe_proxy} (通过 {test_url}, 状态码: {response.status_code})")
+                                        log_info(t("log.proxy_test_success_http", index=i, proxy=safe_proxy, test_url=test_url, status_code=response.status_code))
                                         test_success = True
                                         last_error = None
                                         break
@@ -675,7 +675,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 if result.returncode == 0:
                                     # 成功获取视频信息，代理可用
                                     safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                    log_info(f"代理 {i} 测试成功: {safe_proxy} (通过 yt-dlp 测试)")
+                                    log_info(t("log.proxy_test_success_ytdlp", index=i, proxy=safe_proxy))
                                     test_success = True
                                     last_error = None
                                     last_exception = None
@@ -685,7 +685,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 ]):
                                     # 代理连接成功，但需要 Cookie 认证（这说明代理是工作的）
                                     safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                    log_info(f"代理 {i} 测试成功: {safe_proxy} (代理连接正常，但测试视频需要 Cookie 认证)")
+                                    log_info(t("log.proxy_test_success_cookie_required", index=i, proxy=safe_proxy))
                                     log_debug(f"  注意: {error_msg[:150]}")
                                     test_success = True
                                     last_error = None
@@ -706,7 +706,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     if "ERROR:" in error_output and "youtube" in error_lower:
                                         # 能够连接到 YouTube 服务器，说明代理是工作的
                                         safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                        log_info(f"代理 {i} 测试成功: {safe_proxy} (代理连接正常，可访问 YouTube)")
+                                        log_info(t("log.proxy_test_success_youtube", index=i, proxy=safe_proxy))
                                         log_debug(f"  详细信息: {error_msg[:150]}")
                                         test_success = True
                                         last_error = None
@@ -872,7 +872,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                     if self.on_log_message:
                         # 显示测试总结
                         if success_count > 0:
-                            self.on_log_message("INFO", f"测试完成: {success_count}/{total} 个代理可用")
+                            self.on_log_message("INFO", t("log.proxy_test_success_summary", success=success_count, total=total))
                         if failed_count > 0:
                             self.on_log_message("WARN", t("log.proxy_test_complete", failed=failed_count, total=total))
                         
