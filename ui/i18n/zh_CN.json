@@ -375,6 +375,7 @@
   "log.cookie_file_created": "已创建 Cookie 文件: {cookie_file}",
   "log.cookie_file_exists": "使用现有 Cookie 文件: {cookie_file}",
   "log.cookies_written": "已写入 {count} 个 Cookie 到文件",
+  "log.using_cookie": "使用 Cookie",
   
   "log.ai_profile_file_not_found": "AI Profile 配置文件不存在: {path}，将使用默认配置",
   "log.ai_profile_task_not_mapped": "任务类型 '{task_type}' 未配置 profile 映射",
