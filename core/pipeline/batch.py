@@ -240,10 +240,7 @@ def process_video_list(
     success_count = sum(1 for r in result["results"] if r is True)
     failed_count = result["failed"]
     
-    logger.info(
-        f"处理完成: 总计 {total}，成功 {success_count}，失败 {failed_count}",
-        run_id=run_id
-    )
+    logger.info_i18n("task_complete", total=total, success=success_count, failed=failed_count, run_id=run_id)
     
     # 清除日志上下文
     clear_log_context()

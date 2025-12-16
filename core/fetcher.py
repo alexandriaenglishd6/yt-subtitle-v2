@@ -428,7 +428,7 @@ class VideoFetcher:
                 if proxy and proxy in tried_proxies:
                     # 如果所有代理都尝试过了，尝试直连
                     proxy = None
-                    logger.info(f"所有代理都已尝试，尝试直连")
+                    logger.info_i18n("all_proxies_tried_direct")
                 
                 if proxy:
                     tried_proxies.add(proxy)
@@ -512,7 +512,7 @@ class VideoFetcher:
                 # 超时错误：标记代理失败并重试
                 if proxy and self.proxy_manager:
                     self.proxy_manager.mark_failure(proxy, "超时")
-                    logger.warning(f"代理 {proxy} 超时，将尝试下一个代理或直连")
+                    logger.warning_i18n("proxy_timeout_try_next", proxy=proxy)
                 
                 last_error = AppException(
                     message=f"获取视频信息超时: {url}",

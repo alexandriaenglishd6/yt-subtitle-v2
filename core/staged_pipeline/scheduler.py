@@ -232,7 +232,7 @@ class StagedPipeline:
         self._success_count = 0
         self._failed_count = 0
         
-        logger.info(f"开始处理 {self._total_count} 个视频（分阶段队列模式）", run_id=self.run_id)
+        logger.info_i18n("processing_start_staged", count=self._total_count, run_id=self.run_id)
         
         try:
             # 1. 启动所有阶段

@@ -159,7 +159,7 @@ class CookieManager:
                 else:
                     logger.debug("PREF Cookie 中未找到 gl 参数")
             else:
-                logger.debug("Cookie 中未找到 PREF 字段")
+                logger.debug_i18n("cookie_pref_not_found")
             
             # 方法2：尝试从其他可能的 Cookie 字段中提取地区信息
             # 检查是否有其他包含地区信息的 Cookie
@@ -177,7 +177,7 @@ class CookieManager:
                         logger.info(f"从 Cookie 字段 {key} 中提取到地区代码: {region}")
                         return region
             
-            logger.debug("未能从 Cookie 中提取地区信息")
+            logger.debug_i18n("cookie_region_extract_failed")
             return None
             
         except Exception as e:
@@ -231,7 +231,7 @@ class CookieManager:
                 "details": {}
             }
         
-        logger.info("开始测试 Cookie...")
+        logger.info_i18n("cookie_test_start")
         
         try:
             # 获取 Cookie 文件路径
@@ -281,7 +281,7 @@ class CookieManager:
                 data = json.loads(result.stdout)
                 region = self._extract_region_from_cookie()
                 
-                logger.info("Cookie 测试成功：Cookie 可用")
+                logger.info_i18n("cookie_test_success")
                 if region:
                     logger.info(f"检测到地区: {region}")
                 

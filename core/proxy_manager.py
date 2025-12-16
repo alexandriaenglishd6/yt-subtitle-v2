@@ -140,12 +140,12 @@ class ProxyManager:
             logger.warning(f"已过滤 {len(invalid_proxies)} 个无效代理，保留 {len(self.proxies)} 个有效代理")
         
         if self.proxies:
-            logger.info(f"代理管理器初始化: {len(self.proxies)} 个有效代理")
+            logger.info_i18n("proxy_manager_init", count=len(self.proxies))
         else:
             if proxies:
-                logger.warning("代理管理器初始化: 所有代理都无效，将不使用代理")
+                logger.warning_i18n("proxy_manager_init_all_invalid")
             else:
-                logger.info("代理管理器初始化: 无代理配置")
+                logger.info_i18n("proxy_manager_init_none")
     
     def _is_valid_proxy(self, proxy: str) -> bool:
         """验证代理格式是否有效
@@ -445,14 +445,14 @@ class ProxyManager:
         
         self._probe_thread = threading.Thread(target=probe_worker, daemon=True, name="ProxyHealthProbe")
         self._probe_thread.start()
-        logger.info("健康探测线程已启动")
+        logger.info_i18n("proxy_health_probe_started")
     
     def stop_health_probe(self):
         """停止健康探测线程"""
         if self._probe_thread and self._probe_thread.is_alive():
             self._stop_probe.set()
             self._probe_thread.join(timeout=5)
-            logger.info("健康探测线程已停止")
+            logger.info_i18n("proxy_health_probe_stopped")
     
     def __del__(self):
         """析构函数，确保线程正确停止"""

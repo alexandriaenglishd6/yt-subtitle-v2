@@ -407,5 +407,38 @@
   "cookie_status_configured_with_region": "已配置 (地区: {region})",
   "cookie_status_test_success_with_region": "测试成功 (地区: {region})",
   "profile_default": "默认配置",
-  "exception.ytdlp_execution_failed": "yt-dlp 执行失败 (退出码 {returncode}): {error}"
+  "exception.ytdlp_execution_failed": "yt-dlp 执行失败 (退出码 {returncode}): {error}",
+  
+  "log.cookie_pref_not_found": "Cookie 中未找到 PREF 字段",
+  "log.cookie_region_extract_failed": "未能从 Cookie 中提取地区信息",
+  "log.cookie_file_detect_subtitle": "使用 Cookie 文件检测字幕: {cookie_file}",
+  
+  "log.proxy_health_probe_started": "健康探测线程已启动",
+  "log.proxy_health_probe_stopped": "健康探测线程已停止",
+  "log.proxy_manager_init": "代理管理器初始化: {count} 个有效代理",
+  "log.proxy_manager_init_all_invalid": "代理管理器初始化: 所有代理都无效，将不使用代理",
+  "log.proxy_manager_init_none": "代理管理器初始化: 无代理配置",
+  "log.proxy_test_start": "开始测试 {count} 个代理...",
+  "log.proxy_test_item": "测试代理 {current}/{total}: {proxy}",
+  "log.proxy_type": "代理类型: {type}, 地址: {address}",
+  "log.proxy_socks_no_auth": "使用无认证的SOCKS代理: {proxy}",
+  "log.proxy_test_ytdlp": "使用 yt-dlp 测试代理（与实际使用场景一致）",
+  "log.proxy_test_ytdlp_connecting": "使用 yt-dlp 测试代理连接...",
+  "log.proxy_test_ytdlp_timeout": "yt-dlp 测试超时",
+  "log.proxy_connection_error": "代理 {index} 连接错误: {error}",
+  "log.proxy_test_complete": "测试完成: {failed}/{total} 个代理失败",
+  "log.proxy_test_failed_detail": "代理测试失败: {proxy} - 连接失败: {error}",
+  "log.proxy_timeout_try_next": "代理 {proxy} 超时，将尝试下一个代理或直连",
+  "log.all_proxies_tried_direct": "所有代理都已尝试，尝试直连",
+  
+  "log.detect_subtitle_start": "开始检测字幕: {video_id}",
+  "log.detect_subtitle_complete": "字幕检测完成: {video_id} - 人工字幕: {manual_count} 种, 自动字幕: {auto_count} 种",
+  "log.detect_manual_languages": "人工字幕语言: {languages}",
+  "log.detect_auto_languages": "自动字幕语言: {languages}",
+  
+  "log.stage_start": "启动阶段 {stage}，worker 数量: {workers}",
+  "log.stage_stop": "停止阶段 {stage}...",
+  "log.stage_stopped": "阶段 {stage} 已停止",
+  "log.video_already_processed_skip": "视频已处理，跳过: {video_id}",
+  "log.processing_start_staged": "开始处理 {count} 个视频（分阶段队列模式）"
 }

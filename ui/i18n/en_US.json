@@ -412,5 +412,38 @@
   "cookie_status_configured_with_region": "Configured (Region: {region})",
   "cookie_status_test_success_with_region": "Test successful (Region: {region})",
   "profile_default": "Default Config",
-  "exception.ytdlp_execution_failed": "yt-dlp execution failed (exit code {returncode}): {error}"
+  "exception.ytdlp_execution_failed": "yt-dlp execution failed (exit code {returncode}): {error}",
+  
+  "log.cookie_pref_not_found": "PREF field not found in Cookie",
+  "log.cookie_region_extract_failed": "Failed to extract region information from Cookie",
+  "log.cookie_file_detect_subtitle": "Using Cookie file to detect subtitles: {cookie_file}",
+  
+  "log.proxy_health_probe_started": "Health probe thread started",
+  "log.proxy_health_probe_stopped": "Health probe thread stopped",
+  "log.proxy_manager_init": "Proxy manager initialized: {count} valid proxies",
+  "log.proxy_manager_init_all_invalid": "Proxy manager initialized: All proxies are invalid, will not use proxies",
+  "log.proxy_manager_init_none": "Proxy manager initialized: No proxy configured",
+  "log.proxy_test_start": "Starting to test {count} proxies...",
+  "log.proxy_test_item": "Testing proxy {current}/{total}: {proxy}",
+  "log.proxy_type": "Proxy type: {type}, address: {address}",
+  "log.proxy_socks_no_auth": "Using unauthenticated SOCKS proxy: {proxy}",
+  "log.proxy_test_ytdlp": "Using yt-dlp to test proxy (consistent with actual usage scenario)",
+  "log.proxy_test_ytdlp_connecting": "Using yt-dlp to test proxy connection...",
+  "log.proxy_test_ytdlp_timeout": "yt-dlp test timeout",
+  "log.proxy_connection_error": "Proxy {index} connection error: {error}",
+  "log.proxy_test_complete": "Test complete: {failed}/{total} proxies failed",
+  "log.proxy_test_failed_detail": "Proxy test failed: {proxy} - Connection failed: {error}",
+  "log.proxy_timeout_try_next": "Proxy {proxy} timeout, will try next proxy or direct connection",
+  "log.all_proxies_tried_direct": "All proxies have been tried, attempting direct connection",
+  
+  "log.detect_subtitle_start": "Starting subtitle detection: {video_id}",
+  "log.detect_subtitle_complete": "Subtitle detection complete: {video_id} - Manual subtitles: {manual_count} types, Auto subtitles: {auto_count} types",
+  "log.detect_manual_languages": "Manual subtitle languages: {languages}",
+  "log.detect_auto_languages": "Auto subtitle languages: {languages}",
+  
+  "log.stage_start": "Starting stage {stage}, worker count: {workers}",
+  "log.stage_stop": "Stopping stage {stage}...",
+  "log.stage_stopped": "Stage {stage} stopped",
+  "log.video_already_processed_skip": "Video already processed, skipping: {video_id}",
+  "log.processing_start_staged": "Starting to process {count} videos (staged queue mode)"
 }
