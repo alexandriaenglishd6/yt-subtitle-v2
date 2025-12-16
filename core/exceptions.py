@@ -73,6 +73,20 @@ class TaskCancelledError(AppException):
         self.reason = reason
 
 
+class LocalModelError(AppException):
+    """本地模型服务未启动异常
+    
+    当本地模型服务（Ollama/LM Studio）未启动时抛出此异常。
+    """
+    
+    def __init__(self):
+        """初始化本地模型错误"""
+        super().__init__(
+            message="本地模型服务未启动，请先运行 Ollama 或 LM Studio",
+            error_type=ErrorType.EXTERNAL_SERVICE
+        )
+
+
 def map_llm_error_to_app_error(llm_error_type: str) -> ErrorType:
     """将 LLMErrorType 映射为 AppException 的 ErrorType
     

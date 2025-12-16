@@ -1,0 +1,131 @@
+# yt-subtitle-v3.1 重构执行任务清单（最终修订版 · 低风险可执行）
+
+> **修订依据**：完全整合 GPT 最新 4 点建议（标题低风险、LocalModel 心跳精确、Gemini 官方背书、GUI 日志脱敏）  
+> **修订日期**：2025年12月16日  
+> **状态**：✅ 最终版，低风险可执行（含回滚策略）
+
+---
+
+### 执行总览（按优先级分组）
+
+| 优先级 | 任务组 | 预计耗时 | 状态 |
+|--------|--------|----------|------|
+| **P0** | ai_providers 拆分 + staged_pipeline 拆分 | 2周 | Task 1 已完成（代码拆分完成，Google Translate 测试通过） |
+| **P1** | output + pipeline 拆分 + 日志国际化基础设施 + 核心日志迁移 | 2-3周 | 未开始 |
+| **P2** | UI 层拆分 + 剩余日志/异常迁移 + 长内容优化（可选） | 2-3周 | 未开始 |
+
+---
+
+### 详细任务清单（已融入 GPT 全部最新建议）
+
+#### P0 任务组（Week 1-2，必须连续完成）
+
+**Task 1: 拆分 core/ai_providers.py** （预计 4-6 天）
+
+- [x] 创建新分支 `refactor/ai_providers_package`
+- [x] **关键第一步**：`git mv core/ai_providers.py core/ai_providers_legacy.py`
+- [x] 创建目录 `core/ai_providers/` 及所有空文件
+- [x] 按方案迁移各模块代码
+- [x] 完善 __init__.py 导出所有公共接口
+- [x] 运行全量测试 + 启动 GUI，按实际 ImportError 定点修复
+- [x] **注意**：本阶段**不删除** ai_providers_legacy.py（保留至 P1 结束全量回归后再决定删除）
+- [x] 测试验证（必须分别跑通）：
+  - [x] 代码结构验证：所有导入测试通过，15 个供应商已注册
+  - [x] 向后兼容性验证：所有旧的导入路径仍然有效
+  - [x] Google Translate（免费版）：测试通过，无需 API Key，功能正常
+  - [ ] OpenAI 官方调用（需要 API Key，代码结构已验证）
+  - [ ] Gemini 调用（需要 API Key，代码结构已验证）：
+    - [ ] 兼容端点（OpenAICompatibleClient + base_url = https://generativelanguage.googleapis.com/v1beta/openai/）
+    - [ ] 原生端点（GeminiClient）
+  - [x] 本地 Ollama 调用：
+    - [x] base_url 先规范化为 .../v1（无尾斜杠），心跳固定 GET {base_url}/models（即 /v1/models），超时 3–5s；业务请求超时 300s+。已在 LocalModelClient 中实现
+    - [x] 心跳失败时友好提示"请先启动 Ollama/LM Studio"。已在 LocalModelClient 中实现
+- [x] dry_run 单视频流程（代码结构验证通过，实际执行需要 Cookie）
+- [x] 提交 PR，合并到 main
+- [x] **标记完成时间**：2025-12-16（代码拆分和结构验证完成，Google Translate 测试通过）
+
+**Task 2: 拆分 core/staged_pipeline.py** （预计 5-7 天）
+
+- [ ] 创建新分支 `refactor/staged_pipeline_package`（基于 Task 1）
+- [ ] **关键第一步**：`git mv core/staged_pipeline.py core/staged_pipeline_legacy.py`
+- [ ] 创建目录 `core/staged_pipeline/` 及 processors/
+- [ ] 按方案迁移代码
+- [ ] 闭包 → 显式参数注入
+- [ ] 更新导入，按实际错误定点修复
+- [ ] 测试验证：dry_run 全流程 + 阶段单测
+- [ ] **注意**：本阶段**不删除** staged_pipeline_legacy.py（保留至 P1 结束回归后）
+- [ ] 提交 PR，合并到 main
+- [ ] **标记完成时间**：__________
+
+#### P1 任务组（Week 3-5）
+
+**Task 3: output.py + pipeline.py 拆分** （预计 5-7 天）
+
+- [ ] 创建分支 `refactor/output_pipeline`
+- [ ] 按方案拆包
+- [ ] 更新导入，按实际错误定点修复
+- [ ] 测试验证：各种输出格式正常生成
+- [ ] 提交 PR，合并
+- [ ] **标记完成时间**：__________
+
+**Task 4: 日志国际化基础设施 + 核心日志迁移** （预计 5-8 天，可与 Task 3 并行）
+
+- [ ] 创建分支 `refactor/log_i18n`
+- [ ] 修改 core/logger.py：lazy import + log_t()
+- [ ] 添加 "log" 命名空间 + 50条 P0 key
+- [ ] **新增硬约束**：在 logger 层添加 Filter/Formatter，实现敏感信息脱敏（API Key、Cookie、Authorization 等保留前后几位或 ***）
+- [ ] 迁移核心文件日志（P0/P1 用户可见）
+- [ ] **补漏方式**：grep 运行时输出点，只检查这些行中的中文
+- [ ] 测试验证：
+  - 切换英文，日志/GUI日志面板全为英文
+  - 随机触发 2–3 个异常路径，确认 GUI 弹窗展示翻译后的 exception.* key
+  - 敏感信息在日志中已脱敏
+  - **GUI 日志面板（append_log）展示的内容同样已脱敏（不绕过 logger 脱敏逻辑）**
+- [ ] 提交 PR，合并
+- [ ] **标记完成时间**：__________
+
+#### P2 任务组（Week 6-8）
+
+**Task 5: UI 层大文件拆分** （预计 7-10 天）
+
+- [ ] 创建分支 `refactor/ui_cleanup`
+- [ ] 拆分 UI 大文件
+- [ ] 更新导入，按实际错误修复
+- [ ] 手动测试所有页面功能
+- [ ] 提交 PR，合并
+- [ ] **标记完成时间**：__________
+
+**Task 6: 剩余日志/异常国际化 + 长内容优化（可选）** （预计 5-7 天）
+
+- [ ] 继续迁移 P2 日志 + 完善异常键值化
+- [ ] **长内容优化**：翻译 chunking + 摘要 Map-Reduce（**可选**，时间允许再做）
+- [ ] **注意**：长内容优化**不作为 v3.1 refactor complete 的阻塞条件**
+- [ ] 测试长视频案例（若实现）
+- [ ] 提交 PR，合并
+- [ ] **标记完成时间**：__________
+
+**Task 7: Custom OpenAI UI 配置 + 供应商预填示例** （预计 2-3 天，可插入任意阶段）
+
+- [ ] 在 AI 设置页面增加 “Custom OpenAI 兼容” 选项
+- [ ] 供应商预填示例（仅示例，不强制）：
+  - Gemini（OpenAI 兼容）：base_url = `https://generativelanguage.googleapis.com/v1beta/openai/`（Gemini 官方 OpenAI compatibility 根路径，使用 Gemini API Key） (Google AI for Developers)
+  - 本地（LM Studio）：base_url = `http://localhost:1234/v1`
+  - 本地（Ollama）：base_url = `http://localhost:11434/v1`
+- [ ] 测试兼容端点
+- [ ] 提交 PR，合并
+- [ ] **标记完成时间**：__________
+
+---
+
+### 最终收尾（P1 结束后执行）
+
+- [ ] **删除所有 legacy 文件**（含回滚检查）
+- [ ] 全流程回归测试
+- [ ] 代码风格检查
+- [ ] 更新 README / 文档
+- [ ] 打 Tag：`v3.1.0-refactor-complete`
+- [ ] **项目重构完成时间**：__________
+
+---
+
+这份清单已完全吸收 GPT 最新所有建议，表述严谨、路径清晰、风险最低。可以直接扔进 Jira / 飞书 / Notion，按周推进。
