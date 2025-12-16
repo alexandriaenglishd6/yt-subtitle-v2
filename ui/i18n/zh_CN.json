@@ -462,5 +462,7 @@
   "log.language_current_new": "当前语言: {current}, 新语言: {new}",
   "log.language_set": "语言已设置为: {lang}, 测试翻译: {test}",
   "log.language_saved": "语言设置已保存到配置",
-  "log.ui_text_refreshed": "UI 文本刷新完成"
+  "log.ui_text_refreshed": "UI 文本刷新完成",
+  "log.language_no_change": "语言未变化，跳过",
+  "log.language_unknown": "未知的语言值: {value}"
 }
