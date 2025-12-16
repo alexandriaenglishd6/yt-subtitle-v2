@@ -443,6 +443,7 @@
   "log.proxy_failed_try_next": "代理 {proxy} 失败，将尝试下一个代理或直连",
   
   "log.detect_subtitle_start": "开始检测字幕: {video_id}",
+  "log.detect_subtitle_info": "检测字幕: {video_id} - {title_preview}...",
   "log.detect_subtitle_complete": "字幕检测完成: {video_id} - 人工字幕: {manual_count} 种, 自动字幕: {auto_count} 种",
   "log.detect_manual_languages": "人工字幕语言: {languages}",
   "log.detect_auto_languages": "自动字幕语言: {languages}",
