@@ -12,6 +12,7 @@ from core.logger import get_logger
 from core.exceptions import ErrorType
 from core.cancel_token import CancelToken
 from core.failure_logger import FailureLogger
+from ui.i18n_manager import t
 
 from .data_types import StageData
 from .queue import StageQueue
