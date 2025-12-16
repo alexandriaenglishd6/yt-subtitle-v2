@@ -32,8 +32,9 @@ class AnthropicClient:
         self.api_key = load_api_key(api_key_config)
         
         if not self.api_key:
+            # 使用翻译键格式，日志系统会自动翻译
             raise LLMException(
-                f"未找到 Anthropic API Key（配置: {api_key_config}）",
+                f"exception.ai_api_key_not_found:provider=Anthropic,config={api_key_config}",
                 LLMErrorType.AUTH
             )
         

@@ -202,7 +202,7 @@ class VideoFetcher:
             )
             if result.returncode == 0:
                 version = result.stdout.strip()
-                logger.info(f"yt-dlp 可用，版本: {version}")
+                logger.info_i18n("ytdlp_available", version=version)
             else:
                 logger.warning("yt-dlp 可能不可用，请确保已安装")
         except FileNotFoundError:
@@ -441,9 +441,9 @@ class VideoFetcher:
                 # 如果配置了代理，添加代理参数
                 if proxy:
                     cmd.extend(["--proxy", proxy])
-                    logger.debug(f"使用代理: {proxy}")
+                    logger.debug_i18n("using_proxy", proxy=proxy)
                 else:
-                    logger.debug("使用直连")
+                    logger.debug_i18n("using_direct_connection")
                 
                 # 如果配置了 Cookie，添加 Cookie 参数
                 if self.cookie_manager:
@@ -451,7 +451,7 @@ class VideoFetcher:
                     if cookie_file:
                         cmd.extend(["--cookies", cookie_file])
                         if attempt == 0:  # 只在第一次尝试时记录 Cookie 使用
-                            logger.info(f"使用 Cookie 文件: {cookie_file}")
+                            logger.info_i18n("using_cookie_file", cookie_file=cookie_file)
                     else:
                         if attempt == 0:
                             logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径")
@@ -599,14 +599,14 @@ class VideoFetcher:
             # 如果配置了代理，添加代理参数
             if proxy:
                 cmd.extend(["--proxy", proxy])
-                logger.debug(f"使用代理: {proxy}")
+                logger.debug_i18n("using_proxy", proxy=proxy)
             
             # 如果配置了 Cookie，添加 Cookie 参数
             if self.cookie_manager:
                 cookie_file = self.cookie_manager.get_cookie_file_path()
                 if cookie_file:
                     cmd.extend(["--cookies", cookie_file])
-                    logger.debug("使用 Cookie")
+                    logger.debug_i18n("using_cookie")
             
             cmd.append(channel_url)
             
@@ -732,14 +732,14 @@ class VideoFetcher:
             # 如果配置了代理，添加代理参数
             if proxy:
                 cmd.extend(["--proxy", proxy])
-                logger.debug(f"使用代理: {proxy}")
+                logger.debug_i18n("using_proxy", proxy=proxy)
             
             # 如果配置了 Cookie，添加 Cookie 参数
             if self.cookie_manager:
                 cookie_file = self.cookie_manager.get_cookie_file_path()
                 if cookie_file:
                     cmd.extend(["--cookies", cookie_file])
-                    logger.debug("使用 Cookie")
+                    logger.debug_i18n("using_cookie")
             
             cmd.append(playlist_url)
             

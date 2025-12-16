@@ -108,7 +108,7 @@ class CookieManager:
                 line = f"{domain}\tTRUE\t/\t{secure_flag}\t0\t{key}\t{value}\n"
                 temp_file.write(line)
             
-            logger.debug(f"已写入 {len(cookies)} 个 Cookie 到文件")
+            logger.debug_i18n("cookies_written", count=len(cookies))
             
             temp_file.close()
             return temp_path
@@ -196,13 +196,13 @@ class CookieManager:
         
         # 如果已经有临时文件，直接返回
         if self._temp_cookie_file and self._temp_cookie_file.exists():
-            logger.debug(f"使用现有 Cookie 文件: {self._temp_cookie_file}")
+            logger.debug_i18n("cookie_file_exists", cookie_file=str(self._temp_cookie_file))
             return str(self._temp_cookie_file)
         
         # 创建新的临时文件
         self._temp_cookie_file = self._cookie_string_to_netscape_file(self.cookie_string)
         if self._temp_cookie_file:
-            logger.info(f"已创建 Cookie 文件: {self._temp_cookie_file}")
+            logger.info_i18n("cookie_file_created", cookie_file=str(self._temp_cookie_file))
             return str(self._temp_cookie_file)
         else:
             logger.warning("创建 Cookie 文件失败")

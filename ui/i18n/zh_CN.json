@@ -368,6 +368,20 @@
   "log.fetch_channel_videos_failed": "获取频道视频列表失败: {error}",
   "log.fetch_playlist_videos_failed": "获取播放列表视频失败: {error}",
   
+  "log.ytdlp_available": "yt-dlp 可用，版本: {version}",
+  "log.using_direct_connection": "使用直连",
+  "log.using_proxy": "使用代理: {proxy}",
+  "log.using_cookie_file": "使用 Cookie 文件: {cookie_file}",
+  "log.cookie_file_created": "已创建 Cookie 文件: {cookie_file}",
+  "log.cookie_file_exists": "使用现有 Cookie 文件: {cookie_file}",
+  "log.cookies_written": "已写入 {count} 个 Cookie 到文件",
+  
+  "log.ai_profile_file_not_found": "AI Profile 配置文件不存在: {path}，将使用默认配置",
+  "log.ai_profile_task_not_mapped": "任务类型 '{task_type}' 未配置 profile 映射",
+  "log.ai_profile_task_fallback": "任务类型 '{task_type}' 未配置 Profile，使用回退配置",
+  "log.ai_client_init_failed": "初始化 {provider} 客户端失败: {error}",
+  "log.ai_api_key_not_found": "未找到 {provider} API Key（配置: {config}）",
+  
   "exception.download_failed": "下载失败: {reason}",
   "exception.translation_failed": "翻译失败: {reason}",
   "exception.summary_failed": "摘要生成失败: {reason}",

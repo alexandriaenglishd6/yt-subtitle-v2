@@ -373,6 +373,21 @@
   "log.fetch_channel_videos_failed": "Failed to fetch channel videos: {error}",
   "log.fetch_playlist_videos_failed": "Failed to fetch playlist videos: {error}",
   
+  "log.ytdlp_available": "yt-dlp available, version: {version}",
+  "log.using_direct_connection": "Using direct connection",
+  "log.using_proxy": "Using proxy: {proxy}",
+  "log.using_cookie_file": "Using Cookie file: {cookie_file}",
+  "log.cookie_file_created": "Cookie file created: {cookie_file}",
+  "log.cookie_file_exists": "Using existing Cookie file: {cookie_file}",
+  "log.cookies_written": "Written {count} cookies to file",
+  
+  "log.ai_profile_file_not_found": "AI Profile config file not found: {path}, will use default config",
+  "log.ai_profile_task_not_mapped": "Task type '{task_type}' not configured with profile mapping",
+  "log.ai_profile_task_fallback": "Task type '{task_type}' not configured with Profile, using fallback config",
+  "log.ai_client_init_failed": "Failed to initialize {provider} client: {error}",
+  "log.ai_api_key_not_found": "{provider} API Key not found (config: {config})",
+  "log.using_cookie": "Using Cookie",
+  
   "exception.download_failed": "Download failed: {reason}",
   "exception.translation_failed": "Translation failed: {reason}",
   "exception.summary_failed": "Summary generation failed: {reason}",
