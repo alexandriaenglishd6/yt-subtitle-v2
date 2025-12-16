@@ -11,7 +11,7 @@
 | 优先级 | 任务组 | 预计耗时 | 状态 |
 |--------|--------|----------|------|
 | **P0** | ai_providers 拆分 + staged_pipeline 拆分 | 2周 | ✅ Task 1 和 Task 2 已完成（代码拆分完成，测试通过，已合并到 main） |
-| **P1** | output + pipeline 拆分 + 日志国际化基础设施 + 核心日志迁移 | 2-3周 | Task 3 已完成（代码拆分完成，测试通过） |
+| **P1** | output + pipeline 拆分 + 日志国际化基础设施 + 核心日志迁移 | 2-3周 | ✅ Task 3 已完成（代码拆分完成，测试通过，已合并到 main） |
 | **P2** | UI 层拆分 + 剩余日志/异常迁移 + 长内容优化（可选） | 2-3周 | 未开始 |
 
 ---
@@ -97,9 +97,9 @@
   - [x] 单元测试：`test_staged_pipeline_detect_output.py::test_detect_only` 通过
 - [x] **注意**：本阶段**不删除** output_legacy.py 和 pipeline_legacy.py（保留至 P1 结束回归后）
 - [x] 提交更改：`git commit -m "refactor: 拆分 core/output.py 和 core/pipeline.py 为包结构"`
-- [ ] 推送分支：`git push origin refactor/output_pipeline`
-- [ ] 创建 PR，合并到 main
-- [x] **标记完成时间**：2025-12-16（代码拆分完成，测试通过）
+- [x] 推送分支：`git push origin refactor/output_pipeline`
+- [x] 创建 PR，合并到 main
+- [x] **标记完成时间**：2025-12-16（代码拆分完成，测试通过，已合并到 main）
 
 **Task 4: 日志国际化基础设施 + 核心日志迁移** （预计 5-8 天，可与 Task 3 并行）
 
