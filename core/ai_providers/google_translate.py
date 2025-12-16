@@ -108,7 +108,7 @@ class GoogleTranslateClient:
                     target_lang_short = self._normalize_lang_code(target_lang)
                 else:
                     # 完全无法提取，使用默认值（但这是不应该发生的情况）
-                    logger.warning("无法从 prompt 中提取语言信息，使用默认值（auto -> zh-CN）")
+                    logger.warning_i18n("ai_extract_language_failed")
                     source_lang_short = "auto"
                     target_lang_short = "zh-CN"
                 

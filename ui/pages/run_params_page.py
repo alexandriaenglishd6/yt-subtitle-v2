@@ -221,19 +221,20 @@ class RunParamsPage(ctk.CTkFrame):
     
     def _update_concurrency_warning(self, concurrency: int):
         """更新并发数警告提示"""
+        from ui.i18n_manager import t
         if concurrency > 30:
             self.concurrency_warning.configure(
-                text="⚠️ 警告：并发数过高可能导致 IP 封锁、429 错误或本地模型压力过大，建议降低并发数",
+                text=t("concurrency_warning_high"),
                 text_color=("red", "red")
             )
         elif concurrency > 20:
             self.concurrency_warning.configure(
-                text="⚠️ 提示：高并发可能导致限流，建议监控网络请求频率",
+                text=t("concurrency_warning_medium"),
                 text_color=("orange", "orange")
             )
         elif concurrency > 10:
             self.concurrency_warning.configure(
-                text="💡 提示：并发数较高，建议监控网络请求，避免触发限流",
+                text=t("concurrency_warning_low"),
                 text_color=("gray50", "gray50")
             )
         else:

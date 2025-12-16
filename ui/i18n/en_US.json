@@ -69,6 +69,9 @@
   "concurrency_updated": "Concurrency updated to {value}",
   "concurrency_high_warning": "High concurrency setting ({value}) may cause IP blocking or 429 errors, use with caution",
   "concurrency_medium_warning": "Concurrency set to {value}, monitor network request frequency to avoid rate limiting",
+  "concurrency_warning_high": "⚠️ Warning: High concurrency may cause IP blocking, 429 errors, or excessive local model pressure, recommend reducing concurrency",
+  "concurrency_warning_medium": "⚠️ Hint: High concurrency may cause rate limiting, recommend monitoring network request frequency",
+  "concurrency_warning_low": "💡 Hint: Concurrency is relatively high, recommend monitoring network requests to avoid triggering rate limits",
   "save_params_failed": "Failed to save run parameters: {error}",
   
   "page_not_implemented": "Page: {page}\n(Will be implemented in P0-22 and later tasks)",
@@ -445,5 +448,27 @@
   "log.stage_stop": "Stopping stage {stage}...",
   "log.stage_stopped": "Stage {stage} stopped",
   "log.video_already_processed_skip": "Video already processed, skipping: {video_id}",
-  "log.processing_start_staged": "Starting to process {count} videos (staged queue mode)"
+  "log.processing_start_staged": "Starting to process {count} videos (staged queue mode)",
+  
+  "log.proxy_connection_timeout": "Connection timeout (exceeded {timeout} seconds)",
+  "log.proxy_connection_failed": "Connection failed: {detail}",
+  "log.proxy_connection_failed_no_response": "Connection failed: Proxy server no response (may be invalid or network issue)",
+  "log.proxy_connection_failed_refused": "Connection failed: Proxy server refused connection",
+  "log.proxy_connection_failed_auth": "Connection failed: SOCKS proxy authentication failed (please check username and password)",
+  "log.proxy_connection_failed_socks": "Connection failed: SOCKS proxy connection failed (please check proxy address and port)",
+  "log.proxy_connection_failed_socks_detail": "SOCKS proxy: Please check proxy address, port, username and password are correct, and firewall settings",
+  "log.proxy_connection_failed_slow": "Connection timeout (proxy may be slow or unavailable)",
+  
+  "log.ai_extract_language_failed": "Failed to extract language information from prompt, using default value (auto -> zh-CN)",
+  
+  "log.theme_changed": "Theme changed: value={value}, theme_name={theme_name}, current_theme={current_theme}",
+  "log.theme_saved": "Theme saved to config: {theme_name}",
+  
+  "log.language_change_callback": "Language change callback called, value={value}",
+  "log.language_current_new": "Current language: {current}, new language: {new}",
+  "log.language_set": "Language set to: {lang}, test translation: {test}",
+  "log.language_saved": "Language settings saved to config",
+  "log.ui_text_refreshed": "UI text refresh complete",
+  "log.language_no_change": "Language unchanged, skipping",
+  "log.language_unknown": "Unknown language value: {value}"
 }

@@ -717,7 +717,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                         log_debug(f"  yt-dlp 测试失败: {last_error}")
                                         test_success = False
                             except subprocess.TimeoutExpired:
-                                last_error = f"连接超时（超过 {timeout} 秒）"
+                                last_error = t("log.proxy_connection_timeout", timeout=timeout)
                                 last_exception = None
                                 test_success = False
                                 log_debug(t("log.proxy_test_ytdlp_timeout"))
@@ -781,7 +781,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         results.append({
                             "proxy": proxy,
                             "success": False,
-                            "error": "连接超时（代理可能较慢或不可用）"
+                            "error": t("log.proxy_connection_failed_slow")
                         })
                     except requests.exceptions.ConnectionError as e:
                         error_msg = str(e)
@@ -789,10 +789,10 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         
                         # 分析连接错误类型
                         if "Max retries exceeded" in error_msg:
-                            error_detail = "连接失败：代理服务器无响应（可能已失效或网络不通）"
+                            error_detail = t("log.proxy_connection_failed_no_response")
                             # 如果是SOCKS代理，提供更详细的提示
                             if parsed.scheme.lower() in ["socks4", "socks5", "socks5h"]:
-                                error_detail += "（SOCKS代理：请检查代理地址、端口、用户名和密码是否正确，以及防火墙设置）"
+                                error_detail += f" ({t('log.proxy_connection_failed_socks_detail')})"
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
@@ -802,7 +802,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
-                                "error": "连接失败：代理服务器拒绝连接"
+                                "error": t("log.proxy_connection_failed_refused")
                             })
                         elif "SOCKS" in error_msg:
                             # SOCKS 连接错误
@@ -810,13 +810,13 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": "连接失败：SOCKS 代理认证失败（请检查用户名和密码）"
+                                    "error": t("log.proxy_connection_failed_auth")
                                 })
                             else:
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": "连接失败：SOCKS 代理连接失败（请检查代理地址和端口）"
+                                    "error": t("log.proxy_connection_failed_socks")
                                 })
                         else:
                             # 提取更简洁的错误信息
@@ -828,13 +828,13 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": f"连接失败: {caused_by_part}"
+                                    "error": t("log.proxy_connection_failed", detail=caused_by_part)
                                 })
                             else:
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": f"连接失败: {error_msg[:80]}"
+                                    "error": t("log.proxy_connection_failed", detail=error_msg[:80])
                                 })
                     except Exception as e:
                         error_msg = str(e)
@@ -849,7 +849,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
-                                "error": "连接失败：代理服务器无响应"
+                                "error": t("log.proxy_connection_failed_no_response")
                             })
                         else:
                             results.append({

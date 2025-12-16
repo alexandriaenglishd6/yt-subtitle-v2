@@ -69,6 +69,9 @@
   "concurrency_updated": "并发数已更新为 {value}",
   "concurrency_high_warning": "并发数设置较高（{value}），可能导致 IP 封锁或 429 错误，请谨慎使用",
   "concurrency_medium_warning": "并发数设置为 {value}，建议监控网络请求频率，避免触发限流",
+  "concurrency_warning_high": "⚠️ 警告：并发数过高可能导致 IP 封锁、429 错误或本地模型压力过大，建议降低并发数",
+  "concurrency_warning_medium": "⚠️ 提示：高并发可能导致限流，建议监控网络请求频率",
+  "concurrency_warning_low": "💡 提示：并发数较高，建议监控网络请求，避免触发限流",
   "save_params_failed": "保存运行参数失败：{error}",
   
   "page_not_implemented": "页面：{page}\n（P0-22 及后续任务将实现）",
@@ -440,5 +443,24 @@
   "log.stage_stop": "停止阶段 {stage}...",
   "log.stage_stopped": "阶段 {stage} 已停止",
   "log.video_already_processed_skip": "视频已处理，跳过: {video_id}",
-  "log.processing_start_staged": "开始处理 {count} 个视频（分阶段队列模式）"
+  "log.processing_start_staged": "开始处理 {count} 个视频（分阶段队列模式）",
+  
+  "log.proxy_connection_timeout": "连接超时（超过 {timeout} 秒）",
+  "log.proxy_connection_failed": "连接失败：{detail}",
+  "log.proxy_connection_failed_no_response": "连接失败：代理服务器无响应（可能已失效或网络不通）",
+  "log.proxy_connection_failed_refused": "连接失败：代理服务器拒绝连接",
+  "log.proxy_connection_failed_auth": "连接失败：SOCKS 代理认证失败（请检查用户名和密码）",
+  "log.proxy_connection_failed_socks": "连接失败：SOCKS 代理连接失败（请检查代理地址和端口）",
+  "log.proxy_connection_failed_slow": "连接超时（代理可能较慢或不可用）",
+  
+  "log.ai_extract_language_failed": "无法从 prompt 中提取语言信息，使用默认值（auto -> zh-CN）",
+  
+  "log.theme_changed": "主题切换: value={value}, theme_name={theme_name}, current_theme={current_theme}",
+  "log.theme_saved": "主题已保存到配置: {theme_name}",
+  
+  "log.language_change_callback": "语言切换回调被调用，value={value}",
+  "log.language_current_new": "当前语言: {current}, 新语言: {new}",
+  "log.language_set": "语言已设置为: {lang}, 测试翻译: {test}",
+  "log.language_saved": "语言设置已保存到配置",
+  "log.ui_text_refreshed": "UI 文本刷新完成"
 }

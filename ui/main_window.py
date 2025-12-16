@@ -727,32 +727,32 @@ class MainWindow(ctk.CTk):
         # zh_CN.json: "language_zh": "中文", "language_en": "English"
         # en_US.json: "language_zh": "中文", "language_en": "English"
         logger = get_logger()
-        logger.info(f"语言切换回调被调用，value={value}")
+        logger.info_i18n("language_change_callback", value=value)
         
         if value == "中文":
             new_lang = "zh-CN"
         elif value == "English":
             new_lang = "en-US"
         else:
-            logger.warning(f"未知的语言值: {value}")
+            logger.warning_i18n("language_unknown", value=value)
             return
         
         current_lang = get_language()
-        logger.info(f"当前语言: {current_lang}, 新语言: {new_lang}")
+        logger.info_i18n("language_current_new", current=current_lang, new=new_lang)
         
         if current_lang == new_lang:
-            logger.info("语言未变化，跳过")
+            logger.info_i18n("language_no_change")
             return
         
         set_language(new_lang)
-        logger.info(f"语言已设置为: {new_lang}, 测试翻译: {t('app_name')}")
+        logger.info_i18n("language_set", lang=new_lang, test=t('app_name'))
         
         # 保存到配置
         try:
             if hasattr(self.app_config, 'ui_language'):
                 self.app_config.ui_language = new_lang
                 self.config_manager.save(self.app_config)
-                logger.info("语言设置已保存到配置")
+                logger.info_i18n("language_saved")
         except Exception as e:
             logger.error(f"保存语言设置失败: {e}")
         
@@ -760,7 +760,7 @@ class MainWindow(ctk.CTk):
         self._refresh_ui_texts()
         self.state_manager.set("current_language", new_lang)
         self.event_bus.publish(EventType.LANGUAGE_CHANGED, new_lang)
-        logger.info("UI 文本刷新完成")
+        logger.info_i18n("ui_text_refreshed")
     
     def _on_theme_changed(self, value: str):
         """主题切换回调"""
@@ -783,7 +783,7 @@ class MainWindow(ctk.CTk):
         
         # 调试日志
         logger = get_logger()
-        logger.info(f"主题切换: value={value}, theme_name={theme_name}, current_theme={self.current_theme}")
+        logger.info_i18n("theme_changed", value=value, theme_name=theme_name, current_theme=self.current_theme)
         
         if theme_name != self.current_theme:
             self.current_theme = theme_name
@@ -798,7 +798,7 @@ class MainWindow(ctk.CTk):
                 if hasattr(self.app_config, 'theme'):
                     self.app_config.theme = theme_name
                     self.config_manager.save(self.app_config)
-                    logger.info(f"主题已保存到配置: {theme_name}")
+                    logger.info_i18n("theme_saved", theme_name=theme_name)
             except Exception as e:
                 logger.error(f"保存主题设置失败: {e}")
             
