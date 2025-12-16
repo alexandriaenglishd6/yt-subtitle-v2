@@ -11,7 +11,7 @@
 | 优先级 | 任务组 | 预计耗时 | 状态 |
 |--------|--------|----------|------|
 | **P0** | ai_providers 拆分 + staged_pipeline 拆分 | 2周 | ✅ Task 1 和 Task 2 已完成（代码拆分完成，测试通过，已合并到 main） |
-| **P1** | output + pipeline 拆分 + 日志国际化基础设施 + 核心日志迁移 | 2-3周 | 未开始 |
+| **P1** | output + pipeline 拆分 + 日志国际化基础设施 + 核心日志迁移 | 2-3周 | Task 3 已完成（代码拆分完成，测试通过） |
 | **P2** | UI 层拆分 + 剩余日志/异常迁移 + 长内容优化（可选） | 2-3周 | 未开始 |
 
 ---
@@ -77,12 +77,29 @@
 
 **Task 3: output.py + pipeline.py 拆分** （预计 5-7 天）
 
-- [ ] 创建分支 `refactor/output_pipeline`
-- [ ] 按方案拆包
-- [ ] 更新导入，按实际错误定点修复
-- [ ] 测试验证：各种输出格式正常生成
-- [ ] 提交 PR，合并
-- [ ] **标记完成时间**：__________
+- [x] 创建分支 `refactor/output_pipeline`
+- [x] **关键第一步**：`git mv core/output.py core/output_legacy.py`
+- [x] **关键第一步**：`git mv core/pipeline.py core/pipeline_legacy.py`
+- [x] 创建目录 `core/output/` 及 `formats/`
+- [x] 创建目录 `core/pipeline/`
+- [x] 按方案迁移 `OutputWriter` 类到 `core/output/writer.py`
+- [x] 拆分 `OutputWriter` 的内部逻辑到 `formats/` 目录下的 `subtitle.py`, `summary.py`, `metadata.py`
+- [x] 创建 `core/output/__init__.py` 导出公共接口
+- [x] 迁移 `process_single_video` 到 `core/pipeline/single_video.py`
+- [x] 迁移 `_process_video_list_staged` 到 `core/pipeline/batch.py`
+- [x] 迁移 `process_video_list` 到 `core/pipeline/batch.py`（作为分发器）
+- [x] 迁移辅助函数到 `core/pipeline/utils.py`
+- [x] 创建 `core/pipeline/__init__.py` 导出公共接口
+- [x] 更新导入，按实际错误定点修复（导入测试通过）
+- [x] 测试验证：各种输出格式正常生成
+  - [x] 导入测试：`from core.output import OutputWriter` ✓
+  - [x] 导入测试：`from core.pipeline import process_single_video, process_video_list` ✓
+  - [x] 单元测试：`test_staged_pipeline_detect_output.py::test_detect_only` 通过
+- [x] **注意**：本阶段**不删除** output_legacy.py 和 pipeline_legacy.py（保留至 P1 结束回归后）
+- [x] 提交更改：`git commit -m "refactor: 拆分 core/output.py 和 core/pipeline.py 为包结构"`
+- [ ] 推送分支：`git push origin refactor/output_pipeline`
+- [ ] 创建 PR，合并到 main
+- [x] **标记完成时间**：2025-12-16（代码拆分完成，测试通过）
 
 **Task 4: 日志国际化基础设施 + 核心日志迁移** （预计 5-8 天，可与 Task 3 并行）
 
