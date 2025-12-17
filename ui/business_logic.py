@@ -654,7 +654,6 @@ class VideoProcessor:
                 
                 # 如果翻译 AI 初始化失败，提前提示
                 if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
-                    from ui.i18n_manager import t
                     error_msg = t("translation_ai_init_failed_skip", error=self.translation_llm_init_error)
                     on_log("WARN", error_msg)
                 
@@ -852,7 +851,6 @@ class VideoProcessor:
                 
                 # 如果翻译 AI 初始化失败，提前提示
                 if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
-                    from ui.i18n_manager import t
                     error_msg = t("translation_ai_init_failed_skip", error=self.translation_llm_init_error)
                     on_log("WARN", error_msg)
                 
