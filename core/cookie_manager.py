@@ -70,11 +70,11 @@ class CookieManager:
                         cookies[key] = value
                 else:
                     # 如果单个项目没有 '='，可能是格式错误，记录警告但继续
-                    logger.warning(f"Cookie 格式可能不正确（缺少 '='）: {item[:50]}")
+                    logger.warning_i18n("cookie_format_invalid", preview=item[:50])
             
             # 检查是否解析到了 Cookie
             if not cookies:
-                logger.error("Cookie 字符串解析后为空，无法创建 Cookie 文件")
+                logger.error_i18n("cookie_string_empty")
                 temp_file.close()
                 temp_path.unlink()  # 删除空文件
                 return None
@@ -114,7 +114,7 @@ class CookieManager:
             return temp_path
             
         except Exception as e:
-            logger.error(f"转换 Cookie 字符串失败: {e}")
+            logger.error_i18n("cookie_convert_failed", error=str(e))
             return None
     
     def _extract_region_from_cookie(self) -> Optional[str]:
@@ -154,10 +154,10 @@ class CookieManager:
                 gl_values = params.get("gl", [])
                 if gl_values and len(gl_values) > 0:
                     region = gl_values[0].upper()  # 转换为大写（如 "us" -> "US"）
-                    logger.info(f"从 PREF Cookie 的 gl 参数中提取到地区代码: {region}")
+                    logger.info_i18n("cookie_region_extracted_pref", region=region)
                     return region
                 else:
-                    logger.debug("PREF Cookie 中未找到 gl 参数")
+                    logger.debug_i18n("cookie_pref_no_gl")
             else:
                 logger.debug_i18n("cookie_pref_not_found")
             
@@ -167,21 +167,21 @@ class CookieManager:
                 key_upper = key.upper()
                 if key_upper in ["GL", "LOCALE"]:
                     region = value.upper()
-                    logger.info(f"从 Cookie 字段 {key} 中提取到地区代码: {region}")
+                    logger.info_i18n("cookie_region_extracted_field", key=key, region=region)
                     return region
                 # 检查 hl 参数（语言代码，可能包含地区信息）
                 elif key_upper == "HL" and len(value) >= 2:
                     # hl 格式可能是 "en-US", "zh-CN" 等，提取国家代码部分
                     if '-' in value:
                         region = value.split('-')[-1].upper()
-                        logger.info(f"从 Cookie 字段 {key} 中提取到地区代码: {region}")
+                        logger.info_i18n("cookie_region_extracted_field", key=key, region=region)
                         return region
             
             logger.debug_i18n("cookie_region_extract_failed")
             return None
             
         except Exception as e:
-            logger.warning(f"提取地区信息失败: {e}")
+            logger.warning_i18n("cookie_region_extract_failed", error=str(e))
             return None
     
     def get_cookie_file_path(self) -> Optional[str]:
@@ -191,7 +191,7 @@ class CookieManager:
             Cookie 文件路径，如果没有 Cookie 则返回 None
         """
         if not self.cookie_string:
-            logger.debug("Cookie 字符串为空，返回 None")
+            logger.debug_i18n("cookie_string_empty_debug")
             return None
         
         # 如果已经有临时文件，直接返回
@@ -205,7 +205,7 @@ class CookieManager:
             logger.info_i18n("cookie_file_created", cookie_file=str(self._temp_cookie_file))
             return str(self._temp_cookie_file)
         else:
-            logger.warning("创建 Cookie 文件失败")
+            logger.warning_i18n("cookie_file_create_failed")
             return None
     
     def test_cookie(self, test_url: str = "https://www.youtube.com") -> Dict[str, any]:
@@ -237,10 +237,12 @@ class CookieManager:
             # 获取 Cookie 文件路径
             cookie_file = self.get_cookie_file_path()
             if not cookie_file:
+                from core.logger import translate_log
+                error_msg = translate_log("cookie_file_create_failed")
                 return {
                     "available": False,
                     "region": None,
-                    "error": "Cookie 文件创建失败",
+                    "error": error_msg,
                     "details": {}
                 }
             
@@ -283,7 +285,7 @@ class CookieManager:
                 
                 logger.info_i18n("cookie_test_success")
                 if region:
-                    logger.info(f"检测到地区: {region}")
+                    logger.info_i18n("cookie_region_detected", region=region)
                 
                 return {
                     "available": True,
@@ -297,7 +299,7 @@ class CookieManager:
                 }
                 
             except json.JSONDecodeError as e:
-                logger.warning(f"解析测试结果失败: {e}")
+                logger.warning_i18n("cookie_test_parse_failed", error=str(e))
                 return {
                     "available": False,
                     "region": None,
@@ -306,7 +308,7 @@ class CookieManager:
                 }
                 
         except subprocess.TimeoutExpired:
-            logger.warning("Cookie 测试超时")
+            logger.warning_i18n("cookie_test_timeout")
             return {
                 "available": False,
                 "region": None,
@@ -314,7 +316,7 @@ class CookieManager:
                 "details": {}
             }
         except Exception as e:
-            logger.error(f"Cookie 测试时出错: {e}")
+            logger.error_i18n("cookie_test_error", error=str(e))
             import traceback
             logger.debug(traceback.format_exc())
             return {
@@ -331,7 +333,7 @@ class CookieManager:
                 self._temp_cookie_file.unlink()
                 self._temp_cookie_file = None
             except Exception as e:
-                logger.warning(f"清理 Cookie 临时文件失败: {e}")
+                logger.warning_i18n("cookie_temp_cleanup_failed", error=str(e))
     
     def __del__(self):
         """析构函数，清理临时文件"""

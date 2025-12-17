@@ -149,7 +149,8 @@ def write_metadata(
                 error_type=ErrorType.FILE_IO
             )
         
-        logger.debug(f"已写入元数据: {metadata_path.name}")
+        from core.logger import translate_log
+        logger.debug(translate_log("metadata_written", file_name=metadata_path.name))
         return metadata_path
         
     except (OSError, IOError, PermissionError) as e:

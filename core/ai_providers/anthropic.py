@@ -148,7 +148,7 @@ class AnthropicClient:
                     )
                     if attempt < self.ai_config.max_retries:
                         wait_time = 2 ** attempt
-                        logger.warning(f"遇到频率限制，{wait_time}秒后重试...")
+                        logger.warning_i18n("log.ai_retry_rate_limit", wait_time=wait_time)
                         time.sleep(wait_time)
                         continue
                     raise last_error
@@ -166,7 +166,7 @@ class AnthropicClient:
                     )
                     if attempt < self.ai_config.max_retries:
                         wait_time = 2 ** attempt
-                        logger.warning(f"连接失败，{wait_time}秒后重试...")
+                        logger.warning_i18n("log.ai_retry_connection_failed", wait_time=wait_time)
                         time.sleep(wait_time)
                         continue
                     raise last_error
@@ -185,7 +185,7 @@ class AnthropicClient:
                     )
                     if attempt < self.ai_config.max_retries:
                         wait_time = 2 ** attempt
-                        logger.warning(f"API 错误，{wait_time}秒后重试...")
+                        logger.warning_i18n("log.ai_retry_api_error", wait_time=wait_time)
                         time.sleep(wait_time)
                         continue
                     raise last_error

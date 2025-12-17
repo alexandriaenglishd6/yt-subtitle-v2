@@ -378,7 +378,9 @@ class TranslationSummaryPage(ctk.CTkFrame):
             
             return translation_ai_config
         except ValueError as e:
-            raise ValueError(f"翻译 AI 配置格式错误: {e}")
+            from core.logger import translate_exception
+            error_msg = translate_exception("exception.translation_ai_config_format_error", error=str(e))
+            raise ValueError(error_msg)
     
     def _get_summary_ai_config(self) -> dict:
         """获取摘要 AI 配置"""
@@ -403,7 +405,9 @@ class TranslationSummaryPage(ctk.CTkFrame):
             
             return summary_ai_config
         except ValueError as e:
-            raise ValueError(f"摘要 AI 配置格式错误: {e}")
+            from core.logger import translate_exception
+            error_msg = translate_exception("exception.summary_ai_config_format_error", error=str(e))
+            raise ValueError(error_msg)
     
     def _on_save_translation_ai(self):
         """保存翻译 AI 配置"""
@@ -414,7 +418,7 @@ class TranslationSummaryPage(ctk.CTkFrame):
             if self.on_log_message:
                 self.on_log_message("INFO", t("ai_save_translation_success"))
         except ValueError as e:
-            logger.error(f"翻译 AI 配置格式错误: {e}")
+            logger.error_i18n("log.translation_ai_config_format_error", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", f"{t('ai_save_failed')}: {e}")
         except Exception as e:

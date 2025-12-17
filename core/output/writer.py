@@ -8,7 +8,7 @@ from typing import Optional, Dict, List
 
 from core.models import VideoInfo, DetectionResult
 from core.language import LanguageConfig
-from core.logger import get_logger
+from core.logger import get_logger, translate_log
 from core.exceptions import AppException, ErrorType
 from core.failure_logger import _atomic_write
 from core.llm_client import LLMClient
@@ -105,7 +105,7 @@ class OutputWriter:
                     message=f"原子写原始字幕文件失败: {target_path}",
                     error_type=ErrorType.FILE_IO
                 )
-            logger.debug(f"已写入原始字幕: {target_path.name}")
+            logger.debug_i18n("log.output_original_subtitle_written", file_name=target_path.name)
             return target_path
         except (OSError, IOError, PermissionError) as e:
             # 文件IO错误
@@ -162,7 +162,7 @@ class OutputWriter:
                     message=f"原子写翻译字幕文件失败: {target_path}",
                     error_type=ErrorType.FILE_IO
                 )
-            logger.debug(f"已写入翻译字幕: {target_path.name}")
+            logger.debug_i18n("log.output_translated_subtitle_written", file_name=target_path.name)
             return target_path
         except (OSError, IOError, PermissionError) as e:
             # 文件IO错误
@@ -324,14 +324,17 @@ class OutputWriter:
         output_translated_paths = {}  # 保存输出目录中的翻译字幕路径（可能是 SRT 或 TXT）
         translated_srt_paths = {}  # 保存临时目录中的原始 SRT 路径（用于双语字幕生成）
         logger.info(
-            f"OutputWriter.write_all: 准备写入翻译字幕，translation_result 包含: {list(translation_result.keys())}, "
-            f"文件路径: {[str(p) if p else None for p in translation_result.values()]}",
+            translate_log("preparing_translated_subtitle",
+                         languages=list(translation_result.keys()),
+                         paths=[str(p) if p else None for p in translation_result.values()]),
             video_id=video_info.video_id
         )
         for target_lang, translated_path in translation_result.items():
             if translated_path and translated_path.exists():
                 logger.debug(
-                    f"写入翻译字幕: {target_lang} <- {translated_path}",
+                    translate_log("writing_translated_subtitle",
+                                target_lang=target_lang,
+                                translated_path=str(translated_path)),
                     video_id=video_info.video_id
                 )
                 # 保存原始 SRT 路径（用于双语字幕生成）
@@ -347,7 +350,9 @@ class OutputWriter:
                     output_translated_path = self.write_translated_subtitle(video_dir, translated_path, target_lang)
                     output_translated_paths[target_lang] = output_translated_path
                 logger.info(
-                    f"已写入翻译字幕: {target_lang} -> {output_translated_paths[target_lang]}",
+                    translate_log("translated_subtitle_written",
+                                target_lang=target_lang,
+                                output_path=str(output_translated_paths[target_lang])),
                     video_id=video_info.video_id
                 )
             else:
@@ -367,7 +372,7 @@ class OutputWriter:
                 if language_config.source_language:
                     source_lang = language_config.source_language
                     logger.debug(
-                        f"使用配置的源语言: {source_lang}",
+                        translate_log("using_configured_source_lang", source_lang=source_lang),
                         video_id=video_info.video_id
                     )
                 
@@ -439,8 +444,11 @@ class OutputWriter:
                                 target_srt_for_bilingual = output_translated_path
                             
                             logger.info(
-                                f"开始生成双语字幕: 源语言={source_lang} (文件: {source_srt_for_bilingual}), "
-                                f"目标语言={target_lang} (文件: {target_srt_for_bilingual})",
+                                translate_log("bilingual_subtitle_start",
+                                            source_lang=source_lang,
+                                            source_file=str(source_srt_for_bilingual),
+                                            target_lang=target_lang,
+                                            target_file=str(target_srt_for_bilingual)),
                                 video_id=video_info.video_id
                             )
                             
@@ -467,7 +475,9 @@ class OutputWriter:
                                 )
                             
                             logger.info(
-                                f"已生成双语字幕: {bilingual_path.name} (路径: {bilingual_path})",
+                                translate_log("bilingual_subtitle_generated",
+                                            filename=bilingual_path.name,
+                                            path=str(bilingual_path)),
                                 video_id=video_info.video_id
                             )
                         except Exception as e:
@@ -500,7 +510,7 @@ class OutputWriter:
                 txt_path = srt_file.with_suffix(".txt")
                 write_txt_subtitle(srt_file, txt_path)
             
-            logger.debug(f"已生成 TXT 格式字幕", video_id=video_info.video_id)
+            logger.debug_i18n("log.output_txt_subtitle_generated", video_id=video_info.video_id)
         
         # 写入元数据
         write_metadata_format(
@@ -516,7 +526,7 @@ class OutputWriter:
             summary_llm=summary_llm
         )
         
-        logger.info(f"所有输出文件已写入: {video_dir}", video_id=video_info.video_id)
+        logger.info(translate_log("all_output_files_written", path=str(video_dir)), video_id=video_info.video_id)
         return video_dir
     
     def _parse_srt(self, srt_content: str) -> List[Dict]:
@@ -586,7 +596,10 @@ class OutputWriter:
                     error_type=ErrorType.CONTENT
                 )
             source_entries = parse_srt(source_content)
-            logger.debug(f"解析源语言字幕: {len(source_entries)} 条条目，文件: {source_subtitle_path.name}，文件大小: {len(source_content)} 字符")
+            logger.debug(translate_log("parsing_source_subtitle",
+                                     count=len(source_entries),
+                                     filename=source_subtitle_path.name,
+                                     size=len(source_content)))
             
             # 读取目标语言字幕
             target_content = target_subtitle_path.read_text(encoding="utf-8")
@@ -596,7 +609,10 @@ class OutputWriter:
                     error_type=ErrorType.CONTENT
                 )
             target_entries = parse_srt(target_content)
-            logger.debug(f"解析目标语言字幕: {len(target_entries)} 条条目，文件: {target_subtitle_path.name}，文件大小: {len(target_content)} 字符")
+            logger.debug(translate_log("parsing_target_subtitle",
+                                     count=len(target_entries),
+                                     filename=target_subtitle_path.name,
+                                     size=len(target_content)))
             
             if len(source_entries) == 0:
                 # 记录文件内容的前200字符，方便调试
@@ -620,7 +636,9 @@ class OutputWriter:
             else:
                 # 生成 SRT 格式
                 merged_content = merge_srt_entries(source_entries, target_entries)
-            logger.debug(f"合并后字幕长度: {len(merged_content)} 字符，前100字符: {merged_content[:100]}")
+            logger.debug(translate_log("merged_subtitle_length",
+                                     length=len(merged_content),
+                                     preview=merged_content[:100]))
             
             # 使用原子写机制
             if not _atomic_write(target_path, merged_content, mode="w"):
@@ -629,7 +647,7 @@ class OutputWriter:
                     error_type=ErrorType.FILE_IO
                 )
             
-            logger.debug(f"已写入双语字幕: {target_path.name}")
+            logger.debug(translate_log("bilingual_subtitle_written", filename=target_path.name))
             return target_path
             
         except (OSError, IOError, PermissionError) as e:

@@ -1,0 +1,928 @@
+总计: 3185 处中文硬编码
+================================================================================
+
+[日志相关] 优先处理:
+--------------------------------------------------------------------------------
+
+cli\channel.py (55 处):
+     2 | 频道模式命令
+     3 | 处理 YouTube 频道/播放列表/单视频
+    12 |     """处理频道命令
+    15 |         args: argparse 解析的参数
+    18 |         退出码（0 表示成功）
+    23 |         logger.error("必须提供频道 URL（使用 --url 参数）")
+    26 |     logger.info(f"频道模式：URL = {args.url}")
+    34 |     logger.warning("请指定 --dry-run（仅检测）或 --run（开始处理）")
+    39 |     """执行 Dry Run 模式
+    41 |     严格遵守"只检测、不下载、不摘要、不写报告、不更新增量"的语义
+    42 |     但可以使用增量记录来过滤视频（不更新增量）
+    45 |         url: 频道/播放列表/单视频 URL
+    46 |         logger: Logger 实例
+    47 |         force: 是否强制重跑（忽略增量记录）
+    50 |         退出码（0 表示成功）
+    53 |     logger.info("Dry Run 模式：仅检测字幕，不下载/不翻译/不摘要/不更新增量")
+    55 |         logger.info("强制重跑模式：忽略历史记录，检测所有视频")
+    64 |         logger.info(f"开始获取视频列表: {url}")
+    69 |             logger.warning("未能获取到任何视频，请检查 URL 是否正确")
+    73 |         logger.info(f"共获取到 {total_videos} 个视频")
+  ... 还有 35 处
+
+cli\cookie.py (11 处):
+     2 | Cookie 测试命令
+     3 | 检查 Cookie 是否可用及所在地区
+     9 |     """测试 Cookie 命令
+    12 |         args: argparse 解析的参数
+    15 |         退出码（0 表示成功）
+    27 |             logger.warning("未配置 Cookie，请先在配置文件中添加 Cookie")
+    30 |         logger.info("开始测试 Cookie...")
+    35 |             logger.info("Cookie 测试成功：Cookie 可用")
+    37 |                 logger.info(f"检测到地区：{result['region']}")
+    41 |             logger.error(f"Cookie 测试失败：{error_msg}")
+    45 |         logger.error(f"测试 Cookie 时出错：{e}")
+
+cli\main.py (26 处):
+     2 | CLI 主入口
+     3 | 参数解析和命令分发
+    18 |     """创建命令行参数解析器
+    21 |         配置好的 ArgumentParser 实例
+    24 |         description="YouTube 字幕工具 v2 - 命令行接口",
+    27 | 示例：
+    49 |     subparsers = parser.add_subparsers(dest="command", help="可用命令")
+    67 |     """添加 channel 子命令解析器"""
+    70 |         help="频道模式：处理整个 YouTube 频道"
+    75 |         help="频道 URL（例如：https://www.youtube.com/@channel）"
+    80 |         help="Dry Run 模式：仅检测字幕，不下载/不翻译/不摘要"
+    85 |         help="开始处理：执行完整流水线（下载、翻译、摘要）"
+    90 |         help="强制重跑：忽略历史记录，重新处理所有视频"
+    96 |     """添加 urls 子命令解析器"""
+    99 |         help="URL 列表模式：处理多个视频 URL"
+   104 |         help="包含 URL 列表的文件路径（每行一个 URL）"
+   109 |         help="Dry Run 模式：仅检测字幕，不下载/不翻译/不摘要"
+   114 |         help="开始处理：执行完整流水线（下载、翻译、摘要）"
+   119 |         help="强制重跑：忽略历史记录，重新处理所有视频"
+   125 |     """添加 test-cookie 子命令解析器"""
+  ... 还有 6 处
+
+cli\urls.py (59 处):
+     2 | URL 列表模式命令
+     3 | 处理多个视频 URL
+    12 |     """处理 URL 列表命令
+    15 |         args: argparse 解析的参数
+    18 |         退出码（0 表示成功）
+    23 |         logger.error("必须提供 URL 列表文件（使用 --file 参数）")
+    28 |         logger.error(f"文件不存在：{file_path}")
+    31 |     logger.info(f"URL 列表模式：文件 = {file_path}")
+    41 |             logger.warning("未能获取到任何视频，请检查 URL 列表文件内容")
+    44 |         logger.info(f"成功获取 {len(videos)} 个视频")
+    48 |             logger.info("前 5 个视频信息：")
+    54 |                 logger.info(f"  ... 还有 {len(videos) - 5} 个视频")
+    63 |         logger.warning("请指定 --dry-run（仅检测）或 --run（开始处理）")
+    67 |         logger.error(f"获取视频列表失败：{e}")
+    74 |     """执行 Dry Run 模式（URL 列表模式）
+    77 |         file_path: URL 列表文件路径
+    78 |         logger: Logger 实例
+    79 |         force: 是否强制重跑
+    82 |         退出码（0 表示成功）
+    85 |     logger.info("Dry Run 模式（URL 列表）：仅检测字幕，不下载/不翻译/不摘要/不更新增量")
+  ... 还有 39 处
+
+cli\utils.py (43 处):
+     2 | CLI 工具函数
+     3 | 共用的辅助函数
+    18 |     """根据 URL 类型和视频列表确定 archive 文件路径
+    21 |         url: 原始 URL
+    22 |         videos: 视频列表
+    23 |         incremental_manager: IncrementalManager 实例
+    24 |         logger: Logger 实例
+    27 |         archive 文件路径，如果无法确定则返回 None
+    40 |                 logger.info(f"频道模式：使用 archive 文件 {archive_path.name}")
+    43 |                 logger.warning("无法获取频道 ID，将不使用增量过滤")
+    52 |                 logger.info(f"播放列表模式：使用 archive 文件 {archive_path.name}")
+    55 |                 logger.warning("无法提取播放列表 ID，将不使用增量过滤")
+    67 |         logger.warning(f"确定 archive 路径时出错: {e}")
+    72 |     """创建代理管理器和 Cookie 管理器
+    75 |         config: 配置对象
+    76 |         logger: Logger 实例
+    87 |         logger.info(f"已配置 {len(config.proxies)} 个代理")
+    92 |         logger.info("已配置 Cookie")
+    98 |     """创建 LLM 客户端（向后兼容函数）
+   100 |     注意：此函数已废弃，请使用 create_llm_clients
+  ... 还有 23 处
+
+core\ai_profile_manager.py (39 处):
+     2 | AI Profile 管理器
+     4 | 负责管理 AI Profile 配置，支持从配置文件加载多个 AI 配置组合，
+     5 | 并根据任务类型选择对应的 profile。
+    20 |     """AI Profile 配置
+    22 |     表示一个 AI 配置组合，包含完整的 AIConfig 信息
+    30 |     """AI Profile 管理器
+    32 |     负责加载、管理和查找 AI Profiles
+    36 |         """初始化 AI Profile 管理器
+    39 |             profile_file: Profile 配置文件路径，如果为 None 则使用默认路径
+    52 |         """加载 Profile 配置文件
+    55 |             是否成功加载（如果文件不存在，返回 False，但不视为错误）
+    86 |                     logger.debug(f"已加载 AI Profile: {profile_name}")
+    88 |                     logger.warning(f"加载 AI Profile '{profile_name}' 失败: {e}，跳过")
+    93 |             logger.info(f"已加载 {len(self.profiles)} 个 AI Profiles，{len(self.task_mapping)} 个任务映射")
+    98 |             logger.error(f"AI Profile 配置文件格式错误: {e}，将使用默认配置")
+   102 |             logger.error(f"加载 AI Profile 配置文件失败: {e}，将使用默认配置")
+   107 |         """获取指定的 Profile
+   110 |             profile_name: Profile 名称
+   113 |             AIProfile 对象，如果不存在或未启用则返回 None
+   123 |             logger.debug(f"AI Profile '{profile_name}' 已禁用")
+  ... 还有 19 处
+
+core\ai_providers\anthropic.py (19 处):
+     2 | Anthropic Claude 客户端实现
+    19 |     """Anthropic LLM 客户端实现"""
+    22 |         """初始化 Anthropic 客户端
+    25 |             ai_config: AI 配置
+    74 |         """检查依赖库是否已安装"""
+    79 |                 "未安装 anthropic 库，请运行: pip install anthropic",
+    92 |         """调用 Anthropic API"""
+   133 |                         f"Anthropic API 调用成功: model={self.ai_config.model}, "
+   134 |                         f"耗时={elapsed:.2f}s, tokens={usage.total_tokens if usage else 'N/A'}"
+   146 |                         f"Anthropic API 频率限制: {e}",
+   151 |                         logger.warning(f"遇到频率限制，{wait_time}秒后重试...")
+   158 |                         f"Anthropic API 认证失败: {e}",
+   164 |                         f"Anthropic API 连接失败: {e}",
+   169 |                         logger.warning(f"连接失败，{wait_time}秒后重试...")
+   179 |                             f"Anthropic API 内容过滤: {e}",
+   183 |                         f"Anthropic API 错误: {e}",
+   188 |                         logger.warning(f"API 错误，{wait_time}秒后重试...")
+   195 |                         f"Anthropic API 未知错误: {e}",
+   207 |                 f"Anthropic 客户端初始化失败: {e}",
+
+core\ai_providers\gemini.py (16 处):
+     2 | Google Gemini 原生客户端实现
+    19 |     """Google Gemini 客户端实现"""
+    22 |         """初始化 Gemini 客户端
+    25 |             ai_config: AI 配置
+    70 |         """检查依赖库是否已安装"""
+    75 |                 "未安装 google-generativeai 库，请运行: pip install google-generativeai",
+    88 |         """调用 Gemini API"""
+   125 |                         f"Gemini API 调用成功: model={self.ai_config.model}, "
+   126 |                         f"耗时={elapsed:.2f}s"
+   142 |                             f"Gemini API 频率限制: {e}",
+   147 |                             f"Gemini API 认证失败: {e}",
+   152 |                             f"Gemini API 连接失败: {e}",
+   157 |                             f"Gemini API 内容过滤: {e}",
+   162 |                             f"Gemini API 错误: {e}",
+   168 |                         logger.warning(f"遇到错误，{wait_time}秒后重试...")
+   181 |                 f"Gemini 客户端初始化失败: {e}",
+
+core\ai_providers\google_translate.py (92 处):
+     2 | Google 翻译客户端（免费版）
+     4 | 使用 deep-translator 库调用 Google 翻译的免费接口
+     5 | 注意：这不是 LLM，但实现 LLMClient 接口以便统一使用
+    20 |     """Google 翻译客户端（免费版）
+    22 |     使用 deep-translator 库调用 Google 翻译的免费接口
+    23 |     注意：这不是 LLM，但实现 LLMClient 接口以便统一使用
+    27 |         """初始化 Google 翻译客户端
+    30 |             ai_config: AI 配置（虽然不需要 API Key，但保持接口一致）
+    41 |                 "未安装 deep-translator 库，请运行: pip install deep-translator",
+    66 |         """使用 Google 翻译进行翻译
+    68 |         注意：prompt 应该包含字幕文本，格式由 get_translation_prompt 生成
+    69 |         我们需要从 prompt 中提取字幕文本，翻译后重新组装
+    72 |             prompt: 翻译提示词（包含字幕文本）
+    73 |             system: 系统提示词（忽略，Google 翻译不需要）
+    74 |             max_tokens: 最大 token 数（忽略）
+    75 |             temperature: 温度参数（忽略）
+    76 |             stop: 停止序列（忽略）
+    79 |             LLMResult 对象，包含翻译后的文本
+    82 |             LLMException: 当翻译失败时抛出
+    95 |             logger.debug(f"GoogleTranslateClient: 提取到源语言={source_lang}, 目标语言={target_lang}, 字幕文本长度={
+  ... 还有 72 处
+
+core\ai_providers\local_model.py (16 处):
+     2 | 本地模型专用客户端（Ollama、LM Studio）
+     3 | - 继承 OpenAICompatibleClient
+     4 | - 增强：长超时、心跳检测、预热、友好报错
+    20 |     """本地模型专用客户端"""
+    31 |             logger.debug(f"本地模型超时时间调整: {original_timeout}s -> {ai_config.timeout_seconds}s")
+    40 |         规范化 base_url 到 OpenAI 兼容的 /v1 根路径：
+    41 |         - 允许用户填：http://localhost:11434 或 http://localhost:11434/v1 或 .../v1/
+    42 |         - 最终统一为：.../v1（不带尾部 /）
+    50 |         """检查本地模型服务是否可用（心跳）"""
+    57 |             logger.warning("本地模型服务不可用，请先启动 Ollama/LM Studio")
+    60 |             logger.debug(f"服务检查异常: {e}")
+    64 |         """预热本地模型：发送轻量级请求唤醒模型，避免首次正式请求超时"""
+    65 |         logger.info("正在预热本地模型...")
+    74 |             logger.info(f"本地模型预热完成（模型: {self.ai_config.model}）")
+    77 |             logger.debug(f"预热失败（不影响使用）: {e}")
+    82 |         """生成文本：首次调用时进行服务检查和预热"""
+
+core\ai_providers\openai_compatible.py (23 处):
+     2 | OpenAI 兼容客户端实现
+     4 | 支持所有 OpenAI Chat Completions 兼容服务：
+     5 | - OpenAI 官方
+     8 | - 通义千问 Qwen
+     9 | - 智谱 GLM
+    27 |     """OpenAI 兼容客户端实现"""
+    30 |         """初始化 OpenAI 兼容客户端
+    33 |             ai_config: AI 配置
+    82 |         """检查依赖库是否已安装"""
+    87 |                 "未安装 openai 库，请运行: pip install openai",
+   100 |         """调用 OpenAI 兼容 API"""
+   149 |                         f"OpenAICompatible API 调用成功: model={self.ai_config.model}, "
+   150 |                         f"耗时={elapsed:.2f}s, tokens={usage.total_tokens if usage else 'N/A'}"
+   162 |                         f"OpenAI 兼容 API 频率限制: {e}",
+   167 |                         logger.warning(f"遇到频率限制，{wait_time}秒后重试...")
+   174 |                         f"OpenAI 兼容 API 认证失败: {e}",
+   180 |                         f"OpenAI 兼容 API 连接失败: {e}",
+   185 |                         logger.warning(f"连接失败，{wait_time}秒后重试...")
+   195 |                             f"OpenAI 兼容 API 内容过滤: {e}",
+   199 |                         f"OpenAI 兼容 API 错误: {e}",
+  ... 还有 3 处
+
+core\ai_providers_legacy.py (176 处):
+     2 | AI 提供商实现
+     3 | 符合 AI_PROVIDER_EXTENSION.md v2.1 规范的 LLMClient 实现
+    19 |     """OpenAI 兼容客户端实现
+    21 |     支持所有 OpenAI Chat Completions 兼容服务：
+    22 |     - OpenAI 官方
+    25 |     - 通义千问 Qwen
+    26 |     - 智谱 GLM
+    27 |     - 本地 Ollama / vLLM 等
+    31 |         """初始化 OpenAI 兼容客户端
+    34 |             ai_config: AI 配置
+    45 |                 f"未找到 OpenAI API Key（配置: {api_key_config}）",
+    71 |         """检测是否是本地模型（通过 base_url 判断）
+    74 |             base_url: API 基础 URL
+    77 |             如果是本地模型则返回 True
+    94 |         """在后台线程中执行预热（不阻塞初始化）
+    96 |         预热会发送一个轻量级的请求来"唤醒"本地模型，避免首次调用时的冷启动延迟。
+    97 |         预热失败不会影响客户端的使用，只会在日志中记录警告。
+   101 |                 logger.info(f"检测到本地模型 ({self.ai_config.base_url})，开始预热...")
+   103 |                 logger.info(f"本地模型预热完成: {self.ai_config.model}")
+   106 |                 logger.warning(f"本地模型预热失败（不影响使用）: {e}")
+  ... 还有 156 处
+
+core\cookie_manager.py (41 处):
+     2 | Cookie 管理器模块
+     3 | 支持 Cookie 测试和集成到 yt-dlp
+    17 |     """Cookie 管理器
+    19 |     负责 Cookie 的测试和管理，支持将 Cookie 字符串转换为 yt-dlp 可用的格式
+    23 |         """初始化 Cookie 管理器
+    26 |             cookie_string: Cookie 字符串（浏览器复制的格式）
+    27 |             yt_dlp_path: yt-dlp 可执行文件路径
+    34 |         """将 Cookie 字符串转换为 Netscape 格式文件
+    37 |             cookie_string: Cookie 字符串（浏览器格式）
+    40 |             临时文件路径，如果转换失败则返回 None
+    73 |                     logger.warning(f"Cookie 格式可能不正确（缺少 '='）: {item[:50]}")
+    77 |                 logger.error("Cookie 字符串解析后为空，无法创建 Cookie 文件")
+   117 |             logger.error(f"转换 Cookie 字符串失败: {e}")
+   121 |         """从 Cookie 字符串中提取地区信息
+   123 |         尝试从 PREF Cookie 中提取 gl 参数（地区代码）
+   124 |         PREF 格式通常为：f4=4000000&gl=US&hl=en 等
+   127 |             地区代码（如 "US", "CN", "JP" 等），如果无法检测则返回 None
+   157 |                     logger.info(f"从 PREF Cookie 的 gl 参数中提取到地区代码: {region}")
+   160 |                     logger.debug("PREF Cookie 中未找到 gl 参数")
+   170 |                     logger.info(f"从 Cookie 字段 {key} 中提取到地区代码: {region}")
+  ... 还有 21 处
+
+core\detector.py (32 处):
+     2 | 字幕检测模块
+     3 | 检测单个视频的字幕情况（人工/自动字幕语言列表）
+    18 |     """字幕检测器
+    20 |     负责检测单个视频的字幕情况，区分人工字幕和自动字幕
+    24 |         """初始化字幕检测器
+    27 |             yt_dlp_path: yt-dlp 可执行文件路径，如果为 None 则使用系统 PATH 中的 yt-dlp
+    28 |             cookie_manager: CookieManager 实例，如果为 None 则不使用 Cookie
+    34 |         """检测视频字幕情况
+    37 |             video_info: 视频信息对象
+    40 |             DetectionResult 对象，包含字幕检测结果
+    49 |                 logger.warning(f"无法获取字幕信息: {video_info.video_id}")
+   101 |                 logger.warning(f"视频无可用字幕: {video_info.video_id}")
+   108 |                 f"字幕检测失败: {e}",
+   116 |                 message=f"字幕检测失败: {e}",
+   121 |                 f"字幕检测失败: {app_error}",
+   128 |         """使用 yt-dlp 获取字幕信息
+   131 |             url: 视频 URL
+   134 |             包含字幕信息的字典，如果失败则返回 None
+   152 |                     logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径（字幕检测）")
+   154 |                 logger.debug("未配置 Cookie 管理器（字幕检测）")
+  ... 还有 12 处
+
+core\downloader.py (103 处):
+     2 | 字幕下载模块
+     3 | 根据检测结果下载原始字幕和官方翻译字幕
+     4 | 符合 error_handling.md 规范：将 yt-dlp 错误映射为 AppException，使用原子写文件
+    22 |     """字幕下载器
+    24 |     负责下载原始字幕和官方翻译字幕
+    28 |         """初始化字幕下载器
+    31 |             yt_dlp_path: yt-dlp 可执行文件路径，如果为 None 则使用系统 PATH 中的 yt-dlp
+    32 |             output_dir: 输出目录，如果为 None 则使用当前目录
+    33 |             proxy_manager: ProxyManager 实例，如果为 None 则不使用代理
+    34 |             cookie_manager: CookieManager 实例，如果为 None 则不使用 Cookie
+    49 |         """下载字幕文件
+    52 |             video_info: 视频信息
+    53 |             detection_result: 字幕检测结果
+    54 |             language_config: 语言配置
+    55 |             output_path: 输出目录路径（视频的输出目录）
+    58 |             字典，包含下载的字幕文件路径：
+    73 |             logger.warning(f"视频无可用字幕，跳过下载: {video_info.video_id}")
+    86 |                 reason = cancel_token.get_reason() or "用户取消"
+   102 |                     logger.info(f"已下载原始字幕: {original_path.name}", video_id=video_info.video_id)
+   112 |                     reason = cancel_token.get_reason() or "用户取消"
+  ... 还有 83 处
+
+core\failure_logger.py (83 处):
+     2 | 失败记录模块
+     3 | 符合 error_handling.md 规范的失败记录系统
+     4 | 记录所有下载/翻译/摘要失败的视频，写入 out/failed_detail.log 和 out/failed_urls.txt
+     5 | 同时写入结构化 JSON 记录到 out/failed_records.json（R2-1 任务）
+    25 |     """线程安全的追加写入单行文本
+    27 |     使用每个文件路径对应的 Lock 确保并发安全。
+    28 |     符合 R0-4 任务要求：所有追加写入统一调用此函数。
+    31 |         file_path: 目标文件路径
+    32 |         line: 要追加的行（应包含换行符，如 "content\n"）
+    35 |         是否成功
+    55 |         logger.error(f"线程安全追加写入失败 ({file_path}): {e}")
+    60 |     """原子写文件（先写.tmp，成功后rename）
+    62 |     符合 error_handling.md 的原子落盘要求：
+    63 |     - 先写 .tmp 文件
+    64 |     - 成功后 atomic rename
+    65 |     - 失败清理 .tmp
+    68 |         file_path: 目标文件路径
+    69 |         content: 要写入的内容
+    70 |         mode: 写入模式（"a" 追加，"w" 覆盖）
+    73 |         是否成功
+  ... 还有 63 处
+
+core\fetcher.py (98 处):
+     2 | 视频获取模块
+     3 | 解析频道 / 播放列表 / 单视频 / URL 列表，调用 yt-dlp 获取视频信息
+     4 | 符合 error_handling.md 规范：将 yt-dlp 错误映射为 AppException
+    20 |     """从 yt-dlp 的 stderr 中提取真正的错误消息，过滤掉警告
+    23 |         stderr: yt-dlp 的错误输出（可能包含 WARNING 和 ERROR）
+    26 |         只包含 ERROR 消息的字符串
+    59 |     """将 yt-dlp 错误映射为 AppException
+    61 |     符合 error_handling.md 规范：
+    62 |     - 将 yt-dlp 退出码与常见 stderr 文案映射为 NETWORK / RATE_LIMIT / CONTENT / EXTERNAL_SERVICE
+    65 |         returncode: yt-dlp 退出码
+    66 |         stderr: yt-dlp 错误输出（可能包含 WARNING 和 ERROR）
+    67 |         timeout: 是否超时
+    70 |         AppException 实例
+    79 |             message=f"yt-dlp 执行超时",
+    99 |         msg = error_message[:200] if error_message else (stderr[:200] if stderr else '未知网络错误')
+   101 |             message=f"网络错误: {msg}",
+   111 |         msg = error_message[:200] if error_message else (stderr[:200] if stderr else '未知网络错误')
+   113 |             message=f"网络错误（认证检查失败，可能由网络问题导致）: {msg}",
+   121 |             message=f"请求频率限制: {msg}",
+   134 |         msg = error_message[:200] if error_message else (stderr[:200] if stderr else '认证失败')
+  ... 还有 78 处
+
+core\incremental.py (57 处):
+     2 | 增量管理模块
+     3 | 使用 yt-dlp --download-archive 格式记录已成功处理的视频
+    17 |     """增量管理器
+    19 |     负责管理已成功处理的视频记录，使用 yt-dlp --download-archive 格式
+    23 |         """初始化增量管理器
+    26 |             config_manager: ConfigManager 实例，如果为 None 则创建新实例
+    38 |         """获取频道 archive 文件路径
+    41 |             channel_id: 频道 ID（如 "UCxxxxxx"）
+    44 |             archive 文件路径
+    49 |         """获取 URL 列表批次的 archive 文件路径
+    52 |             batch_id: 批次 ID，如果为 None 则自动生成（格式：batch_YYYYMMDD_HHMMSS）
+    55 |             archive 文件路径
+    62 |         """获取播放列表 archive 文件路径
+    65 |             playlist_id: 播放列表 ID
+    68 |             archive 文件路径
+    73 |         """判断视频是否已处理过
+    76 |             video_id: 视频 ID
+    77 |             archive_path: archive 文件路径
+    80 |             如果视频已处理过则返回 True，否则返回 False
+    93 |             logger.warning(f"读取 archive 文件失败: {e}")
+  ... 还有 37 处
+
+core\language.py (28 处):
+     2 | LanguageConfig & 语言相关工具
+     3 | 语言配置模块
+    14 |     """语言配置模型
+    16 |     明确区分：
+    17 |     - UI 语言（界面显示语言）
+    18 |     - 字幕翻译目标语言（字幕要翻成什么）
+    19 |     - 摘要语言（摘要用什么语言写）
+    20 |     - 双语字幕模式
+    21 |     - 翻译策略
+    22 |     - 字幕输出格式
+    37 |         """转换为字典（用于 JSON 序列化）"""
+    53 |         """从字典创建（用于 JSON 反序列化）
+    55 |         自动处理：
+    56 |         1. 转换旧字段名为新字段名（向后兼容）
+    57 |         2. 标准化语言代码
+    62 |             logger.debug("检测到旧字段名 'target_languages'，已转换为 'subtitle_target_languages'")
+    89 |     """标准化语言代码
+    91 |     规则：
+    92 |     - zh-CN, zh-TW 保持不变（完整格式）
+    93 |     - 其他语言转换为简短格式（如 en-US -> en）
+  ... 还有 8 处
+
+core\logger.py (112 处):
+     2 | 统一日志系统
+     3 | 符合 logging_spec.md 规范的日志系统
+     4 | 支持：文件输出、控制台输出、UI回调、敏感信息脱敏、上下文字段、国际化
+    26 |     """延迟加载 i18n 模块，避免循环依赖
+    29 |         i18n_manager 模块，如果不可用则返回 None
+    45 |     """翻译日志消息
+    49 |         **kwargs: 格式化参数（用于 {placeholder} 替换）
+    52 |         翻译后的消息，如果翻译失败则返回原 key
+    95 |     """翻译异常消息
+    99 |         **kwargs: 格式化参数
+   102 |         翻译后的消息，如果翻译失败则返回原 key
+   148 |     """设置日志上下文（线程本地）
+   151 |         run_id: 批次ID（格式：YYYYMMDD_HHMMSS）
+   152 |         task: 任务阶段（download, translate, summarize, output, dryrun等）
+   153 |         video_id: 视频ID
+   154 |         **kwargs: 其他上下文字段（provider, model, latency_ms, tokens, proxy_id, retries, error_type等）
+   163 |     """清除日志上下文"""
+   175 |     """脱敏处理：移除敏感信息
+   177 |     严禁出现在日志中的内容：
+   178 |     - API Key（sk-开头、各种格式）
+  ... 还有 92 处
+
+core\output\formats\subtitle.py (26 处):
+     2 | 字幕输出格式处理
+     3 | 支持 SRT、VTT、TXT 格式
+    17 |     """解析 SRT 或 VTT 字幕文件内容
+    20 |         srt_content: SRT 或 VTT 文件内容
+    23 |         字幕条目列表，每个条目包含：
+   176 |     """合并源语言和目标语言字幕条目
+   178 |     根据时间轴对齐，生成双语字幕（格式：源语言 / 目标语言）
+   181 |         source_entries: 源语言字幕条目列表
+   182 |         target_entries: 目标语言字幕条目列表
+   185 |         合并后的 SRT 格式字符串
+   223 |     logger.debug(f"字幕合并完成: 匹配 {matched_count} 条，未匹配 {unmatched_count} 条")
+   231 |     """合并源语言和目标语言字幕条目为 TXT 格式（去掉时间轴）
+   233 |     保持字幕条目的空行分隔，双语字幕保持上下放置格式
+   236 |         source_entries: 源语言字幕条目列表
+   237 |         target_entries: 目标语言字幕条目列表
+   240 |         合并后的 TXT 格式字符串（每个条目之间有空行分隔）
+   286 |     """将 SRT 字幕转换为纯文本（去掉时间轴）
+   288 |     保持字幕条目的空行分隔，对于双语字幕保持上下放置格式
+   291 |         srt_content: SRT 文件内容
+   294 |         纯文本内容（每个字幕条目之间有空行分隔）
+  ... 还有 6 处
+
+core\output\writer.py (101 处):
+     2 | 输出模块
+     3 | 按 v2_final_plan.md 规定的结构创建目录和文件
+     4 | 符合 error_handling.md 规范：文件IO错误映射，使用原子写文件
+    32 |     """输出写入器
+    34 |     负责按统一结构创建目录和文件，使用语言代码命名
+    38 |         """初始化输出写入器
+    41 |             base_output_dir: 基础输出目录（通常是 "out"）
+    52 |         """获取视频的输出目录路径
+    54 |         根据模式确定目录结构：
+    55 |         - 频道模式：out/频道名称 [UCxxxxxx]/视频ID 标题/
+    56 |         - 单视频/URL列表模式：out/视频ID 标题/
+    59 |             video_info: 视频信息
+    60 |             channel_name: 频道名称（频道模式时提供）
+    61 |             channel_id: 频道 ID（频道模式时提供）
+    64 |             视频输出目录路径
+    87 |         """写入原始字幕文件
+    90 |             video_dir: 视频输出目录
+    91 |             subtitle_path: 源字幕文件路径
+    92 |             source_language: 源语言代码
+    95 |             写入的文件路径
+  ... 还有 81 处
+
+core\output_legacy.py (155 处):
+     2 | 输出模块
+     3 | 按 v2_final_plan.md 规定的结构创建目录和文件
+     4 | 符合 error_handling.md 规范：文件IO错误映射，使用原子写文件
+    24 |     """输出写入器
+    26 |     负责按统一结构创建目录和文件，使用语言代码命名
+    30 |         """初始化输出写入器
+    33 |             base_output_dir: 基础输出目录（通常是 "out"）
+    44 |         """获取视频的输出目录路径
+    46 |         根据模式确定目录结构：
+    47 |         - 频道模式：out/频道名称 [UCxxxxxx]/视频ID 标题/
+    48 |         - 单视频/URL列表模式：out/视频ID 标题/
+    51 |             video_info: 视频信息
+    52 |             channel_name: 频道名称（频道模式时提供）
+    53 |             channel_id: 频道 ID（频道模式时提供）
+    56 |             视频输出目录路径
+    79 |         """写入原始字幕文件
+    82 |             video_dir: 视频输出目录
+    83 |             subtitle_path: 源字幕文件路径
+    84 |             source_language: 源语言代码
+    87 |             写入的文件路径
+  ... 还有 135 处
+
+core\pipeline_legacy.py (152 处):
+     2 | 主流水线模块
+     3 | 串联：检测 → 下载 → 翻译 → 摘要 → 输出 → 增量更新
+     4 | 符合 error_handling.md 和 logging_spec.md 规范
+    38 |     """安全的日志回调执行
+    41 |         on_log: 日志回调函数（可能为 None）
+    42 |         level: 日志级别
+    43 |         message: 日志消息
+    44 |         video_id: 视频 ID（可选）
+    50 |             logger.warning(f"日志回调执行失败: {e}")
+    72 |     """处理单个视频的完整流程
+    74 |     符合 error_handling.md 规范：
+    75 |     - 使用统一的错误处理
+    76 |     - 仅在最终失败时写入失败记录
+    77 |     - 使用日志上下文（run_id, task, video_id）
+    80 |         video_info: 视频信息
+    81 |         language_config: 语言配置
+    82 |         translation_llm: 翻译 LLM 客户端（可选）
+    83 |         summary_llm: 摘要 LLM 客户端（可选）
+    84 |         output_writer: 输出写入器
+    85 |         failure_logger: 失败记录器
+  ... 还有 132 处
+
+core\proxy_manager.py (64 处):
+     2 | 代理管理器模块
+     3 | 实现多代理列表管理、round-robin 轮询、简单健康检查
+    20 |     """代理状态信息"""
+    32 |         """标记成功"""
+    43 |         """标记失败
+    46 |             error: 错误原因
+    47 |             failure_threshold: 失败阈值（连续失败超过此值标记为不健康），默认 5
+    57 |             logger.warning(f"代理标记为不健康: {self.proxy} (连续失败 {self.consecutive_failures} 次)")
+    60 |         """判断是否应该重试（探测恢复）
+    63 |             retry_delay_minutes: 重试延迟（分钟）
+    66 |             是否应该尝试恢复
+    79 |     """代理管理器
+    81 |     实现 round-robin 轮询策略和简单健康管理。
+    82 |     支持多代理列表（数量不锁死），连续失败超过阈值暂时禁用，延迟后重试。
+    93 |         """初始化代理管理器
+    96 |             proxies: 代理列表（格式：http://host:port 或 socks5://host:port）
+    97 |             failure_threshold: 失败阈值（连续失败超过此值标记为不健康），默认 5
+    98 |             retry_delay_minutes: 重试延迟（分钟），默认 10
+    99 |             enable_health_probe: 是否启用健康探测，默认 True
+   100 |             probe_interval_minutes: 健康探测间隔（分钟），默认 5
+  ... 还有 44 处
+
+core\staged_pipeline\processors\output.py (22 处):
+     2 | OUTPUT 阶段处理器
+    17 |     """输出处理器
+    19 |     负责写入输出文件和清理临时目录
+    33 |         """初始化输出处理器
+    36 |             language_config: 语言配置
+    37 |             output_writer: 输出写入器
+    38 |             incremental_manager: 增量管理器
+    39 |             archive_path: archive 文件路径
+    40 |             dry_run: 是否 Dry Run 模式
+    41 |             cancel_token: 取消令牌
+    42 |             translation_llm: 翻译 LLM 客户端（可选）
+    43 |             summary_llm: 摘要 LLM 客户端（可选）
+    55 |         """处理 OUTPUT 阶段
+    57 |         1. 写入输出文件（Dry Run 模式下跳过）
+    58 |         2. 更新增量记录（如果成功）
+    59 |         3. 清理临时目录（无论成功/失败）
+    62 |             data: 阶段数据
+    65 |             处理后的阶段数据
+   106 |                                 f"补充官方字幕到翻译结果: {target_lang} <- {official_path}",
+   127 |                 logger.debug(f"[Dry Run] 跳过写入输出文件: {vid}", video_id=vid)
+  ... 还有 2 处
+
+core\staged_pipeline\processors\summarize.py (17 处):
+     2 | SUMMARIZE 阶段处理器
+    17 |     """摘要处理器
+    19 |     负责生成视频摘要
+    30 |         """初始化摘要处理器
+    33 |             language_config: 语言配置
+    34 |             summary_llm: 摘要 LLM 客户端（可选）
+    35 |             force: 是否强制重跑
+    36 |             dry_run: 是否 Dry Run 模式
+    37 |             cancel_token: 取消令牌
+    46 |         """处理 SUMMARIZE 阶段
+    48 |         1. 检查是否有翻译结果或原始字幕，以及是否有 summary_llm
+    49 |         2. 如果有，调用摘要生成器
+    50 |         3. 摘要失败不视为整体失败
+    53 |             data: 阶段数据
+    56 |             处理后的阶段数据
+    67 |                 logger.debug(f"摘要 LLM 不可用，跳过摘要生成: {vid}", video_id=vid)
+    84 |                 logger.debug(f"无可用字幕，跳过摘要生成: {vid}", video_id=vid)
+
+core\staged_pipeline\processors\translate.py (43 处):
+     2 | TRANSLATE 阶段处理器
+    17 |     """检查两个语言代码是否匹配（考虑主语言代码）"""
+    35 |     """翻译处理器
+    37 |     负责翻译字幕文件
+    51 |         """初始化翻译处理器
+    54 |             language_config: 语言配置
+    55 |             translation_llm: 翻译 LLM 客户端（可选）
+    56 |             force: 是否强制重跑
+    57 |             dry_run: 是否 Dry Run 模式
+    58 |             cancel_token: 取消令牌
+    59 |             translation_llm_init_error_type: 翻译 LLM 初始化错误类型
+    60 |             translation_llm_init_error: 翻译 LLM 初始化错误信息
+    61 |             on_log: 日志回调
+    73 |         """处理 TRANSLATE 阶段
+    75 |         1. 检查哪些语言有官方字幕，哪些需要翻译
+    76 |         2. 如果有需要翻译的语言，调用翻译器
+    77 |         3. 合并翻译结果和官方字幕
+    78 |         4. 检查是否所有目标语言都有翻译结果
+    81 |             data: 阶段数据
+    84 |             处理后的阶段数据
+  ... 还有 23 处
+
+core\staged_pipeline\queue.py (40 处):
+     2 | 阶段队列管理
+    19 |     """阶段队列
+    21 |     管理单个阶段的队列和执行器，支持并发处理和错误处理
+    34 |         """初始化阶段队列
+    37 |             stage_name: 阶段名称（如 "detect", "download" 等）
+    38 |             executor: 线程池执行器
+    39 |             processor: 阶段处理函数 (StageData) -> StageData
+    40 |             next_stage_queue: 下一阶段的队列（如果为 None 则表示这是最后一个阶段）
+    41 |             max_queue_size: 最大队列大小
+    42 |             failure_logger: 失败记录器
+    43 |             cancel_token: 取消令牌
+    60 |         """将数据加入队列
+    62 |         如果队列已满，会阻塞直到有空间
+    65 |             data: 阶段数据
+    72 |             logger.error(f"阶段 {self.stage_name} 入队失败: {e}")
+    76 |         """启动阶段处理
+    79 |             num_workers: worker 线程数量，如果为 None 则使用 executor 的 max_workers
+    82 |             logger.warning(f"阶段 {self.stage_name} 已经在运行")
+   100 |         """停止阶段处理
+   103 |             timeout: 等待 worker 线程停止的超时时间（秒）
+  ... 还有 20 处
+
+core\staged_pipeline\scheduler.py (31 处):
+     2 | 分阶段 Pipeline 调度器
+    29 |     """分阶段 Pipeline 编排器
+    31 |     将视频处理流程拆分为多个阶段，每个阶段有独立的队列和执行器
+    59 |         """初始化分阶段 Pipeline
+    62 |             language_config: 语言配置
+    63 |             translation_llm: 翻译 LLM 客户端（可选）
+    64 |             summary_llm: 摘要 LLM 客户端（可选）
+    65 |             output_writer: 输出写入器
+    66 |             failure_logger: 失败记录器
+    67 |             incremental_manager: 增量管理器
+    68 |             archive_path: archive 文件路径
+    69 |             force: 是否强制重跑
+    70 |             dry_run: 是否 Dry Run 模式
+    71 |             cancel_token: 取消令牌
+    72 |             proxy_manager: 代理管理器
+    73 |             cookie_manager: Cookie 管理器
+    74 |             run_id: 批次ID（run_id）
+    75 |             on_log: 日志回调
+    76 |             detect_concurrency: DETECT 阶段并发数
+    77 |             download_concurrency: DOWNLOAD 阶段并发数
+  ... 还有 11 处
+
+core\staged_pipeline_legacy.py (194 处):
+     2 | 分阶段队列化 Pipeline 模块
+     3 | 实现多阶段队列处理，支持不同阶段配置不同并发数
+    31 |     """阶段数据容器
+    33 |     用于在阶段之间传递视频处理数据
+    52 |     """阶段队列
+    54 |     管理单个阶段的队列和执行器，支持并发处理和错误处理
+    67 |         """初始化阶段队列
+    70 |             stage_name: 阶段名称（如 "detect", "download" 等）
+    71 |             executor: 线程池执行器
+    72 |             processor: 阶段处理函数 (StageData) -> StageData
+    73 |             next_stage_queue: 下一阶段的队列（如果为 None 则表示这是最后一个阶段）
+    74 |             max_queue_size: 最大队列大小
+    75 |             failure_logger: 失败记录器
+    76 |             cancel_token: 取消令牌
+    93 |         """将数据加入队列
+    95 |         如果队列已满，会阻塞直到有空间
+    98 |             data: 阶段数据
+   105 |             logger.error(f"阶段 {self.stage_name} 入队失败: {e}")
+   109 |         """启动阶段处理
+   112 |             num_workers: worker 线程数量，如果为 None 则使用 executor 的 max_workers
+  ... 还有 174 处
+
+core\summarizer.py (56 处):
+     2 | AI 摘要模块
+     3 | 调用大模型对字幕文本生成单语言摘要
+     4 | 符合 error_handling.md 规范：将 LLMException 适配为 AppException
+    21 |     """摘要生成器
+    23 |     根据 LanguageConfig 生成单语言摘要
+    27 |         """初始化摘要生成器
+    30 |             llm: LLM 客户端实例（符合 ai_design.md 规范）
+    31 |             language_config: 语言配置
+    39 |         """获取摘要错误信息
+    42 |             摘要错误信息，如果没有错误则返回 None
+    55 |         """生成视频摘要
+    57 |         根据 LanguageConfig 生成单语言摘要
+    60 |             video_info: 视频信息
+    61 |             language_config: 语言配置
+    62 |             translation_result: 翻译结果（包含翻译后的字幕文件路径）
+    63 |             download_result: 下载结果（包含原始字幕路径）
+    64 |             output_path: 输出目录路径
+    65 |             force_regenerate: 是否强制重新生成摘要（忽略已存在的摘要文件）
+    68 |             摘要文件路径，如果失败则返回 None
+    83 |                 f"摘要文件已存在，跳过生成: {summary_path.name}",
+  ... 还有 36 处
+
+core\task_runner.py (39 处):
+     2 | 并发执行器模块
+     3 | 实现队列 + worker 池并发执行，支持配置并发数
+    16 |     """并发任务执行器
+    18 |     使用队列 + worker 池实现并发执行，支持配置并发数。
+    19 |     默认并发数 10（用于下载任务），不在代码中硬锁死上限，对过高配置只做日志警告。
+    23 |         """初始化任务执行器
+    26 |             concurrency: 并发数，默认 10（用于下载任务）
+    30 |             logger.warning(f"并发数无效（{concurrency}），重置为 1")
+    38 |                 f"并发数设置较高（{concurrency}），可能导致 IP 封锁或 429 错误，请谨慎使用"
+    42 |                 f"并发数设置为 {concurrency}，建议监控网络请求频率，避免触发限流"
+    60 |         """并发执行任务列表
+    63 |             tasks: 任务函数列表（每个函数不接受参数，返回任务结果）
+    64 |             task_names: 任务名称列表（用于日志），如果为 None 则使用索引
+    65 |             progress_callback: 进度回调函数 (completed, total, running_tasks) -> None
+    68 |             执行结果字典：
+    70 |                 "total": 总任务数,
+    71 |                 "success": 成功数,
+    72 |                 "failed": 失败数,
+    73 |                 "results": 成功结果列表,
+    74 |                 "errors": 错误信息列表
+  ... 还有 19 处
+
+core\translator.py (108 处):
+     2 | 字幕翻译模块
+     3 | 根据翻译策略调用 AI 翻译或使用官方字幕
+     4 | 符合 error_handling.md 规范：将 LLMException 适配为 AppException
+    23 |     """字幕翻译器
+    25 |     根据翻译策略决定是否调用 AI 翻译，或使用官方字幕
+    29 |         """初始化字幕翻译器
+    32 |             llm: LLM 客户端实例（符合 ai_design.md 规范）
+    33 |             language_config: 语言配置
+    41 |         """获取翻译错误信息
+    44 |             字典，包含每个目标语言的错误信息：{target_lang: AppException}
+    59 |         """翻译字幕
+    61 |         根据翻译策略和检测结果，决定是否调用 AI 翻译
+    64 |             video_info: 视频信息
+    65 |             detection_result: 字幕检测结果
+    66 |             language_config: 语言配置
+    67 |             download_result: 下载结果（包含原始字幕和官方翻译字幕路径）
+    68 |             output_path: 输出目录路径
+    69 |             force_retranslate: 是否强制重译（忽略已存在的翻译文件）
+    70 |             target_languages: 需要翻译的目标语言列表（如果为 None，则翻译所有目标语言）
+    71 |                             注意：此参数用于优化，只翻译没有官方字幕的语言
+  ... 还有 88 处
+
+ui\main_window.py (74 处):
+     2 | 主窗口 & 控件布局（重构版）
+     3 | 实现四区结构：顶部工具栏 + 左侧侧边栏 + 中间主区 + 底部日志框
+     4 | 使用组件化架构，main_window 仅负责布局和事件接线
+    34 |     """主窗口类（重构版）
+    36 |     实现四区布局，使用组件化架构：
+    37 |     - 顶部工具栏：应用标题、运行状态、功能按钮
+    38 |     - 左侧侧边栏：导航菜单（任务、运行设置、外观 & 系统）
+    39 |     - 中间主区：根据导航显示不同页面
+    40 |     - 底部日志框：实时显示日志
+    47 |         self.title("YouTube 字幕工具 v2")
+   109 |         """初始化 i18n，从配置读取语言设置"""
+   119 |         """从配置加载主题设置"""
+   130 |         """构建 UI 布局"""
+   173 |         """订阅事件"""
+   178 |         """切换页面"""
+   205 |                 get_logger().debug(f"保存页面内容时出错: {e}")
+   219 |                 get_logger().debug(f"恢复频道URL: {saved_channel_url[:50]}...")
+   249 |                 get_logger().debug(f"恢复URL列表文本，长度: {len(saved_url_list_text)}")
+   356 |         """创建线程安全的回调函数集
+   362 |             """线程安全的日志回调"""
+  ... 还有 54 处
+
+ui\pages\cookie_page.py (13 处):
+     2 | Cookie 配置页面
+    16 |     """Cookie 配置页面"""
+    34 |         """构建 UI"""
+   110 |         """从剪贴板粘贴 Cookie"""
+   118 |                 self.on_log_message("INFO", "已从剪贴板粘贴 Cookie")
+   120 |             logger.error(f"粘贴 Cookie 失败: {e}")
+   122 |                 self.on_log_message("ERROR", f"粘贴 Cookie 失败: {e}")
+   125 |         """清空 Cookie"""
+   131 |         """测试 Cookie"""
+   149 |                         msg += f" (地区: {result['region']})"
+   159 |                 logger.error(f"测试 Cookie 时出错: {e}")
+   172 |                         logger.debug(f"恢复按钮失败（可能已销毁）: {e}")
+   180 |         """保存 Cookie"""
+
+ui\pages\network_ai_page.py (32 处):
+     2 | 网络和 AI 设置页面
+     3 | 包含代理、Cookie、AI 配置等
+    19 |     """网络和 AI 设置页面"""
+    47 |         """构建 UI"""
+   242 |         """从剪贴板粘贴 Cookie"""
+   250 |                 self.on_log_message("INFO", "已从剪贴板粘贴 Cookie")
+   252 |             logger.error(f"粘贴 Cookie 失败: {e}")
+   254 |                 self.on_log_message("ERROR", f"粘贴 Cookie 失败: {e}")
+   257 |         """清空 Cookie"""
+   263 |         """测试 Cookie"""
+   281 |                         msg += f" (地区: {result['region']})"
+   291 |                 logger.error(f"测试 Cookie 时出错: {e}")
+   304 |                         logger.debug(f"恢复按钮失败（可能已销毁）: {e}")
+   312 |         """保存 Cookie"""
+   328 |         """清空代理列表"""
+   334 |         """保存代理列表"""
+   351 |         """构建 AI Profile 状态显示
+   354 |             parent_frame: 父框架
+   378 |                         f"翻译: {translation_profile.name} ({translation_profile.ai_config.provider}/{
+   382 |                         f"摘要: {summary_profile.name} ({summary_profile.ai_config.provider}/{summary_
+  ... 还有 12 处
+
+ui\pages\network_settings_page.py (47 处):
+     2 | 网络设置页面
+     3 | 包含 Cookie 和代理配置
+    17 |     """网络设置页面"""
+    43 |         """构建 UI"""
+   204 |         """从剪贴板粘贴 Cookie"""
+   213 |                 self.on_log_message("INFO", "已从剪贴板粘贴 Cookie")
+   215 |             logger.error(f"粘贴 Cookie 失败: {e}")
+   217 |                 self.on_log_message("ERROR", f"粘贴 Cookie 失败: {e}")
+   220 |         """清空 Cookie"""
+   227 |         """显示 Cookie 占位符"""
+   240 |         """Cookie 输入框获得焦点"""
+   246 |         """Cookie 输入框失去焦点"""
+   252 |         """Cookie 输入框按键事件"""
+   258 |         """测试 Cookie"""
+   282 |                         msg += f" (地区: {region})"
+   301 |                         msg += " (未检测到地区信息，Cookie 中可能没有 PREF 字段或 gl 参数)"
+   335 |                 logger.error(f"测试 Cookie 时出错: {e}")
+   348 |                         logger.debug(f"恢复按钮失败（可能已销毁）: {e}")
+   356 |         """更新地区信息显示"""
+   359 |                 text=f"当前地区: {self.network_region} (已缓存) - 点击'测试 Cookie'可重新检测",
+  ... 还有 27 处
+
+ui\pages\translation_summary_page.py (26 处):
+     2 | 翻译&摘要页面
+     3 | 包含翻译 AI 和摘要 AI 配置
+    50 |     """翻译&摘要页面"""
+    72 |         """构建 UI"""
+   163 |         """构建 AI 配置字段（辅助方法，用于翻译和摘要配置）
+   166 |             parent_frame: 父框架
+   167 |             ai_config: AI 配置字典
+   168 |             prefix: 字段前缀（"translation" 或 "summary"）
+   169 |             start_row: 起始行号
+   300 |         """获取有效的 base_url 值
+   303 |             prefix: 字段前缀（"translation" 或 "summary"）
+   306 |             有效的 base_url 字符串，如果无效则返回空字符串
+   325 |         """供应商选择改变时的回调
+   328 |             prefix: 字段前缀（"translation" 或 "summary"）
+   329 |             provider: 选择的供应商名称
+   359 |         """获取翻译 AI 配置"""
+   381 |             raise ValueError(f"翻译 AI 配置格式错误: {e}")
+   384 |         """获取摘要 AI 配置"""
+   406 |             raise ValueError(f"摘要 AI 配置格式错误: {e}")
+   409 |         """保存翻译 AI 配置"""
+  ... 还有 6 处
+
+
+[其他] (816 处):
+--------------------------------------------------------------------------------
+
+check_archive_migration.py (8 处):
+     1 | """Archive 迁移和增量行为检查脚本
+     3 | 用于验证 T0-2 测试：Archive 位置 + 迁移测试
+    11 |     """获取 archives 目录"""
+    15 |     """检查旧的 out/archive.txt 文件"""
+    47 |     """检查新的 archives/ 目录"""
+
+check_encoding.py (8 处):
+     4 | 检查项目文件的编码问题
+    20 |     """检查文件编码"""
+    38 |     """检查文件中的中文字符是否正常"""
+    63 |     """主函数"""
+    76 |         'docs/ide_修复任务表_AI层与流水线.md',
+
+check_error_classification.py (14 处):
+     1 | """错误分类与失败记录检查脚本
+     3 | 用于验证 T1-1 测试：错误分类与失败记录测试
+     4 | 检查 failed_detail.log、failed_urls.txt、failed_records.json 中的错误分类是否正确
+    20 |     """解析 failed_detail.log 文件"""
+    80 |     """解析 failed_urls.txt 文件"""
+
+check_file_integrity.py (8 处):
+     1 | """文件完整性检查脚本
+     3 | 用于验证 T0-4 测试：文件写入锁 + 原子写测试
+     4 | 检查高并发下文件写入是否正确，无错乱、无截断
+    11 |     """检查追加写入的文件（with_subtitle.txt, without_subtitle.txt, failed_urls.txt, failed_records.json）"""
+    67 |                                 json_issues.append(f"第 {i} 行: {str(e)}")
+
+check_temp_cleanup.py (6 处):
+     1 | """临时目录清理检查脚本
+     3 | 用于验证 T0-5 测试：临时目录清理测试
+     4 | 检查 temp/ 目录是否在任务结束后被正确清理
+    11 |     """查找所有可能的 temp 目录"""
+    36 |     """检查单个 temp 目录"""
+
+cli.py (2 处):
+     2 | CLI 入口文件（向后兼容）
+     3 | 实际实现已移至 cli/ 模块
+
+cli\__init__.py (2 处):
+     2 | CLI 模块
+     3 | 命令行接口入口
+
+config\__init__.py (1 处):
+     2 | 配置管理模块
+
+config\manager.py (25 处):
+     2 | 配置模型 + 读写逻辑（用户目录）
+     3 | 配置管理器
+    16 |     """获取用户数据目录路径（跨平台）
+    18 |     根据 v2_final_plan.md 约定：
+    24 |         用户数据目录的 Path 对象
+
+core\__init__.py (1 处):
+     2 | 核心业务逻辑模块

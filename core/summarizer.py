@@ -79,8 +79,9 @@ class Summarizer:
         
         # 检查是否已存在摘要文件（避免重复调用 AI）
         if summary_path.exists() and not force_regenerate:
-            logger.info(
-                f"摘要文件已存在，跳过生成: {summary_path.name}",
+            logger.info_i18n(
+                "summary_file_exists_skip",
+                file_name=summary_path.name,
                 video_id=video_info.video_id
             )
             return summary_path
@@ -93,8 +94,8 @@ class Summarizer:
         )
         
         if not source_subtitle_path or not source_subtitle_path.exists():
-            logger.warning(
-                f"无法找到摘要源字幕文件，跳过摘要生成",
+            logger.warning_i18n(
+                "summary_source_not_found_skip",
                 video_id=video_info.video_id
             )
             return None
@@ -102,8 +103,9 @@ class Summarizer:
         # 读取字幕文本
         subtitle_text = self._read_srt_file(source_subtitle_path)
         if not subtitle_text:
-            logger.error(
-                f"无法读取源字幕文件: {source_subtitle_path}",
+            logger.error_i18n(
+                "summary_source_read_failed",
+                path=str(source_subtitle_path),
                 video_id=video_info.video_id
             )
             return None
@@ -111,8 +113,8 @@ class Summarizer:
         # 提取纯文本（去除 SRT 格式的时间轴）
         plain_text = self._extract_text_from_srt(subtitle_text)
         if not plain_text:
-            logger.warning(
-                f"字幕文件为空，跳过摘要生成",
+            logger.warning_i18n(
+                "summary_subtitle_empty_skip",
                 video_id=video_info.video_id
             )
             return None
@@ -128,8 +130,8 @@ class Summarizer:
         try:
             summary_content = self._call_ai_api(prompt)
             if not summary_content:
-                logger.error(
-                    f"AI 摘要生成失败",
+                logger.error_i18n(
+                    "summary_ai_generate_failed",
                     video_id=video_info.video_id
                 )
                 return None
@@ -137,28 +139,32 @@ class Summarizer:
             # 保存摘要文件（使用原子写）
             from core.failure_logger import _atomic_write
             if not _atomic_write(summary_path, summary_content, mode="w"):
-                logger.error(
-                    f"保存摘要文件失败",
+                logger.error_i18n(
+                    "summary_save_failed",
                     video_id=video_info.video_id,
                     error_type=ErrorType.FILE_IO.value
                 )
                 return None
             
-            logger.info(
-                f"摘要生成完成: {summary_path.name}",
+            logger.info_i18n(
+                "summary_generate_complete",
+                file_name=summary_path.name,
                 video_id=video_info.video_id
             )
             return summary_path
             
         except LLMException as e:
             # 将 LLMException 适配为 AppException
+            from core.logger import translate_exception
+            error_msg = translate_exception("summary_generate_error", error=str(e))
             app_error = AppException(
-                message=f"摘要生成过程出错: {e}",
+                message=error_msg,
                 error_type=map_llm_error_to_app_error(e.error_type.value),
                 cause=e
             )
-            logger.error(
-                f"摘要生成过程出错: {app_error}",
+            logger.error_i18n(
+                "exception.summary_generate_error",
+                error=str(app_error),
                 video_id=video_info.video_id,
                 error_type=app_error.error_type.value
             )
@@ -215,19 +221,19 @@ class Summarizer:
         # 优先使用翻译后的字幕（如果存在）
         translated_path = translation_result.get(summary_language)
         if translated_path and translated_path.exists():
-            logger.info(f"使用翻译后的字幕作为摘要源: {translated_path.name}")
+            logger.info_i18n("summary_source_translated", file_name=translated_path.name)
             return translated_path
         
         # 否则使用原始字幕
         original_path = download_result.get("original")
         if original_path and original_path.exists():
-            logger.info(f"使用原始字幕作为摘要源: {original_path.name}")
+            logger.info_i18n("summary_source_original", file_name=original_path.name)
             return original_path
         
         # 如果都没有，尝试使用任何可用的翻译字幕
         for lang, path in translation_result.items():
             if path and path.exists():
-                logger.info(f"使用翻译字幕作为摘要源: {path.name} (语言: {lang})")
+                logger.info_i18n("summary_source_translated_lang", file_name=path.name, lang=lang)
                 return path
         
         return None
@@ -343,8 +349,10 @@ class Summarizer:
             raise
         except Exception as e:
             # 未映射的异常，转换为 LLMException
+            from core.logger import translate_exception
+            error_msg = translate_exception("ai_api_call_failed", error=str(e))
             raise LLMException(
-                f"AI API 调用失败: {e}",
+                error_msg,
                 LLMErrorType.UNKNOWN
             )
     

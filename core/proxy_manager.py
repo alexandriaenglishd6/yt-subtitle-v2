@@ -54,7 +54,7 @@ class ProxyStatus:
         if self.consecutive_failures >= failure_threshold and not self.is_unhealthy:
             self.is_unhealthy = True
             self.marked_unhealthy_time = datetime.now()
-            logger.warning(f"代理标记为不健康: {self.proxy} (连续失败 {self.consecutive_failures} 次)")
+            logger.warning_i18n("proxy_marked_unhealthy", proxy=self.proxy, failures=self.consecutive_failures)
     
     def should_retry(self, retry_delay_minutes: int = 10) -> bool:
         """判断是否应该重试（探测恢复）
@@ -112,7 +112,7 @@ class ProxyManager:
                 valid_proxies.append(proxy)
             else:
                 invalid_proxies.append(proxy)
-                logger.warning(f"无效的代理格式，已跳过: {proxy}")
+                logger.warning_i18n("proxy_invalid_format_skipped", proxy=proxy)
         
         self.proxies = valid_proxies
         self.failure_threshold = failure_threshold
@@ -137,7 +137,7 @@ class ProxyManager:
             self._start_health_probe()
         
         if invalid_proxies:
-            logger.warning(f"已过滤 {len(invalid_proxies)} 个无效代理，保留 {len(self.proxies)} 个有效代理")
+            logger.warning_i18n("proxy_invalid_filtered", invalid_count=len(invalid_proxies), valid_count=len(self.proxies))
         
         if self.proxies:
             logger.info_i18n("proxy_manager_init", count=len(self.proxies))
@@ -207,23 +207,23 @@ class ProxyManager:
                     if self._proxy_statuses[p].should_retry(self.retry_delay_minutes)
                 ]
                 if retryable_proxies:
-                    logger.info(f"尝试恢复代理: {len(retryable_proxies)} 个代理可重试")
+                    logger.info_i18n("proxy_retry_attempt", count=len(retryable_proxies))
                     healthy_proxies = retryable_proxies
             
             # 如果还是没有健康的代理
             if not healthy_proxies:
                 if allow_direct and self.allow_direct_connection:
                     # 所有代理都不健康，尝试直连
-                    logger.warning("所有代理都不健康，尝试直连")
+                    logger.warning_i18n("proxy_all_unhealthy_direct")
                     return None
                 else:
                     # 不允许直连，选择失败最少的代理
                     best_proxy = self._get_best_unhealthy_proxy()
                     if best_proxy:
-                        logger.warning(f"所有代理都不健康，使用失败最少的代理: {best_proxy}")
+                        logger.warning_i18n("proxy_all_unhealthy_use_best", proxy=best_proxy)
                         return best_proxy
                     # 如果还是没有，使用所有代理（包括不健康的）
-                    logger.warning("所有代理都不健康，将使用不健康代理")
+                    logger.warning_i18n("proxy_all_unhealthy_use_unhealthy")
                     healthy_proxies = self.proxies
             
             # round-robin 选择
@@ -276,7 +276,7 @@ class ProxyManager:
             recovered = status.mark_success()
             
             if recovered:
-                logger.info(f"代理已恢复健康: {proxy}")
+                logger.info_i18n("proxy_recovered", proxy=proxy)
     
     def mark_failure(self, proxy: str, error: Optional[str] = None):
         """标记代理失败
@@ -350,7 +350,7 @@ class ProxyManager:
             status.is_unhealthy = False
             status.marked_unhealthy_time = None
             status.last_error = None
-            logger.info(f"代理状态已重置: {proxy}")
+            logger.info_i18n("proxy_status_reset", proxy=proxy)
     
     def reset_all(self):
         """重置所有代理状态"""
@@ -360,7 +360,7 @@ class ProxyManager:
                 status.is_unhealthy = False
                 status.marked_unhealthy_time = None
                 status.last_error = None
-            logger.info("所有代理状态已重置")
+            logger.info_i18n("proxy_all_status_reset")
     
     def _start_health_probe(self):
         """启动健康探测线程"""
@@ -372,7 +372,7 @@ class ProxyManager:
             try:
                 import requests
             except ImportError:
-                logger.warning("requests 库未安装，健康探测功能不可用")
+                logger.warning_i18n("proxy_health_probe_unavailable")
                 return
             
             from requests.adapters import HTTPAdapter
@@ -403,7 +403,7 @@ class ProxyManager:
                     if not unhealthy_proxies:
                         continue
                     
-                    logger.debug(f"开始健康探测: {len(unhealthy_proxies)} 个代理")
+                    logger.debug_i18n("proxy_health_probe_start", count=len(unhealthy_proxies))
                     
                     # 对每个 unhealthy 代理进行轻量探测
                     for proxy, status in unhealthy_proxies:
@@ -432,16 +432,16 @@ class ProxyManager:
                                 with self._lock:
                                     if proxy in self._proxy_statuses:
                                         self.mark_success(proxy)
-                                        logger.info(f"健康探测成功，代理已恢复: {proxy}")
+                                        logger.info_i18n("proxy_health_probe_success", proxy=proxy)
                             else:
-                                logger.debug(f"健康探测失败: {proxy} (状态码: {response.status_code})")
+                                logger.debug_i18n("proxy_health_probe_failed_status", proxy=proxy, status_code=response.status_code)
                         
                         except Exception as e:
-                            logger.debug(f"健康探测失败: {proxy} - {str(e)}")
+                            logger.debug_i18n("proxy_health_probe_failed_error", proxy=proxy, error=str(e))
                             # 探测失败不影响代理状态（不增加失败计数）
                 
                 except Exception as e:
-                    logger.warning(f"健康探测线程异常: {e}")
+                    logger.warning_i18n("proxy_health_probe_thread_error", error=str(e))
         
         self._probe_thread = threading.Thread(target=probe_worker, daemon=True, name="ProxyHealthProbe")
         self._probe_thread.start()

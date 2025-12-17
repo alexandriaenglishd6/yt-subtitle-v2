@@ -4,7 +4,7 @@ SUMMARIZE 阶段处理器
 from pathlib import Path
 from typing import Optional, Callable, Any
 
-from core.logger import get_logger, set_log_context, clear_log_context
+from core.logger import get_logger, set_log_context, clear_log_context, translate_log
 from core.exceptions import ErrorType, AppException, TaskCancelledError
 from core.cancel_token import CancelToken
 from core.summarizer import Summarizer
@@ -64,7 +64,7 @@ class SummarizeProcessor:
             
             # 检查是否有必要的输入数据和 summary_llm
             if not self.summary_llm:
-                logger.debug(f"摘要 LLM 不可用，跳过摘要生成: {vid}", video_id=vid)
+                logger.debug_i18n("summary_llm_unavailable_skip", video_id=vid)
                 data.summary_result = None
                 return data
             
@@ -81,7 +81,7 @@ class SummarizeProcessor:
                 has_original = data.download_result["original"].exists()
             
             if not (has_translation or has_original):
-                logger.debug(f"无可用字幕，跳过摘要生成: {vid}", video_id=vid)
+                logger.debug_i18n("summary_no_subtitle_skip", video_id=vid)
                 data.summary_result = None
                 return data
             

@@ -46,7 +46,7 @@ class SubtitleDetector:
             subtitle_info = self._get_subtitle_info_ytdlp(video_info.url)
             
             if subtitle_info is None:
-                logger.warning(f"无法获取字幕信息: {video_info.video_id}")
+                logger.warning_i18n("log.detect_subtitle_info_failed", video_id=video_info.video_id)
                 return DetectionResult(
                     video_id=video_info.video_id,
                     has_subtitles=False,
@@ -98,7 +98,7 @@ class SubtitleDetector:
                 if auto_languages:
                     logger.info_i18n("detect_auto_languages", languages=', '.join(auto_languages))
             else:
-                logger.warning(f"视频无可用字幕: {video_info.video_id}")
+                logger.warning_i18n("log.video_no_subtitle", video_id=video_info.video_id)
             
             return result
             
@@ -149,9 +149,9 @@ class SubtitleDetector:
                     cmd.extend(["--cookies", cookie_file])
                     logger.info_i18n("cookie_file_detect_subtitle", cookie_file=cookie_file)
                 else:
-                    logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径（字幕检测）")
+                    logger.warning_i18n("log.cookie_file_path_unavailable_detect")
             else:
-                logger.debug("未配置 Cookie 管理器（字幕检测）")
+                logger.debug_i18n("log.cookie_manager_not_configured_detect")
             
             cmd.append(url)
             
@@ -239,7 +239,7 @@ class SubtitleDetector:
             fetcher = VideoFetcher()
             video_id = fetcher.extract_video_id(url)
             if not video_id:
-                logger.error(f"无法从 URL 提取视频 ID: {url}")
+                logger.error_i18n("log.video_id_extract_failed", url=url)
                 return DetectionResult(
                     video_id="unknown",
                     has_subtitles=False,

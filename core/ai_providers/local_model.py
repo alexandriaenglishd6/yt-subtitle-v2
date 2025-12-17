@@ -28,7 +28,7 @@ class LocalModelClient(OpenAICompatibleClient):
         original_timeout = ai_config.timeout_seconds
         ai_config.timeout_seconds = max(ai_config.timeout_seconds, self.MIN_TIMEOUT)
         if ai_config.timeout_seconds != original_timeout:
-            logger.debug(f"本地模型超时时间调整: {original_timeout}s -> {ai_config.timeout_seconds}s")
+            logger.debug_i18n("log.local_model_timeout_adjusted", original_timeout=original_timeout, new_timeout=ai_config.timeout_seconds)
 
         super().__init__(ai_config)
 
@@ -54,15 +54,15 @@ class LocalModelClient(OpenAICompatibleClient):
             response = requests.get(check_url, timeout=self.HEALTH_CHECK_TIMEOUT)
             return response.status_code == 200
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            logger.warning("本地模型服务不可用，请先启动 Ollama/LM Studio")
+            logger.warning_i18n("log.local_model_not_running")
             return False
         except Exception as e:
-            logger.debug(f"服务检查异常: {e}")
+            logger.debug_i18n("log.local_model_service_check_error", error=str(e))
             return False
 
     def _warmup(self) -> None:
         """预热本地模型：发送轻量级请求唤醒模型，避免首次正式请求超时"""
-        logger.info("正在预热本地模型...")
+        logger.info_i18n("log.local_model_warming_up")
 
         try:
             original_timeout = self.ai_config.timeout_seconds
@@ -71,10 +71,10 @@ class LocalModelClient(OpenAICompatibleClient):
             super().generate("Hi", max_tokens=5)
 
             self.ai_config.timeout_seconds = original_timeout
-            logger.info(f"本地模型预热完成（模型: {self.ai_config.model}）")
+            logger.info_i18n("log.local_model_warmup_complete", model=self.ai_config.model)
 
         except Exception as e:
-            logger.debug(f"预热失败（不影响使用）: {e}")
+            logger.debug_i18n("log.local_model_warmup_failed", error=str(e))
 
         self._warmed_up = True
 

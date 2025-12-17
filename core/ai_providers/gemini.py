@@ -165,7 +165,7 @@ class GeminiClient:
                     
                     if attempt < self.ai_config.max_retries and last_error.error_type in (LLMErrorType.RATE_LIMIT, LLMErrorType.NETWORK):
                         wait_time = 2 ** attempt
-                        logger.warning(f"遇到错误，{wait_time}秒后重试...")
+                        logger.warning_i18n("log.ai_retry_error", wait_time=wait_time)
                         time.sleep(wait_time)
                         continue
                     raise last_error

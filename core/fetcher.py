@@ -207,11 +207,11 @@ class VideoFetcher:
                 version = result.stdout.strip()
                 logger.info_i18n("ytdlp_available", version=version)
             else:
-                logger.warning("yt-dlp 可能不可用，请确保已安装")
+                logger.warning_i18n("ytdlp_maybe_unavailable")
         except FileNotFoundError:
-            logger.error(f"未找到 yt-dlp，请确保已安装并添加到 PATH，或使用 --yt-dlp-path 指定路径")
+            logger.error_i18n("ytdlp_not_found")
         except Exception as e:
-            logger.warning(f"检查 yt-dlp 时出错: {e}")
+            logger.warning_i18n("ytdlp_check_error", error=str(e))
     
     def identify_url_type(self, url: str) -> str:
         """识别 URL 类型
@@ -308,7 +308,7 @@ class VideoFetcher:
             VideoInfo 列表
         """
         try:
-            logger.info(f"开始获取频道视频列表: {channel_url}")
+            logger.info_i18n("fetching_channel_videos", url=channel_url)
             videos = self._get_channel_videos_ytdlp(channel_url)
             logger.info_i18n("channel_video_count", count=len(videos))
             if len(videos) == 0:
@@ -338,7 +338,7 @@ class VideoFetcher:
             VideoInfo 列表
         """
         try:
-            logger.info(f"开始获取播放列表视频: {playlist_url}")
+            logger.info_i18n("fetching_playlist_videos", url=playlist_url)
             videos = self._get_playlist_videos_ytdlp(playlist_url)
             logger.info_i18n("playlist_video_count", count=len(videos))
             return videos
@@ -368,14 +368,14 @@ class VideoFetcher:
             with open(file_path, "r", encoding="utf-8") as f:
                 urls = [line.strip() for line in f if line.strip()]
             
-            logger.info(f"从文件读取到 {len(urls)} 个 URL")
+            logger.info_i18n("urls_read_from_file", count=len(urls))
             
             all_videos = []
             for url in urls:
                 videos = self.fetch_from_url(url)
                 all_videos.extend(videos)
             
-            logger.info(f"总共获取到 {len(all_videos)} 个视频")
+            logger.info_i18n("total_videos_fetched", count=len(all_videos))
             return all_videos
         except (OSError, IOError, PermissionError) as e:
             # 文件IO错误
@@ -457,7 +457,7 @@ class VideoFetcher:
                             logger.info_i18n("using_cookie_file", cookie_file=cookie_file)
                     else:
                         if attempt == 0:
-                            logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径")
+                            logger.warning_i18n("cookie_manager_no_file")
                 
                 cmd.append(url)
                 
@@ -681,7 +681,7 @@ class VideoFetcher:
             # 超时错误：标记代理失败
             if proxy and self.proxy_manager:
                 self.proxy_manager.mark_failure(proxy, "超时")
-                logger.warning(f"代理 {proxy} 超时")
+                logger.warning_i18n("proxy_timeout", proxy=proxy)
             
             app_error = AppException(
                 message=f"获取频道视频列表超时: {channel_url}",
@@ -799,7 +799,7 @@ class VideoFetcher:
             # 超时错误：标记代理失败
             if proxy and self.proxy_manager:
                 self.proxy_manager.mark_failure(proxy, "超时")
-                logger.warning(f"代理 {proxy} 超时")
+                logger.warning_i18n("proxy_timeout", proxy=proxy)
             
             app_error = AppException(
                 message=f"获取播放列表视频超时: {playlist_url}",

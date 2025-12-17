@@ -7,7 +7,7 @@ from typing import Optional, Callable
 
 from core.models import VideoInfo
 from core.language import LanguageConfig
-from core.logger import get_logger, set_log_context, clear_log_context
+from core.logger import get_logger, set_log_context, clear_log_context, translate_log
 from core.detector import SubtitleDetector
 from core.downloader import SubtitleDownloader
 from core.translator import SubtitleTranslator
@@ -88,17 +88,17 @@ def process_single_video(
         
         # 检查取消状态
         if cancel_token and cancel_token.is_cancelled():
-            reason = cancel_token.get_reason() or "用户取消"
+            reason = cancel_token.get_reason() or translate_log("user_cancelled")
             msg = logger.info_i18n("task_cancelled", reason=reason, video_id=video_info.video_id)
             safe_log(on_log, "INFO", msg, video_info.video_id)
-            raise TaskCancelledError(f"任务已取消: {reason}")
+            raise TaskCancelledError(reason)
         
         msg = logger.info_i18n("video_processing_start", title=video_info.title, video_id=video_info.video_id)
         safe_log(on_log, "INFO", msg, video_info.video_id)
         
         # 1. 字幕检测
         if cancel_token and cancel_token.is_cancelled():
-            raise TaskCancelledError("任务已取消")
+            raise TaskCancelledError()
         
         msg = logger.info_i18n("detect_start", video_id=video_info.video_id)
         safe_log(on_log, "INFO", msg, video_info.video_id)
@@ -134,7 +134,7 @@ def process_single_video(
         
         # 2. 字幕下载
         if cancel_token and cancel_token.is_cancelled():
-            raise TaskCancelledError("任务已取消")
+            raise TaskCancelledError()
         
         msg = logger.info_i18n("download_start", video_id=video_info.video_id)
         safe_log(on_log, "INFO", msg, video_info.video_id)
@@ -183,7 +183,7 @@ def process_single_video(
         
         if language_config.target_languages and translation_llm:
             if cancel_token and cancel_token.is_cancelled():
-                raise TaskCancelledError("任务已取消")
+                raise TaskCancelledError()
             
             msg = logger.info_i18n("translation_start", video_id=video_info.video_id)
             safe_log(on_log, "INFO", msg, video_info.video_id)
@@ -231,7 +231,7 @@ def process_single_video(
             
         if language_config.summary_enabled and summary_llm and download_result.get("original"):
             if cancel_token and cancel_token.is_cancelled():
-                raise TaskCancelledError("任务已取消")
+                raise TaskCancelledError()
             
             msg = logger.info_i18n("summary_start", video_id=video_info.video_id)
             safe_log(on_log, "INFO", msg, video_info.video_id)
@@ -270,7 +270,7 @@ def process_single_video(
         # 5. 输出文件
         if not dry_run:
             if cancel_token and cancel_token.is_cancelled():
-                raise TaskCancelledError("任务已取消")
+                raise TaskCancelledError()
             
             msg = logger.info_i18n("output_start", video_id=video_info.video_id)
             safe_log(on_log, "INFO", msg, video_info.video_id)

@@ -115,6 +115,7 @@ class AppConfig:
     ai: Optional[AIConfig] = None
     ui_language: str = "zh-CN"  # UI 语言（zh-CN / en-US）
     theme: str = "light"  # UI 主题（light / light_gray / dark_gray / claude_warm）
+    force_rerun: bool = False  # 强制重跑选项（忽略历史记录）
     
     def to_dict(self) -> dict:
         """转换为字典（用于 JSON 序列化）"""
@@ -130,6 +131,7 @@ class AppConfig:
             "summary_ai": self.summary_ai.to_dict(),
             "ui_language": self.ui_language,
             "theme": self.theme,
+            "force_rerun": self.force_rerun,
         }
         # 向后兼容：如果 ai 字段存在，也保存（用于旧版本兼容）
         if self.ai is not None:
@@ -172,6 +174,7 @@ class AppConfig:
             ai=AIConfig.from_dict(old_ai) if old_ai else None,  # 保留用于向后兼容
             ui_language=data.get("ui_language", "zh-CN"),
             theme=data.get("theme", "light"),
+            force_rerun=data.get("force_rerun", False),  # 默认 False
         )
     
     @classmethod

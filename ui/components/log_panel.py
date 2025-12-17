@@ -25,7 +25,9 @@ class LogPanel(ctk.CTkFrame):
         # 统计信息
         self.stats = {"total": 0, "success": 0, "failed": 0}
         self.running_status = ""
-        self.cookie_status = ""  # Cookie 状态（如 "已配置"、"未配置"、"测试成功"、"测试失败" 等）
+        self.cookie_status = ""  # Cookie 状态（已翻译的文本）
+        # Cookie 状态的原始信息（用于语言切换时重新翻译）
+        self._cookie_info = {"cookie": None, "region": None, "test_result": None}
         self._build_ui()
     
     def _build_ui(self):
@@ -63,12 +65,12 @@ class LogPanel(ctk.CTkFrame):
         filter_frame.grid(row=0, column=2, padx=8, pady=4, sticky="e")
         
         # 日志级别过滤标签
-        filter_label = ctk.CTkLabel(
+        self.filter_label = ctk.CTkLabel(
             filter_frame,
             text=t("log_filter_label"),
             font=body_font()
         )
-        filter_label.pack(side="left", padx=4)
+        self.filter_label.pack(side="left", padx=4)
         
         # 日志级别下拉框
         filter_values = [
@@ -234,13 +236,23 @@ class LogPanel(ctk.CTkFrame):
         if hasattr(self, 'stats_label'):
             self.stats_label.configure(text=self._format_stats())
     
-    def update_cookie_status(self, cookie_status: str):
+    def update_cookie_status(self, cookie_status: str, cookie: Optional[str] = None, region: Optional[str] = None, test_result: Optional[str] = None):
         """更新 Cookie 状态
         
         Args:
-            cookie_status: Cookie 状态文本（如 "已配置"、"未配置"、"测试成功"、"测试失败" 等）
+            cookie_status: Cookie 状态文本（已翻译的文本）
+            cookie: Cookie 字符串（可选，用于语言切换时重新翻译）
+            region: 地区代码（可选）
+            test_result: 测试结果（可选，"success" 或 "failed"）
         """
         self.cookie_status = cookie_status
+        # 保存原始信息，用于语言切换时重新翻译
+        if cookie is not None:
+            self._cookie_info["cookie"] = cookie
+        if region is not None:
+            self._cookie_info["region"] = region
+        if test_result is not None:
+            self._cookie_info["test_result"] = test_result
         if hasattr(self, 'stats_label'):
             self.stats_label.configure(text=self._format_stats())
     
@@ -250,17 +262,53 @@ class LogPanel(ctk.CTkFrame):
         success = self.stats.get("success", 0)
         failed = self.stats.get("failed", 0)
         
-        # 格式化状态
+        # 格式化状态（将中文文本转换为翻译键）
         if self.running_status:
             if self.running_status.startswith("status_"):
                 status_display = t(self.running_status)
             else:
-                status_display = self.running_status
+                # 尝试将中文文本转换为翻译键
+                from ui.i18n_manager import get_language, load_translations
+                current_lang = get_language()
+                translations = load_translations(current_lang)
+                status_key = None
+                for key, value in translations.items():
+                    if key.startswith("status_") and value == self.running_status:
+                        status_key = key
+                        break
+                if status_key:
+                    status_display = t(status_key)
+                    # 更新为翻译键，以便下次直接使用
+                    self.running_status = status_key
+                else:
+                    status_display = self.running_status
         else:
             status_display = t("status_idle")
         
-        # 格式化 Cookie 状态
-        cookie_display = self.cookie_status if self.cookie_status else t("cookie_status_not_configured")
+        # 格式化 Cookie 状态（如果有原始信息，重新翻译；否则使用已保存的文本）
+        if self._cookie_info["cookie"] is not None:
+            # 重新翻译 Cookie 状态
+            cookie = self._cookie_info["cookie"]
+            region = self._cookie_info["region"]
+            test_result = self._cookie_info["test_result"]
+            if cookie:
+                if test_result == "failed":
+                    cookie_display = t("cookie_status_test_failed")
+                elif test_result == "success":
+                    if region:
+                        cookie_display = t("cookie_status_test_success_with_region", region=region)
+                    else:
+                        cookie_display = t("cookie_status_test_success")
+                else:
+                    if region:
+                        cookie_display = t("cookie_status_configured_with_region", region=region)
+                    else:
+                        cookie_display = t("cookie_status_configured")
+            else:
+                cookie_display = t("cookie_status_not_configured")
+        else:
+            # 没有原始信息，使用已保存的文本（可能是旧版本保存的）
+            cookie_display = self.cookie_status if self.cookie_status else t("cookie_status_not_configured")
         
         # 使用更清晰的分隔符，增加间隔（至少3个空格）
         return f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{t('stats_success')} {success} / {t('stats_failed')} {failed}   ••   {t('stats_status')}：{status_display}   ••   {t('stats_cookie')}：{cookie_display}"
@@ -269,8 +317,41 @@ class LogPanel(ctk.CTkFrame):
         """刷新语言相关文本"""
         if hasattr(self, 'log_title'):
             self.log_title.configure(text=t("log_output"))
+        # 刷新状态栏（会重新翻译状态和 Cookie 状态）
         if hasattr(self, 'stats_label'):
             self.stats_label.configure(text=self._format_stats())
+        # 刷新过滤控件
+        if hasattr(self, 'filter_combo'):
+            filter_values = [
+                t("log_filter_all"),
+                t("log_filter_debug"),
+                t("log_filter_info"),
+                t("log_filter_warn"),
+                t("log_filter_error")
+            ]
+            current_value = self.filter_combo.get()
+            # 保存当前选择的级别
+            current_level = self.filter_level
+            # 更新下拉框选项
+            self.filter_combo.configure(values=filter_values)
+            # 根据当前级别恢复选择
+            level_to_text = {
+                "ALL": t("log_filter_all"),
+                "DEBUG": t("log_filter_debug"),
+                "INFO": t("log_filter_info"),
+                "WARN": t("log_filter_warn"),
+                "ERROR": t("log_filter_error")
+            }
+            if current_level in level_to_text:
+                self.filter_combo.set(level_to_text[current_level])
+            else:
+                self.filter_combo.set(filter_values[0])
+        # 刷新自动滚动复选框
+        if hasattr(self, 'auto_scroll_checkbox'):
+            self.auto_scroll_checkbox.configure(text=t("log_auto_scroll"))
+        # 刷新过滤标签
+        if hasattr(self, 'filter_label'):
+            self.filter_label.configure(text=t("log_filter_label"))
         # 重新添加初始日志消息（使用新语言）
         self.clear()
         self.append_log("INFO", t("gui_started"))

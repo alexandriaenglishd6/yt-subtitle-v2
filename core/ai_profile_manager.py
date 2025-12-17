@@ -83,23 +83,23 @@ class AIProfileManager:
                         enabled=enabled
                     )
                     self.profiles[profile_name] = profile
-                    logger.debug(f"已加载 AI Profile: {profile_name}")
+                    logger.debug_i18n("log.ai_profile_loaded", profile_name=profile_name)
                 except Exception as e:
-                    logger.warning(f"加载 AI Profile '{profile_name}' 失败: {e}，跳过")
+                    logger.warning_i18n("log.ai_profile_load_failed", profile_name=profile_name, error=str(e))
             
             # 加载 task_mapping
             self.task_mapping = data.get("task_mapping", {})
             
-            logger.info(f"已加载 {len(self.profiles)} 个 AI Profiles，{len(self.task_mapping)} 个任务映射")
+            logger.info_i18n("log.ai_profile_loaded_summary", profile_count=len(self.profiles), mapping_count=len(self.task_mapping))
             self._loaded = True
             return True
             
         except json.JSONDecodeError as e:
-            logger.error(f"AI Profile 配置文件格式错误: {e}，将使用默认配置")
+            logger.error_i18n("log.ai_profile_config_format_error", error=str(e))
             self._loaded = True
             return False
         except Exception as e:
-            logger.error(f"加载 AI Profile 配置文件失败: {e}，将使用默认配置")
+            logger.error_i18n("log.ai_profile_config_load_failed", error=str(e))
             self._loaded = True
             return False
     
@@ -120,7 +120,7 @@ class AIProfileManager:
             return None
         
         if not profile.enabled:
-            logger.debug(f"AI Profile '{profile_name}' 已禁用")
+            logger.debug_i18n("log.ai_profile_disabled", profile_name=profile_name)
             return None
         
         return profile
@@ -161,7 +161,7 @@ class AIProfileManager:
         """
         profile = self.get_profile_for_task(task_type)
         if profile:
-            logger.debug(f"任务类型 '{task_type}' 使用 Profile: {profile.name}")
+            logger.debug_i18n("log.ai_profile_task_using_profile", task_type=task_type, profile_name=profile.name)
             return profile.ai_config
         
         # 回退到 fallback_config
@@ -243,11 +243,11 @@ class AIProfileManager:
             with open(self.profile_file, 'w', encoding='utf-8') as f:
                 json.dump(default_config, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"已创建默认 AI Profile 配置文件: {self.profile_file}")
+            logger.info_i18n("log.ai_profile_default_created", path=str(self.profile_file))
             return True
             
         except Exception as e:
-            logger.error(f"创建默认 AI Profile 配置文件失败: {e}")
+            logger.error_i18n("log.ai_profile_default_create_failed", error=str(e))
             return False
 
 

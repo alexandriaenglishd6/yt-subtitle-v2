@@ -52,7 +52,8 @@ def _append_line_safe(file_path: Path, line: str) -> bool:
                 os.fsync(f.fileno())  # 强制刷新到磁盘
         return True
     except Exception as e:
-        logger.error(f"线程安全追加写入失败 ({file_path}): {e}")
+        from core.logger import translate_log
+        logger.error_i18n("thread_safe_append_failed", file_path=str(file_path), error=str(e))
         return False
 
 
@@ -84,7 +85,7 @@ def _atomic_write(file_path: Path, content: str, mode: str = "a") -> bool:
             try:
                 existing_content = file_path.read_text(encoding="utf-8")
             except Exception as e:
-                logger.warning(f"读取原文件失败，将创建新文件: {e}")
+                logger.warning_i18n("read_original_file_failed", error=str(e))
         
         # 写入临时文件（追加模式下先写入原内容，再写入新内容）
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -104,7 +105,7 @@ def _atomic_write(file_path: Path, content: str, mode: str = "a") -> bool:
                 tmp_path.unlink()
         except Exception:
             pass
-        logger.error(f"原子写文件失败 ({file_path}): {e}")
+        logger.error_i18n("atomic_write_file_failed", file_path=str(file_path), error=str(e))
         return False
 
 
@@ -216,15 +217,12 @@ class FailureLogger:
             )
             
             # 静默记录（不阻塞主流程，不弹窗）
-            logger.warning(
-                f"失败记录已写入: {video_id} - {reason}",
-                video_id=video_id,
-                error_type=error_type.value
-            )
+            from core.logger import translate_log
+            logger.warning_i18n("failure_record_written", video_id=video_id, reason=reason, error_type=error_type.value)
             
         except Exception as e:
             # 失败记录写入失败不应该影响主流程
-            logger.error(f"写入失败记录失败: {e}", video_id=video_id)
+            logger.error_i18n("write_failure_record_failed", error=str(e), video_id=video_id)
     
     def log_download_failure(
         self,
@@ -377,7 +375,7 @@ class FailureLogger:
             
         except Exception as e:
             # JSON 记录写入失败不应该影响主流程
-            logger.debug(f"写入 JSON 记录失败: {e}", video_id=video_id)
+            logger.debug_i18n("write_json_record_failed", error=str(e), video_id=video_id)
     
     def clear_logs(self) -> None:
         """清空失败记录（谨慎使用）
@@ -391,6 +389,6 @@ class FailureLogger:
                 self.urls_file_path.unlink()
             if self.json_records_path.exists():
                 self.json_records_path.unlink()
-            logger.info("失败记录已清空")
+            logger.info_i18n("failure_records_cleared")
         except Exception as e:
-            logger.error(f"清空失败记录失败: {e}")
+            logger.error_i18n("clear_failure_records_failed", error=str(e))

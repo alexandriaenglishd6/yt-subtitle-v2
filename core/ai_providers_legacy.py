@@ -789,7 +789,9 @@ class GoogleTranslateClient:
                         translator = GoogleTranslator(source=source_lang_short, target=target_lang_short)
                         translated_text = translator.translate(subtitle_text)
                 else:
-                    raise LLMException("无法从 prompt 中提取字幕文本", LLMErrorType.UNKNOWN)
+                    from core.logger import translate_exception
+                    error_msg = translate_exception("exception.subtitle_text_extract_failed")
+                    raise LLMException(error_msg, LLMErrorType.UNKNOWN)
             else:
                 # 正常模式：提取到了字幕格式
                 # 转换语言代码格式（Google 翻译使用短格式，如 "zh", "en"）

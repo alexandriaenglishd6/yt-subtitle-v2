@@ -69,7 +69,7 @@ class StageQueue:
             with self._lock:
                 self._total_count += 1
         except Exception as e:
-            logger.error(f"阶段 {self.stage_name} 入队失败: {e}")
+            logger.error_i18n("log.stage_enqueue_failed", stage=self.stage_name, error=str(e))
             raise
     
     def start(self, num_workers: int = None):
@@ -79,7 +79,7 @@ class StageQueue:
             num_workers: worker 线程数量，如果为 None 则使用 executor 的 max_workers
         """
         if self.running:
-            logger.warning(f"阶段 {self.stage_name} 已经在运行")
+            logger.warning_i18n("log.stage_already_running", stage=self.stage_name)
             return
         
         self.running = True
@@ -120,7 +120,7 @@ class StageQueue:
         for worker in self.workers:
             worker.join(timeout=timeout)
             if worker.is_alive():
-                logger.warning(f"Worker 线程 {worker.name} 在超时后仍未停止")
+                logger.warning_i18n("log.worker_thread_timeout", worker_name=worker.name)
         
         self.workers.clear()
         logger.info_i18n("stage_stopped", stage=self.stage_name)
@@ -131,7 +131,7 @@ class StageQueue:
             try:
                 # 检查取消状态
                 if self.cancel_token and self.cancel_token.is_cancelled():
-                    logger.info(f"阶段 {self.stage_name} worker 检测到取消信号")
+                    logger.info_i18n("log.stage_worker_cancelled", stage=self.stage_name)
                     break
                 
                 # 从队列中获取数据（带超时，以便定期检查取消状态）
@@ -164,7 +164,7 @@ class StageQueue:
                             self._processed_count += 1
                 
                 except Exception as e:
-                    logger.error(f"阶段 {self.stage_name} 处理异常: {e}")
+                    logger.error_i18n("log.stage_process_exception", stage=self.stage_name, error=str(e))
                     import traceback
                     logger.debug(traceback.format_exc())
                     if data:
@@ -185,7 +185,7 @@ class StageQueue:
                     self.input_queue.task_done()
             
             except Exception as e:
-                logger.error(f"Worker 线程异常: {e}")
+                logger.error_i18n("log.worker_thread_exception", error=str(e))
                 import traceback
                 logger.debug(traceback.format_exc())
     
@@ -269,7 +269,7 @@ class StageQueue:
                     stage=self.stage_name
                 )
         except Exception as e:
-            logger.error(f"记录失败信息时出错: {e}")
+            logger.error_i18n("log.failure_log_error", error=str(e))
     
     def get_stats(self) -> Dict[str, int]:
         """获取阶段统计信息
