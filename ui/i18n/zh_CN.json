@@ -502,5 +502,14 @@
   "log.language_saved": "语言设置已保存到配置",
   "log.ui_text_refreshed": "UI 文本刷新完成",
   "log.language_no_change": "语言未变化，跳过",
-  "log.language_unknown": "未知的语言值: {value}"
+  "log.language_unknown": "未知的语言值: {value}",
+  
+  "user_request_stop": "用户请求停止处理",
+  "cancel_token_not_exists": "尝试取消任务，但 cancel_token 不存在（任务可能未开始或已结束）",
+  "gui_url_list_thread_started": "[GUI] URL列表处理任务线程已启动",
+  "gui_videos_fetched": "[GUI] 获取到 {count} 个视频",
+  "translation_ai_init_failed_skip": "翻译 AI 初始化失败: {error}，将跳过 AI 翻译",
+  "ai_profile_status_using": "当前使用 AI Profile 配置",
+  "ai_profile_status_default": "当前使用默认配置（config.json）",
+  "ai_profile_info_not_configured": "未配置 AI Profile，使用下方配置"
 }

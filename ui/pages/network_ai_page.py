@@ -369,7 +369,7 @@ class NetworkAIPage(ctk.CTkFrame):
             
             if translation_profile or summary_profile:
                 # 有 Profile 配置
-                status_text = "当前使用 AI Profile 配置"
+                status_text = t("ai_profile_status_using")
                 status_color = ("green", "lightgreen")
                 
                 profile_info_lines = []
@@ -385,9 +385,9 @@ class NetworkAIPage(ctk.CTkFrame):
                 profile_info = "\n".join(profile_info_lines)
             else:
                 # 使用默认配置
-                status_text = "当前使用默认配置（config.json）"
+                status_text = t("ai_profile_status_default")
                 status_color = ("gray50", "gray50")
-                profile_info = "未配置 AI Profile，使用下方配置"
+                profile_info = t("ai_profile_info_not_configured")
             
             status_label = ctk.CTkLabel(
                 profile_frame,

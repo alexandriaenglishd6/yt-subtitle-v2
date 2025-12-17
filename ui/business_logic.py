@@ -654,7 +654,8 @@ class VideoProcessor:
                 
                 # 如果翻译 AI 初始化失败，提前提示
                 if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
-                    error_msg = f"翻译 AI 初始化失败: {self.translation_llm_init_error}，将跳过 AI 翻译"
+                    from ui.i18n_manager import t
+                    error_msg = t("translation_ai_init_failed_skip", error=self.translation_llm_init_error)
                     on_log("WARN", error_msg)
                 
                 # 执行完整处理流程
@@ -672,9 +673,9 @@ class VideoProcessor:
         """停止处理（由 GUI 的停止按钮调用）"""
         if self.cancel_token is not None:
             self.cancel_token.cancel("用户点击停止按钮")
-            logger.info("用户请求停止处理")
+            logger.info_i18n("user_request_stop")
         else:
-            logger.warning("尝试取消任务，但 cancel_token 不存在（任务可能未开始或已结束）")
+            logger.warning_i18n("cancel_token_not_exists")
     
     def _run_full_processing(
         self,
@@ -830,7 +831,7 @@ class VideoProcessor:
         """
         def task():
             try:
-                logger.info(f"[GUI] URL列表处理任务线程已启动")
+                logger.info_i18n("gui_url_list_thread_started")
                 on_status(t("status_processing"))
                 on_log("INFO", t("processing_start_url_list"))
                 
@@ -839,7 +840,7 @@ class VideoProcessor:
                 if not videos:
                     return
                 
-                logger.info(f"[GUI] 获取到 {len(videos)} 个视频")
+                logger.info_i18n("gui_videos_fetched", count=len(videos))
                 
                 # 保存视频列表到文件
                 self._save_video_list(videos, "URL列表", None, None, on_log)
@@ -851,7 +852,8 @@ class VideoProcessor:
                 
                 # 如果翻译 AI 初始化失败，提前提示
                 if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
-                    error_msg = f"翻译 AI 初始化失败: {self.translation_llm_init_error}，将跳过 AI 翻译"
+                    from ui.i18n_manager import t
+                    error_msg = t("translation_ai_init_failed_skip", error=self.translation_llm_init_error)
                     on_log("WARN", error_msg)
                 
                 # 执行完整处理流程（URL 列表模式使用批次 archive）
