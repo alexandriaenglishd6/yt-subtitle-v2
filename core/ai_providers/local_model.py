@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import Optional
 import requests
-import threading
 
 from .openai_compatible import OpenAICompatibleClient
 from core.exceptions import LocalModelError
