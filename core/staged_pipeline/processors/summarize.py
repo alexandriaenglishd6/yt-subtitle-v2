@@ -85,11 +85,11 @@ class SummarizeProcessor:
                 data.summary_result = None
                 return data
             
-            logger.info(f"生成摘要: {vid}", video_id=vid)
+            logger.info_i18n("summary_generate", video_id=vid)
             
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():
-                reason = self.cancel_token.get_reason() or "用户取消"
+                reason = self.cancel_token.get_reason() or translate_log("user_cancelled")
                 raise TaskCancelledError(reason)
             
             # 生成摘要
@@ -104,7 +104,7 @@ class SummarizeProcessor:
             )
             
             if not summary_path:
-                logger.warning("摘要生成失败", video_id=vid)
+                logger.warning_i18n("summary_failed", video_id=vid)
                 if not self.dry_run:
                     # 尝试从 summarizer 获取错误类型
                     summary_error = summarizer.get_summary_error()
@@ -115,24 +115,24 @@ class SummarizeProcessor:
                     # 失败记录会在 StageQueue._log_failure 中处理
                     # 但这里需要设置错误信息以便记录
                     data.error = AppException(
-                        message="摘要生成失败",
+                        message=translate_log("summary_failed"),
                         error_type=error_type
                     )
                     data.error_type = error_type
                     # 注意：不设置 processing_failed = True，因为摘要失败不视为整体失败
                 else:
-                    logger.debug("[Dry Run] 摘要生成失败（Dry Run）", video_id=vid)
+                    logger.debug_i18n("summary_failed_dry_run", video_id=vid)
             else:
                 # 保存摘要结果（已经是 Path 类型）
                 data.summary_result = summary_path
-                logger.info(f"摘要生成完成: {vid}", video_id=vid)
+                logger.info_i18n("summary_complete", video_id=vid)
             
             return data
             
         except TaskCancelledError as e:
             # 任务已取消
-            reason = e.reason or "用户取消"
-            logger.info(f"任务已取消: {vid} - {reason}", video_id=vid)
+            reason = e.reason or translate_log("user_cancelled")
+            logger.info_i18n("task_cancelled", video_id=vid, reason=reason)
             data.error = e
             data.error_type = ErrorType.CANCELLED
             data.error_stage = "summarize"
@@ -144,12 +144,12 @@ class SummarizeProcessor:
             data.error_type = e.error_type
             data.error_stage = "summarize"
             # 摘要失败不视为整体失败
-            logger.error(f"生成摘要失败: {vid} - {e}", video_id=vid)
+            logger.error_i18n("summary_generate_failed", video_id=vid, error=str(e))
             return data
         except Exception as e:
             # 未知异常
             app_error = AppException(
-                message=f"生成摘要失败: {str(e)}",
+                message=translate_log("summary_generate_failed", video_id=vid, error=str(e)),
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
@@ -157,7 +157,7 @@ class SummarizeProcessor:
             data.error_type = ErrorType.UNKNOWN
             data.error_stage = "summarize"
             # 摘要失败不视为整体失败
-            logger.error(f"生成摘要异常: {vid} - {e}", video_id=vid)
+            logger.error_i18n("summary_generate_exception", video_id=vid, error=str(e))
             import traceback
             logger.debug(traceback.format_exc(), video_id=vid)
             return data

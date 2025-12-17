@@ -221,7 +221,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
         self.cookie_textbox.delete("1.0", "end")
         self._show_cookie_placeholder()
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空 Cookie")
+            self.on_log_message("INFO", t("cookie_cleared"))
     
     def _show_cookie_placeholder(self):
         """显示 Cookie 占位符"""
@@ -292,9 +292,9 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     if self.on_update_cookie_status:
                                         self.on_update_cookie_status(cookie_text, region, "success")
                                     if self.on_log_message:
-                                        self.on_log_message("INFO", f"已保存 Cookie 和地区信息: {region}")
+                                        self.on_log_message("INFO", t("cookie_region_saved", region=region))
                                 except Exception as e:
-                                    logger.error(f"保存地区信息失败: {e}")
+                                    logger.error_i18n("cookie_region_save_failed", error=str(e))
                             self.after(0, save_with_region)
                     else:
                         # 如果未检测到地区信息，提示用户并只保存 Cookie（保留现有地区信息）
@@ -307,7 +307,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     if self.on_update_cookie_status:
                                         self.on_update_cookie_status(cookie_text, self.network_region, "success")
                                 except Exception as e:
-                                    logger.error(f"保存 Cookie 失败: {e}")
+                                    logger.error_i18n("cookie_save_failed", error=str(e))
                             self.after(0, save_cookie_only)
                         else:
                             # 即使不保存，也更新状态显示（测试成功）
@@ -380,18 +380,18 @@ class NetworkSettingsPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("cookie_save_success"))
             except Exception as e:
-                logger.error(f"保存 Cookie 失败: {e}")
+                logger.error_i18n("cookie_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("cookie_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_cookie 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_cookie")
     
     def _on_clear_proxies(self):
         """清空代理列表"""
         self.proxy_textbox.delete("1.0", "end")
         self._show_proxy_placeholder()
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空代理列表")
+            self.on_log_message("INFO", t("proxy_list_cleared"))
     
     def _show_proxy_placeholder(self):
         """显示代理占位符"""
@@ -440,11 +440,11 @@ class NetworkSettingsPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("proxy_save_success"))
             except Exception as e:
-                logger.error(f"保存代理设置失败: {e}")
+                logger.error_i18n("proxy_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("proxy_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_proxies 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_proxies")
     
     def _on_test_proxies(self):
         """测试代理连通性"""
@@ -551,8 +551,8 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         # 验证代理格式
                         parsed = urlparse(proxy)
                         if not parsed.scheme or not parsed.hostname:
-                            error_msg = "无效的代理格式"
-                            log_error(f"代理 {i} 格式无效: {proxy}")
+                            error_msg = t("proxy_format_invalid")
+                            log_error(t("proxy_format_invalid_detail", index=i, proxy=proxy))
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
@@ -574,7 +574,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                             log_debug(t("log.proxy_has_auth", username=parsed.username, password_status="已设置" if parsed.password else "未设置"))
                             # 验证URL解析是否正确
                             if parsed.username and not parsed.password:
-                                log_error(f"警告: 代理包含用户名但缺少密码，可能导致认证失败")
+                                log_error(t("proxy_warning_username_no_password"))
                         
                         # 对于SOCKS5代理，需要特殊处理认证信息
                         # requests库理论上支持从URL中提取认证信息，但在某些情况下可能不工作
@@ -587,13 +587,13 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 log_debug(t("log.proxy_socks_with_auth", proxy=f"{parsed.scheme}://{parsed.username}:***@{parsed.hostname}:{parsed.port}"))
                                 # 验证URL是否包含完整的认证信息
                                 if not parsed.username or not parsed.password:
-                                    log_error(f"警告: SOCKS代理认证信息不完整（用户名: {'有' if parsed.username else '无'}, 密码: {'有' if parsed.password else '无'}）")
+                                    log_error(t("proxy_warning_socks_auth_incomplete", username_status="有" if parsed.username else "无", password_status="有" if parsed.password else "无"))
                             else:
                                 log_debug(t("log.proxy_socks_no_auth", proxy=f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"))
                             
                             # 验证代理URL是否包含 '@' 符号（表示有认证信息）
                             if has_auth and '@' not in test_proxy_url:
-                                log_error(f"错误: 代理URL格式异常，应该包含认证信息但未找到 '@' 符号")
+                                log_error(t("proxy_error_url_format"))
                         
                         # 使用 yt-dlp 测试代理（与实际使用场景一致）
                         # yt-dlp 能够正确处理包含认证信息的 SOCKS5 代理

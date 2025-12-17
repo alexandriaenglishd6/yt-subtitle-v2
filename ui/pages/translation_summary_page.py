@@ -431,11 +431,11 @@ class TranslationSummaryPage(ctk.CTkFrame):
             if self.on_log_message:
                 self.on_log_message("INFO", t("ai_save_summary_success"))
         except ValueError as e:
-            logger.error(f"摘要 AI 配置格式错误: {e}")
+            logger.error_i18n("ai_config_format_error", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", f"{t('ai_save_failed')}: {e}")
         except Exception as e:
-            logger.error(f"保存摘要 AI 配置失败: {e}")
+            logger.error_i18n("ai_save_failed", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", t("ai_save_failed", error=str(e)))
     

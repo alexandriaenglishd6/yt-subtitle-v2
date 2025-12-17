@@ -102,7 +102,7 @@ class ProxyPage(ctk.CTkFrame):
         """清空代理列表"""
         self.proxy_textbox.delete("1.0", "end")
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空代理列表")
+            self.on_log_message("INFO", t("proxy_list_cleared"))
     
     def _on_save_proxies(self):
         """保存代理列表"""
@@ -115,11 +115,11 @@ class ProxyPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("proxy_save_success"))
             except Exception as e:
-                logger.error(f"保存代理设置失败: {e}")
+                logger.error_i18n("proxy_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("proxy_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_proxies 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_proxies")
     
     def _on_test_proxies(self):
         """测试代理连通性"""

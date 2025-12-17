@@ -800,7 +800,7 @@ class MainWindow(ctk.CTk):
                     self.config_manager.save(self.app_config)
                     logger.info_i18n("theme_saved", theme_name=theme_name)
             except Exception as e:
-                logger.error(f"保存主题设置失败: {e}")
+                logger.error_i18n("theme_save_failed", error=str(e))
             
             # 应用主题
             apply_theme_to_window(self, self.theme_tokens, self.current_theme)
@@ -885,7 +885,8 @@ class MainWindow(ctk.CTk):
         else:  # Linux
             subprocess.Popen(["xdg-open", str(output_dir.absolute())])
         
-        self.log_panel.append_log("INFO", f"已打开输出文件夹：{output_dir.absolute()}")
+        from ui.i18n_manager import t
+        self.log_panel.append_log("INFO", t("output_folder_opened", path=str(output_dir.absolute())))
     
     def _on_open_failed_links(self):
         """打开失败链接文件"""

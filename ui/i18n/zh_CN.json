@@ -115,6 +115,11 @@
   "cookie_test_start": "开始测试 Cookie...",
   "cookie_test_success": "Cookie 测试成功：Cookie 可用",
   "cookie_test_failed": "Cookie 测试失败: {error}",
+  "cookie_cleared": "已清空 Cookie",
+  "proxy_list_cleared": "已清空代理列表",
+  "cookie_save_failed": "保存 Cookie 失败: {error}",
+  "theme_save_failed": "保存主题设置失败: {error}",
+  "output_folder_opened": "已打开输出文件夹：{path}",
   "cookie_test_timeout": "Cookie 测试超时",
   "cookie_help": "如何获取 Cookie：\n1. 打开浏览器，访问 YouTube\n2. 按 F12 打开开发者工具\n3. 切换到 Network（网络）标签\n4. 刷新页面，找到任意请求\n5. 在请求头中找到 Cookie 字段\n6. 复制整个 Cookie 字符串并粘贴到此处",
   "cookie_empty": "Cookie 不能为空",
@@ -444,6 +449,9 @@
   
   "log.detect_subtitle_start": "开始检测字幕: {video_id}",
   "log.detect_subtitle_info": "检测字幕: {video_id} - {title_preview}...",
+  "log.detect_subtitle_found": "检测到字幕: {video_id}",
+  "log.detect_subtitle_failed": "检测字幕失败: {video_id} - {error}",
+  "log.detect_subtitle_exception": "检测字幕异常: {video_id} - {error}",
   "log.detect_subtitle_complete": "字幕检测完成: {video_id} - 人工字幕: {manual_count} 种, 自动字幕: {auto_count} 种",
   "log.detect_manual_languages": "人工字幕语言: {languages}",
   "log.detect_auto_languages": "自动字幕语言: {languages}",
@@ -453,6 +461,26 @@
   "log.stage_stopped": "阶段 {stage} 已停止",
   "log.video_already_processed_skip": "视频已处理，跳过: {video_id}",
   "log.processing_start_staged": "开始处理 {count} 个视频（分阶段队列模式）",
+  
+  "log.download_subtitle": "下载字幕: {video_id} - {title_preview}...",
+  "log.download_subtitle_complete": "字幕下载完成: {video_id}",
+  "log.download_subtitle_failed": "下载字幕失败: {video_id} - {error}",
+  "log.download_subtitle_exception": "下载字幕异常: {video_id} - {error}",
+  
+  "log.output_file_write": "写入输出文件: {video_id}",
+  "log.output_file_complete": "输出文件写入完成: {video_id}",
+  "log.output_file_failed": "输出文件失败: {video_id} - {error}",
+  "log.output_file_exception": "输出文件异常: {video_id} - {error}",
+  "log.processing_complete": "处理完成: {video_id}",
+  
+  "log.summary_generate": "生成摘要: {video_id}",
+  "log.summary_complete": "摘要生成完成: {video_id}",
+  "log.summary_failed": "摘要生成失败",
+  "log.summary_generate_failed": "生成摘要失败: {video_id} - {error}",
+  "log.summary_generate_exception": "生成摘要异常: {video_id} - {error}",
+  
+  "log.task_cancelled": "任务已取消: {video_id} - {reason}",
+  "log.user_cancelled": "用户取消",
   
   "log.proxy_connection_timeout": "连接超时（超过 {timeout} 秒）",
   "log.proxy_connection_failed": "连接失败：{detail}",
