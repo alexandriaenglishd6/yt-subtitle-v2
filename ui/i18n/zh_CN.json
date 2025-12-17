@@ -743,5 +743,12 @@
   "log.download_original_subtitle_failed": "下载原始字幕失败",
   "log.download_original_subtitle_failed_dry_run": "下载原始字幕失败（Dry Run）",
   "log.ai_translation_failed": "AI 翻译失败 ({target_lang}): {error}",
-  "log.translator_translate_start": "SubtitleTranslator.translate 开始，目标语言列表: {target_languages}, 输出目录: {output_dir}, 已下载的官方字幕: {official_subtitles}"
+  "log.translator_translate_start": "SubtitleTranslator.translate 开始，目标语言列表: {target_languages}, 输出目录: {output_dir}, 已下载的官方字幕: {official_subtitles}",
+  "log.missing_detection_result": "缺少检测结果",
+  "log.missing_download_result": "缺少下载结果",
+  "log.missing_summary_result": "缺少摘要结果",
+  "log.missing_translation_result": "缺少翻译结果",
+  "log.no_subtitles_dry_run": "无字幕（Dry Run）",
+  "log.playlist_video_count": "播放列表视频数量: {count}",
+  "log.summary_failed_dry_run": "摘要失败（Dry Run）"
 }
