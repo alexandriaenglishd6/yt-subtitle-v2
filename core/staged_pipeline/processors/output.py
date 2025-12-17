@@ -128,7 +128,10 @@ class OutputProcessor:
             
             # 步骤 2: 更新增量记录（仅在成功时，Dry Run 模式下跳过）
             if self.archive_path and not self.dry_run:
-                self.incremental_manager.mark_as_processed(vid, self.archive_path)
+                # 计算语言配置哈希值并记录到 archive 中
+                from core.incremental import _get_language_config_hash
+                lang_hash = _get_language_config_hash(self.language_config) if self.language_config else None
+                self.incremental_manager.mark_as_processed(vid, self.archive_path, lang_hash)
                 logger.debug(f"已更新增量记录: {vid}", video_id=vid)
             elif self.archive_path and self.dry_run:
                 logger.debug(f"[Dry Run] 跳过更新增量记录: {vid}", video_id=vid)

@@ -113,6 +113,7 @@ class StagedPipeline:
             force=self.force,
             dry_run=self.dry_run,
             cancel_token=self.cancel_token,
+            language_config=self.language_config,  # 传递语言配置，用于增量检查
             on_log=self.on_log,
         )
         

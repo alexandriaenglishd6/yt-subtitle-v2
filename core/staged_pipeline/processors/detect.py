@@ -30,6 +30,7 @@ class DetectProcessor:
         force: bool,
         dry_run: bool,
         cancel_token: Optional[CancelToken],
+        language_config=None,  # 语言配置（用于增量检查时考虑语言变化）
         on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
     ):
         """初始化检测处理器
@@ -49,6 +50,7 @@ class DetectProcessor:
         self.force = force
         self.dry_run = dry_run
         self.cancel_token = cancel_token
+        self.language_config = language_config
         self.on_log = on_log
     
     def process(self, data: StageData) -> StageData:
@@ -81,7 +83,11 @@ class DetectProcessor:
             
             # 检查增量记录（如果 force=False）
             if not self.force and self.archive_path:
-                if self.incremental_manager.is_processed(vid, self.archive_path):
+                # 计算语言配置哈希值（如果提供了语言配置）
+                from core.incremental import _get_language_config_hash
+                lang_hash = _get_language_config_hash(self.language_config) if self.language_config else None
+                
+                if self.incremental_manager.is_processed(vid, self.archive_path, lang_hash):
                     data.is_processed = True
                     from ui.i18n_manager import t
                     data.skip_reason = t("log.video_already_processed_skip", video_id=vid)
