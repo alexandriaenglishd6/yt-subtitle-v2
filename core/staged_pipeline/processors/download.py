@@ -69,17 +69,17 @@ class DownloadProcessor:
             if data.run_id:
                 set_log_context(run_id=data.run_id, task="download", video_id=vid)
             
-            logger.info(f"下载字幕: {vid} - {title_preview}...", video_id=vid)
+            logger.info_i18n("download_subtitle", video_id=vid, title_preview=title_preview)
             
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():
-                reason = self.cancel_token.get_reason() or "用户取消"
+                reason = self.cancel_token.get_reason() or translate_log("user_cancelled")
                 raise TaskCancelledError(reason)
             
             # 检查是否有检测结果
             if not data.detection_result:
                 raise AppException(
-                    message="缺少检测结果",
+                    message=translate_log("missing_detection_result"),
                     error_type=ErrorType.INVALID_INPUT
                 )
             
@@ -123,13 +123,13 @@ class DownloadProcessor:
             # 保存下载结果
             data.download_result = download_result
             
-            logger.info(f"字幕下载完成: {vid}", video_id=vid)
+            logger.info_i18n("download_subtitle_complete", video_id=vid)
             return data
             
         except TaskCancelledError as e:
             # 任务已取消
-            reason = e.reason or "用户取消"
-            logger.info(f"任务已取消: {vid} - {reason}", video_id=vid)
+            reason = e.reason or translate_log("user_cancelled")
+            logger.info_i18n("task_cancelled", video_id=vid, reason=reason)
             data.error = e
             data.error_type = ErrorType.CANCELLED
             data.error_stage = "download"
@@ -140,12 +140,12 @@ class DownloadProcessor:
             data.error_type = e.error_type
             data.error_stage = "download"
             data.processing_failed = True
-            logger.error(f"下载字幕失败: {vid} - {e}", video_id=vid)
+            logger.error_i18n("download_subtitle_failed", video_id=vid, error=str(e))
             return data
         except Exception as e:
             # 未知异常
             app_error = AppException(
-                message=f"下载字幕失败: {str(e)}",
+                message=translate_log("download_subtitle_failed", video_id=vid, error=str(e)),
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
@@ -153,7 +153,7 @@ class DownloadProcessor:
             data.error_type = ErrorType.UNKNOWN
             data.error_stage = "download"
             data.processing_failed = True
-            logger.error(f"下载字幕异常: {vid} - {e}", video_id=vid)
+            logger.error_i18n("download_subtitle_exception", video_id=vid, error=str(e))
             import traceback
             logger.debug(traceback.format_exc(), video_id=vid)
             return data

@@ -82,7 +82,7 @@ def process_video_list(
     total = len(videos)
     
     if total == 0:
-        logger.warning("视频列表为空")
+        logger.warning_i18n("task_video_list_empty")
         clear_log_context()
         return {
             "total": 0,
@@ -117,7 +117,7 @@ def process_video_list(
     # 否则使用旧的实现（TaskRunner 方式）
     from core.task_runner import TaskRunner
     
-    logger.info(f"开始处理 {total} 个视频，并发数: {concurrency}（旧模式）", run_id=run_id)
+    logger.info_i18n("task_start", total=total, concurrency=concurrency, run_id=run_id)
     
     # 创建任务列表
     tasks = []
@@ -167,8 +167,8 @@ def process_video_list(
         # 检查取消状态
         if cancel_token and cancel_token.is_cancelled():
             reason = cancel_token.get_reason() or "用户取消"
-            logger.info(f"任务已取消: {reason}", run_id=run_id)
-            safe_log(on_log, "INFO", f"任务已取消: {reason}")
+            msg = logger.info_i18n("task_cancelled", reason=reason, run_id=run_id)
+            safe_log(on_log, "INFO", msg)
             return
         
         # 输出进度信息
@@ -228,7 +228,7 @@ def process_video_list(
                 }
                 on_stats(stats)
             except Exception as e:
-                logger.warning(f"更新统计信息失败: {e}")
+                logger.warning_i18n("stats_update_failed", error=str(e))
     
     result = task_runner.run_tasks(
         tasks=tasks,
@@ -240,10 +240,7 @@ def process_video_list(
     success_count = sum(1 for r in result["results"] if r is True)
     failed_count = result["failed"]
     
-    logger.info(
-        f"处理完成: 总计 {total}，成功 {success_count}，失败 {failed_count}",
-        run_id=run_id
-    )
+    logger.info_i18n("task_complete", total=total, success=success_count, failed=failed_count, run_id=run_id)
     
     # 清除日志上下文
     clear_log_context()
@@ -296,10 +293,14 @@ def _process_video_list_staged(
     summarize_concurrency = max(1, concurrency // 2)
     output_concurrency = max(1, concurrency)
     
-    logger.info(
-        f"开始处理 {total} 个视频（分阶段队列模式），"
-        f"各阶段并发数: DETECT={detect_concurrency}, DOWNLOAD={download_concurrency}, "
-        f"TRANSLATE={translate_concurrency}, SUMMARIZE={summarize_concurrency}, OUTPUT={output_concurrency}",
+    logger.info_i18n(
+        "task_start_staged",
+        total=total,
+        detect=detect_concurrency,
+        download=download_concurrency,
+        translate=translate_concurrency,
+        summarize=summarize_concurrency,
+        output=output_concurrency,
         run_id=run_id
     )
     
@@ -370,13 +371,13 @@ def _process_video_list_staged(
                         try:
                             on_stats(stats)
                         except Exception as e:
-                            logger.warning(f"统计信息更新回调失败: {e}")
+                            logger.warning_i18n("stats_update_callback_failed", error=str(e))
                         
                         # 每 0.5 秒更新一次
                         if stop_stats_update.wait(0.5):
                             break
                     except Exception as e:
-                        logger.warning(f"统计信息更新线程异常: {e}")
+                        logger.warning_i18n("stats_update_thread_error", error=str(e))
                         break
             
             stats_update_thread = threading.Thread(target=stats_updater, daemon=True)
@@ -399,7 +400,7 @@ def _process_video_list_staged(
         }
         
     except Exception as e:
-        logger.error(f"分阶段 Pipeline 处理失败: {e}", run_id=run_id)
+        logger.error_i18n("pipeline_staged_failed", error=str(e), run_id=run_id)
         import traceback
         logger.debug(traceback.format_exc(), run_id=run_id)
         if on_log:

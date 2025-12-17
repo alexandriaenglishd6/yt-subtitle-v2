@@ -257,7 +257,7 @@ class NetworkAIPage(ctk.CTkFrame):
         """清空 Cookie"""
         self.cookie_textbox.delete("1.0", "end")
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空 Cookie")
+            self.on_log_message("INFO", t("cookie_cleared"))
     
     def _on_test_cookie(self):
         """测试 Cookie"""
@@ -318,17 +318,17 @@ class NetworkAIPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("cookie_save_success"))
             except Exception as e:
-                logger.error(f"保存 Cookie 失败: {e}")
+                logger.error_i18n("cookie_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("cookie_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_cookie 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_cookie")
     
     def _on_clear_proxies(self):
         """清空代理列表"""
         self.proxy_textbox.delete("1.0", "end")
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空代理列表")
+            self.on_log_message("INFO", t("proxy_list_cleared"))
     
     def _on_save_proxies(self):
         """保存代理列表"""
@@ -341,11 +341,11 @@ class NetworkAIPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("proxy_save_success"))
             except Exception as e:
-                logger.error(f"保存代理设置失败: {e}")
+                logger.error_i18n("proxy_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("proxy_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_proxies 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_proxies")
     
     def _build_ai_profile_status(self, parent_frame):
         """构建 AI Profile 状态显示
@@ -369,7 +369,7 @@ class NetworkAIPage(ctk.CTkFrame):
             
             if translation_profile or summary_profile:
                 # 有 Profile 配置
-                status_text = "当前使用 AI Profile 配置"
+                status_text = t("ai_profile_status_using")
                 status_color = ("green", "lightgreen")
                 
                 profile_info_lines = []
@@ -385,9 +385,9 @@ class NetworkAIPage(ctk.CTkFrame):
                 profile_info = "\n".join(profile_info_lines)
             else:
                 # 使用默认配置
-                status_text = "当前使用默认配置（config.json）"
+                status_text = t("ai_profile_status_default")
                 status_color = ("gray50", "gray50")
-                profile_info = "未配置 AI Profile，使用下方配置"
+                profile_info = t("ai_profile_info_not_configured")
             
             status_label = ctk.CTkLabel(
                 profile_frame,

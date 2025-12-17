@@ -93,12 +93,31 @@ class VideoProcessor:
         if translation_ai_config and translation_ai_config.enabled:
             try:
                 self.translation_llm_client = create_llm_client(translation_ai_config)
-                profile_name = profile_manager.task_mapping.get("subtitle_translate", "默认配置")
+                profile_name = profile_manager.task_mapping.get("subtitle_translate", t("profile_default"))
                 logger.info(t("translation_ai_client_init_success", 
                              provider=translation_ai_config.provider, 
                              model=translation_ai_config.model) + f" (Profile: {profile_name})")
             except LLMException as e:
-                logger.warning(t("translation_ai_client_init_failed", error=str(e)))
+                # 翻译异常消息
+                error_msg = str(e)
+                # 如果异常消息看起来像翻译键，尝试翻译
+                if error_msg.startswith("exception."):
+                    from core.logger import translate_exception
+                    # 尝试解析翻译键和参数
+                    if ":" in error_msg:
+                        key_part = error_msg.split(":")[0]
+                        # 简单解析参数（格式：key:param1=value1,param2=value2）
+                        params = {}
+                        if ":" in error_msg:
+                            param_str = error_msg.split(":", 1)[1]
+                            for param in param_str.split(","):
+                                if "=" in param:
+                                    k, v = param.split("=", 1)
+                                    params[k.strip()] = v.strip()
+                        error_msg = translate_exception(key_part, **params)
+                    else:
+                        error_msg = translate_exception(error_msg)
+                logger.warning(t("translation_ai_client_init_failed", error=error_msg))
                 self.translation_llm_client = None
                 # 保存初始化失败的原因和错误类型（用于后续提示和错误分类）
                 self.translation_llm_init_error = str(e)
@@ -121,12 +140,31 @@ class VideoProcessor:
         if summary_ai_config and summary_ai_config.enabled:
             try:
                 self.summary_llm_client = create_llm_client(summary_ai_config)
-                profile_name = profile_manager.task_mapping.get("subtitle_summarize", "默认配置")
+                profile_name = profile_manager.task_mapping.get("subtitle_summarize", t("profile_default"))
                 logger.info(t("summary_ai_client_init_success", 
                              provider=summary_ai_config.provider, 
                              model=summary_ai_config.model) + f" (Profile: {profile_name})")
             except LLMException as e:
-                logger.warning(t("summary_ai_client_init_failed", error=str(e)))
+                # 翻译异常消息
+                error_msg = str(e)
+                # 如果异常消息看起来像翻译键，尝试翻译
+                if error_msg.startswith("exception."):
+                    from core.logger import translate_exception
+                    # 尝试解析翻译键和参数
+                    if ":" in error_msg:
+                        key_part = error_msg.split(":")[0]
+                        # 简单解析参数（格式：key:param1=value1,param2=value2）
+                        params = {}
+                        if ":" in error_msg:
+                            param_str = error_msg.split(":", 1)[1]
+                            for param in param_str.split(","):
+                                if "=" in param:
+                                    k, v = param.split("=", 1)
+                                    params[k.strip()] = v.strip()
+                        error_msg = translate_exception(key_part, **params)
+                    else:
+                        error_msg = translate_exception(error_msg)
+                logger.warning(t("summary_ai_client_init_failed", error=error_msg))
                 self.summary_llm_client = None
         else:
             logger.info(t("summary_ai_disabled"))
@@ -616,7 +654,7 @@ class VideoProcessor:
                 
                 # 如果翻译 AI 初始化失败，提前提示
                 if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
-                    error_msg = f"翻译 AI 初始化失败: {self.translation_llm_init_error}，将跳过 AI 翻译"
+                    error_msg = t("translation_ai_init_failed_skip", error=self.translation_llm_init_error)
                     on_log("WARN", error_msg)
                 
                 # 执行完整处理流程
@@ -634,9 +672,9 @@ class VideoProcessor:
         """停止处理（由 GUI 的停止按钮调用）"""
         if self.cancel_token is not None:
             self.cancel_token.cancel("用户点击停止按钮")
-            logger.info("用户请求停止处理")
+            logger.info_i18n("user_request_stop")
         else:
-            logger.warning("尝试取消任务，但 cancel_token 不存在（任务可能未开始或已结束）")
+            logger.warning_i18n("cancel_token_not_exists")
     
     def _run_full_processing(
         self,
@@ -664,7 +702,7 @@ class VideoProcessor:
         on_stats(stats)
         
         on_log("INFO", t("videos_found", count=len(videos)))
-        on_log("INFO", f"开始处理 {len(videos)} 个视频，并发数: {self.app_config.concurrency}")
+        on_log("INFO", t("log.task_start", total=len(videos), concurrency=self.app_config.concurrency))
         
         # 调用核心流水线
         result = process_video_list(
@@ -792,7 +830,7 @@ class VideoProcessor:
         """
         def task():
             try:
-                logger.info(f"[GUI] URL列表处理任务线程已启动")
+                logger.info_i18n("gui_url_list_thread_started")
                 on_status(t("status_processing"))
                 on_log("INFO", t("processing_start_url_list"))
                 
@@ -801,7 +839,7 @@ class VideoProcessor:
                 if not videos:
                     return
                 
-                logger.info(f"[GUI] 获取到 {len(videos)} 个视频")
+                logger.info_i18n("gui_videos_fetched", count=len(videos))
                 
                 # 保存视频列表到文件
                 self._save_video_list(videos, "URL列表", None, None, on_log)
@@ -813,7 +851,7 @@ class VideoProcessor:
                 
                 # 如果翻译 AI 初始化失败，提前提示
                 if self.translation_llm_init_error and self.app_config.translation_ai.enabled:
-                    error_msg = f"翻译 AI 初始化失败: {self.translation_llm_init_error}，将跳过 AI 翻译"
+                    error_msg = t("translation_ai_init_failed_skip", error=self.translation_llm_init_error)
                     on_log("WARN", error_msg)
                 
                 # 执行完整处理流程（URL 列表模式使用批次 archive）
@@ -851,7 +889,7 @@ class VideoProcessor:
         on_stats(stats)
         
         on_log("INFO", t("videos_found", count=len(videos)))
-        on_log("INFO", f"开始处理 {len(videos)} 个视频，并发数: {self.app_config.concurrency}")
+        on_log("INFO", t("log.task_start", total=len(videos), concurrency=self.app_config.concurrency))
         
         # 调用核心流水线
         result = process_video_list(

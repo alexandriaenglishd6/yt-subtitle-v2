@@ -85,7 +85,7 @@ class StageQueue:
         self.running = True
         num_workers = num_workers or self.executor._max_workers
         
-        logger.info(f"启动阶段 {self.stage_name}，worker 数量: {num_workers}")
+        logger.info_i18n("stage_start", stage=self.stage_name, workers=num_workers)
         
         for i in range(num_workers):
             worker = threading.Thread(
@@ -105,7 +105,7 @@ class StageQueue:
         if not self.running:
             return
         
-        logger.info(f"停止阶段 {self.stage_name}...")
+        logger.info_i18n("stage_stop", stage=self.stage_name)
         self.running = False
         
         # 向队列中放入停止信号
@@ -123,7 +123,7 @@ class StageQueue:
                 logger.warning(f"Worker 线程 {worker.name} 在超时后仍未停止")
         
         self.workers.clear()
-        logger.info(f"阶段 {self.stage_name} 已停止")
+        logger.info_i18n("stage_stopped", stage=self.stage_name)
     
     def _worker_loop(self):
         """Worker 线程主循环"""

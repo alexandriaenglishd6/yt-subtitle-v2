@@ -94,18 +94,18 @@ class TranslateProcessor:
             
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():
-                reason = self.cancel_token.get_reason() or "用户取消"
+                reason = self.cancel_token.get_reason() or translate_log("user_cancelled")
                 raise TaskCancelledError(reason)
             
             # 检查是否有必要的输入数据
             if not data.detection_result:
                 raise AppException(
-                    message="缺少检测结果",
+                    message=translate_log("missing_detection_result"),
                     error_type=ErrorType.INVALID_INPUT
                 )
             if not data.download_result:
                 raise AppException(
-                    message="缺少下载结果",
+                    message=translate_log("missing_download_result"),
                     error_type=ErrorType.INVALID_INPUT
                 )
             
@@ -304,8 +304,8 @@ class TranslateProcessor:
             
         except TaskCancelledError as e:
             # 任务已取消
-            reason = e.reason or "用户取消"
-            logger.info(f"任务已取消: {vid} - {reason}", video_id=vid)
+            reason = e.reason or translate_log("user_cancelled")
+            logger.info_i18n("task_cancelled", video_id=vid, reason=reason)
             data.error = e
             data.error_type = ErrorType.CANCELLED
             data.error_stage = "translate"

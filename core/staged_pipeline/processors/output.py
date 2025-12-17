@@ -73,24 +73,24 @@ class OutputProcessor:
             
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():
-                reason = self.cancel_token.get_reason() or "用户取消"
+                reason = self.cancel_token.get_reason() or translate_log("user_cancelled")
                 raise TaskCancelledError(reason)
             
             # 检查是否有必要的输入数据
             if not data.detection_result:
                 raise AppException(
-                    message="缺少检测结果",
+                    message=translate_log("missing_detection_result"),
                     error_type=ErrorType.INVALID_INPUT
                 )
             if not data.download_result:
                 raise AppException(
-                    message="缺少下载结果",
+                    message=translate_log("missing_download_result"),
                     error_type=ErrorType.INVALID_INPUT
                 )
             
             # 步骤 1: 写入输出文件（Dry Run 模式下跳过）
             if not self.dry_run:
-                logger.info(f"写入输出文件: {vid}", video_id=vid)
+                logger.info_i18n("output_file_write", video_id=vid)
                 
                 # 确保 translation_result 中包含所有需要的语言（包括官方字幕）
                 # 如果有官方字幕但没有在 translation_result 中，从 download_result 中补充
@@ -122,24 +122,27 @@ class OutputProcessor:
                     summary_llm=self.summary_llm
                 )
                 
-                logger.info(f"输出文件写入完成: {vid}", video_id=vid)
+                logger.info_i18n("output_file_complete", video_id=vid)
             else:
                 logger.debug(f"[Dry Run] 跳过写入输出文件: {vid}", video_id=vid)
             
             # 步骤 2: 更新增量记录（仅在成功时，Dry Run 模式下跳过）
             if self.archive_path and not self.dry_run:
-                self.incremental_manager.mark_as_processed(vid, self.archive_path)
+                # 计算语言配置哈希值并记录到 archive 中
+                from core.incremental import _get_language_config_hash
+                lang_hash = _get_language_config_hash(self.language_config) if self.language_config else None
+                self.incremental_manager.mark_as_processed(vid, self.archive_path, lang_hash)
                 logger.debug(f"已更新增量记录: {vid}", video_id=vid)
             elif self.archive_path and self.dry_run:
                 logger.debug(f"[Dry Run] 跳过更新增量记录: {vid}", video_id=vid)
             
-            logger.info(f"处理完成: {vid}", video_id=vid)
+            logger.info_i18n("processing_complete", video_id=vid)
             return data
             
         except TaskCancelledError as e:
             # 任务已取消
-            reason = e.reason or "用户取消"
-            logger.info(f"任务已取消: {vid} - {reason}", video_id=vid)
+            reason = e.reason or translate_log("user_cancelled")
+            logger.info_i18n("task_cancelled", video_id=vid, reason=reason)
             data.error = e
             data.error_type = ErrorType.CANCELLED
             data.error_stage = "output"
@@ -151,12 +154,12 @@ class OutputProcessor:
             data.error_type = e.error_type
             data.error_stage = "output"
             data.processing_failed = True
-            logger.error(f"输出文件失败: {vid} - {e}", video_id=vid)
+            logger.error_i18n("output_file_failed", video_id=vid, error=str(e))
             return data
         except Exception as e:
             # 未知异常
             app_error = AppException(
-                message=f"输出文件失败: {str(e)}",
+                message=translate_log("output_file_failed", video_id=vid, error=str(e)),
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
@@ -164,7 +167,7 @@ class OutputProcessor:
             data.error_type = ErrorType.UNKNOWN
             data.error_stage = "output"
             data.processing_failed = True
-            logger.error(f"输出文件异常: {vid} - {e}", video_id=vid)
+            logger.error_i18n("output_file_exception", video_id=vid, error=str(e))
             import traceback
             logger.debug(traceback.format_exc(), video_id=vid)
             return data

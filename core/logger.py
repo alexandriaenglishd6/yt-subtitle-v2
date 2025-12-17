@@ -1,7 +1,7 @@
 """
 统一日志系统
 符合 logging_spec.md 规范的日志系统
-支持：文件输出、控制台输出、UI回调、敏感信息脱敏、上下文字段
+支持：文件输出、控制台输出、UI回调、敏感信息脱敏、上下文字段、国际化
 """
 import logging
 import sys
@@ -15,6 +15,115 @@ from logging.handlers import RotatingFileHandler
 
 from config.manager import get_user_data_dir
 import time
+
+# ============ 国际化支持 ============
+
+_i18n_module = None
+_i18n_lock = Lock()
+
+
+def _get_i18n():
+    """延迟加载 i18n 模块，避免循环依赖
+    
+    Returns:
+        i18n_manager 模块，如果不可用则返回 None
+    """
+    global _i18n_module
+    if _i18n_module is None:
+        with _i18n_lock:
+            if _i18n_module is None:
+                try:
+                    from ui import i18n_manager
+                    _i18n_module = i18n_manager
+                except ImportError:
+                    # CLI 模式下 ui 模块不可用，标记为 False
+                    _i18n_module = False
+    return _i18n_module if _i18n_module else None
+
+
+def translate_log(key: str, **kwargs) -> str:
+    """翻译日志消息
+    
+    Args:
+        key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
+        **kwargs: 格式化参数（用于 {placeholder} 替换）
+    
+    Returns:
+        翻译后的消息，如果翻译失败则返回原 key
+    
+    Example:
+        >>> translate_log("video_detected", video_id="abc123")
+        "检测到视频: abc123"  # 中文环境
+        "Video detected: abc123"  # 英文环境
+    """
+    i18n = _get_i18n()
+    
+    if i18n is None:
+        # i18n 不可用（CLI 模式），返回原 key 或简单格式化
+        if kwargs:
+            try:
+                return f"{key}: {', '.join(f'{k}={v}' for k, v in kwargs.items())}"
+            except Exception:
+                pass
+        return key
+    
+    try:
+        # 确保 key 有 log. 前缀
+        if not key.startswith("log."):
+            full_key = f"log.{key}"
+        else:
+            full_key = key
+        
+        # 调用 i18n_manager 的 t() 函数
+        text = i18n.t(full_key, default=key)
+        
+        # 格式化参数
+        if kwargs:
+            try:
+                text = text.format(**kwargs)
+            except (KeyError, ValueError):
+                # 格式化失败，返回原文本
+                pass
+        
+        return text
+    except Exception:
+        # 翻译失败，返回原 key
+        return key
+
+
+def translate_exception(key: str, **kwargs) -> str:
+    """翻译异常消息
+    
+    Args:
+        key: 翻译键（支持 "exception.xxx" 或 "xxx" 格式）
+        **kwargs: 格式化参数
+    
+    Returns:
+        翻译后的消息，如果翻译失败则返回原 key
+    """
+    i18n = _get_i18n()
+    
+    if i18n is None:
+        return key
+    
+    try:
+        # 确保 key 有 exception. 前缀
+        if not key.startswith("exception."):
+            full_key = f"exception.{key}"
+        else:
+            full_key = key
+        
+        text = i18n.t(full_key, default=key)
+        
+        if kwargs:
+            try:
+                text = text.format(**kwargs)
+            except (KeyError, ValueError):
+                pass
+        
+        return text
+    except Exception:
+        return key
 
 # Windows 控制台编码修复
 if sys.platform == "win32":
@@ -70,6 +179,9 @@ def _sanitize_message(message: str) -> str:
     - Cookie 原文
     - Authorization 头
     - 账号密码
+    - URL 中的敏感参数
+    
+    脱敏策略：保留前后几位，中间用 *** 替换
     
     Args:
         message: 原始消息
@@ -77,19 +189,132 @@ def _sanitize_message(message: str) -> str:
     Returns:
         脱敏后的消息
     """
-    # API Key 模式（sk-开头、各种格式）
-    message = re.sub(r'sk-[a-zA-Z0-9]{20,}', 'sk-***REDACTED***', message)
-    message = re.sub(r'[a-zA-Z0-9]{32,}', lambda m: '***REDACTED***' if len(m.group()) > 40 else m.group(), message)
+    if not message:
+        return message
     
-    # Cookie 模式
-    message = re.sub(r'Cookie:\s*[^;]+', 'Cookie: ***REDACTED***', message, flags=re.IGNORECASE)
-    message = re.sub(r'cookie\s*=\s*[^;]+', 'cookie=***REDACTED***', message, flags=re.IGNORECASE)
+    # ============ API Key 脱敏 ============
+    # OpenAI API Key (sk-开头)
+    def redact_api_key(match):
+        key = match.group(0)
+        if len(key) <= 8:
+            return key
+        # 保留前 4 位和后 4 位
+        return key[:4] + '***' + key[-4:] if len(key) > 8 else '***REDACTED***'
     
-    # Authorization 头
-    message = re.sub(r'Authorization:\s*[^\s]+', 'Authorization: ***REDACTED***', message, flags=re.IGNORECASE)
-    message = re.sub(r'Bearer\s+[a-zA-Z0-9\-_\.]+', 'Bearer ***REDACTED***', message, flags=re.IGNORECASE)
+    message = re.sub(r'sk-[a-zA-Z0-9]{20,}', redact_api_key, message)
     
-    # 截断过长的文本（字幕原文等）
+    # 其他格式的 API Key（长字符串，可能是各种格式）
+    # 匹配长度 >= 32 的字母数字字符串（可能是 API Key）
+    def redact_long_key(match):
+        key = match.group(0)
+        if len(key) < 32:
+            return key
+        # 保留前 4 位和后 4 位
+        return key[:4] + '***' + key[-4:] if len(key) > 8 else '***REDACTED***'
+    
+    message = re.sub(r'\b[a-zA-Z0-9]{32,}\b', redact_long_key, message)
+    
+    # ============ Cookie 脱敏 ============
+    # Cookie: 头格式（处理整个 Cookie 字符串，脱敏每个值）
+    def redact_cookie_string(cookie_str: str) -> str:
+        """脱敏 Cookie 字符串中的各个值"""
+        # 分割 Cookie 字符串为 key=value 对
+        parts = cookie_str.split(';')
+        redacted_parts = []
+        for part in parts:
+            part = part.strip()
+            if '=' in part:
+                key, value = part.split('=', 1)
+                # 只脱敏值，保留键名
+                if len(value) > 8:
+                    redacted_value = value[:4] + '***' + value[-4:]
+                else:
+                    redacted_value = '***REDACTED***' if len(value) > 0 else value
+                redacted_parts.append(f'{key}={redacted_value}')
+            else:
+                redacted_parts.append(part)
+        return '; '.join(redacted_parts)
+    
+    def redact_cookie_header(match):
+        full_match = match.group(0)
+        cookie_value = match.group(1) if match.lastindex >= 1 else full_match
+        redacted = redact_cookie_string(cookie_value)
+        return full_match.replace(cookie_value, redacted)
+    
+    message = re.sub(r'Cookie:\s*([^;\n]+)', redact_cookie_header, message, flags=re.IGNORECASE)
+    
+    # cookie= 格式（URL 参数或配置中的单个 cookie 值）
+    def redact_cookie_param(match):
+        cookie_value = match.group(1) if match.lastindex >= 1 else match.group(0)
+        if len(cookie_value) <= 8:
+            return match.group(0)
+        redacted = cookie_value[:4] + '***' + cookie_value[-4:] if len(cookie_value) > 8 else '***REDACTED***'
+        return match.group(0).replace(cookie_value, redacted)
+    
+    message = re.sub(r'cookie\s*=\s*([^;\s\n&]+)', redact_cookie_param, message, flags=re.IGNORECASE)
+    
+    # ============ Authorization 头脱敏 ============
+    # Authorization: Bearer token 或 Basic auth
+    def redact_auth_value(auth_value: str) -> str:
+        """脱敏认证值"""
+        if len(auth_value) <= 8:
+            return auth_value
+        # 保留前 4 位和后 4 位
+        return auth_value[:4] + '***' + auth_value[-4:] if len(auth_value) > 8 else '***REDACTED***'
+    
+    def redact_auth_header(match):
+        full_match = match.group(0)
+        auth_value = match.group(1) if match.lastindex >= 1 else full_match
+        redacted = redact_auth_value(auth_value)
+        return full_match.replace(auth_value, redacted)
+    
+    message = re.sub(r'Authorization:\s*([^\s\n]+)', redact_auth_header, message, flags=re.IGNORECASE)
+    
+    # Bearer token
+    def redact_bearer(match):
+        token = match.group(1)
+        redacted = redact_auth_value(token)
+        return f'Bearer {redacted}'
+    
+    message = re.sub(r'Bearer\s+([a-zA-Z0-9\-_\.]+)', redact_bearer, message, flags=re.IGNORECASE)
+    
+    # Basic auth (base64 编码)
+    def redact_basic(match):
+        encoded = match.group(1)
+        if len(encoded) <= 8:
+            return match.group(0)
+        redacted = encoded[:4] + '***' + encoded[-4:] if len(encoded) > 8 else '***REDACTED***'
+        return f'Basic {redacted}'
+    
+    message = re.sub(r'Basic\s+([A-Za-z0-9+/=]{20,})', redact_basic, message, flags=re.IGNORECASE)
+    
+    # ============ URL 敏感参数脱敏 ============
+    # URL 中的 token、key、secret 等参数
+    def redact_url_param(match):
+        prefix = match.group(1)  # ? 或 &
+        param_full = match.group(2)  # token= 或 key=
+        param_value = match.group(3)
+        if len(param_value) <= 8:
+            return match.group(0)
+        # 保留前 2 位和后 2 位
+        redacted = param_value[:2] + '***' + param_value[-2:] if len(param_value) > 4 else '***REDACTED***'
+        return f'{prefix}{param_full}{redacted}'
+    
+    # 匹配 URL 参数中的敏感字段
+    sensitive_params = ['token', 'key', 'secret', 'apikey', 'api_key', 'access_token', 'auth', 'password', 'pwd']
+    for param in sensitive_params:
+        pattern = rf'([?&])({param}=)([^&\s\n]+)'
+        message = re.sub(pattern, redact_url_param, message, flags=re.IGNORECASE)
+    
+    # ============ 其他敏感信息 ============
+    # 密码字段（password=, pwd=）
+    message = re.sub(r'(password|pwd)\s*=\s*([^\s\n&]+)', lambda m: f'{m.group(1)}=***REDACTED***', message, flags=re.IGNORECASE)
+    
+    # 代理认证信息（proxy://user:pass@host）
+    message = re.sub(r'://([^:]+):([^@]+)@', r'://\1:***REDACTED***@', message)
+    
+    # ============ 截断过长的文本 ============
+    # 截断过长的文本（字幕原文等），避免日志文件过大
     if len(message) > 500:
         message = message[:500] + '... [truncated]'
     
@@ -409,29 +634,160 @@ class Logger:
         except Exception:
             pass  # JSON 输出失败不影响主日志
     
+    def _translate_if_key(self, message: str, **kwargs) -> str:
+        """如果 message 是翻译键，则自动翻译（启发式判断）
+        
+        判断规则：
+        - 全 ASCII 字符
+        - 不包含中文字符
+        - 包含下划线或点号（常见于翻译键格式）
+        - 不以空格开头
+        
+        Args:
+            message: 可能是翻译键或普通消息
+            **kwargs: 格式化参数
+        
+        Returns:
+            翻译后的消息或原消息
+        """
+        # 启发式判断：是否为翻译键
+        is_key = (
+            message.isascii() and
+            not message.startswith(" ") and
+            ("_" in message or "." in message) and
+            not any('\u4e00' <= c <= '\u9fff' for c in message) and
+            len(message) > 3  # 太短的不可能是翻译键
+        )
+        
+        if is_key:
+            # 尝试翻译
+            translated = translate_log(message, **kwargs)
+            # 如果翻译成功（返回的不是原 key），使用翻译结果
+            if translated != message:
+                return translated
+        
+        # 不是翻译键或翻译失败，返回原消息
+        return message
+    
     def debug(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 DEBUG 级别日志"""
-        self._log_with_context(logging.DEBUG, message, video_id, **kwargs)
+        """记录 DEBUG 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.DEBUG, translated_message, video_id, **kwargs)
     
     def info(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 INFO 级别日志"""
-        self._log_with_context(logging.INFO, message, video_id, **kwargs)
+        """记录 INFO 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.INFO, translated_message, video_id, **kwargs)
     
     def warning(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 WARNING 级别日志"""
-        self._log_with_context(logging.WARNING, message, video_id, **kwargs)
+        """记录 WARNING 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.WARNING, translated_message, video_id, **kwargs)
     
     def warn(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 WARNING 级别日志（别名）"""
+        """记录 WARNING 级别日志（别名，支持自动翻译）"""
         self.warning(message, video_id, **kwargs)
     
     def error(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 ERROR 级别日志"""
-        self._log_with_context(logging.ERROR, message, video_id, **kwargs)
+        """记录 ERROR 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.ERROR, translated_message, video_id, **kwargs)
     
     def critical(self, message: str, video_id: Optional[str] = None, **kwargs) -> None:
-        """记录 CRITICAL 级别日志"""
+        """记录 CRITICAL 级别日志（支持自动翻译）"""
+        # 尝试自动翻译
+        translated_message = self._translate_if_key(message, **kwargs)
+        self._log_with_context(logging.CRITICAL, translated_message, video_id, **kwargs)
+    
+    # ============ 显式国际化方法（推荐用于 P0/P1 关键路径）============
+    
+    def debug_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> None:
+        """显式国际化 DEBUG 日志（不做启发式判断，直接翻译 key）
+        
+        Args:
+            key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
+            video_id: 视频ID（可选）
+            **kwargs: 格式化参数
+        """
+        message = translate_log(key, **kwargs)
+        self._log_with_context(logging.DEBUG, message, video_id, **kwargs)
+    
+    def info_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 INFO 日志（不做启发式判断，直接翻译 key）
+        
+        推荐用于 P0/P1 关键路径（用户直接看到的日志）
+        
+        Args:
+            key: 翻译键（支持 "log.xxx" 或 "xxx" 格式）
+            video_id: 视频ID（可选，也会传递给 translate_log 作为格式化参数）
+            **kwargs: 格式化参数
+        
+        Returns:
+            翻译后的消息（用于传递给 safe_log 等回调）
+        
+        Example:
+            >>> msg = logger.info_i18n("video_detected", video_id="abc123")
+            # 中文环境：msg = "检测到视频: abc123"
+            # 英文环境：msg = "Video detected: abc123"
+        """
+        # 将 video_id 也传递给 translate_log（如果提供）
+        # 注意：需要创建一个新的 kwargs 副本，避免修改原始 kwargs
+        translate_kwargs = kwargs.copy()
+        if video_id is not None:
+            translate_kwargs['video_id'] = video_id
+        message = translate_log(key, **translate_kwargs)
+        self._log_with_context(logging.INFO, message, video_id, **kwargs)
+        return message
+    
+    def warning_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 WARNING 日志
+        
+        Returns:
+            翻译后的消息
+        """
+        # 将 video_id 也传递给 translate_log（如果提供）
+        translate_kwargs = kwargs.copy()
+        if video_id is not None:
+            translate_kwargs['video_id'] = video_id
+        message = translate_log(key, **translate_kwargs)
+        self._log_with_context(logging.WARNING, message, video_id, **kwargs)
+        return message
+    
+    def warn_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 WARNING 日志（别名）
+        
+        Returns:
+            翻译后的消息
+        """
+        return self.warning_i18n(key, video_id, **kwargs)
+    
+    def error_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 ERROR 日志
+        
+        Returns:
+            翻译后的消息
+        """
+        # 将 video_id 也传递给 translate_log（如果提供）
+        translate_kwargs = kwargs.copy()
+        if video_id is not None:
+            translate_kwargs['video_id'] = video_id
+        message = translate_log(key, **translate_kwargs)
+        self._log_with_context(logging.ERROR, message, video_id, **kwargs)
+        return message
+    
+    def critical_i18n(self, key: str, video_id: Optional[str] = None, **kwargs) -> str:
+        """显式国际化 CRITICAL 日志
+        
+        Returns:
+            翻译后的消息
+        """
+        message = translate_log(key, **kwargs)
         self._log_with_context(logging.CRITICAL, message, video_id, **kwargs)
+        return message
     
     def set_level(self, level: str) -> None:
         """设置日志级别"""

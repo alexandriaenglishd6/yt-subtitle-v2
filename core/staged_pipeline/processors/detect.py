@@ -4,7 +4,7 @@ DETECT 阶段处理器
 from pathlib import Path
 from typing import Optional, Callable
 
-from core.logger import get_logger, set_log_context, clear_log_context
+from core.logger import get_logger, set_log_context, clear_log_context, translate_log
 from core.exceptions import ErrorType, AppException, TaskCancelledError
 from core.cancel_token import CancelToken
 from core.detector import SubtitleDetector
@@ -30,6 +30,7 @@ class DetectProcessor:
         force: bool,
         dry_run: bool,
         cancel_token: Optional[CancelToken],
+        language_config=None,  # 语言配置（用于增量检查时考虑语言变化）
         on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
     ):
         """初始化检测处理器
@@ -49,6 +50,7 @@ class DetectProcessor:
         self.force = force
         self.dry_run = dry_run
         self.cancel_token = cancel_token
+        self.language_config = language_config
         self.on_log = on_log
     
     def process(self, data: StageData) -> StageData:
@@ -72,22 +74,27 @@ class DetectProcessor:
             if data.run_id:
                 set_log_context(run_id=data.run_id, task="detect", video_id=vid)
             
-            logger.info(f"检测字幕: {vid} - {title_preview}...", video_id=vid)
+            logger.info_i18n("detect_subtitle_info", video_id=vid, title_preview=title_preview)
             
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():
-                reason = self.cancel_token.get_reason() or "用户取消"
+                reason = self.cancel_token.get_reason() or logger.translate_log("user_cancelled")
                 raise TaskCancelledError(reason)
             
             # 检查增量记录（如果 force=False）
             if not self.force and self.archive_path:
-                if self.incremental_manager.is_processed(vid, self.archive_path):
+                # 计算语言配置哈希值（如果提供了语言配置）
+                from core.incremental import _get_language_config_hash
+                lang_hash = _get_language_config_hash(self.language_config) if self.language_config else None
+                
+                if self.incremental_manager.is_processed(vid, self.archive_path, lang_hash):
                     data.is_processed = True
-                    data.skip_reason = "已处理（增量模式）"
-                    logger.info(f"视频已处理，跳过: {vid}", video_id=vid)
+                    from ui.i18n_manager import t
+                    data.skip_reason = t("log.video_already_processed_skip", video_id=vid)
+                    skip_msg = logger.info_i18n("video_already_processed_skip", video_id=vid)
                     if self.on_log:
                         try:
-                            self.on_log("INFO", f"视频已处理，跳过: {vid}", vid)
+                            self.on_log("INFO", skip_msg, vid)
                         except Exception:
                             pass
                     return data
@@ -113,17 +120,17 @@ class DetectProcessor:
                     data.error_type = ErrorType.CONTENT
                     data.processing_failed = True
                 else:
-                    data.skip_reason = "无可用字幕（Dry Run）"
+                    data.skip_reason = translate_log("no_subtitles_dry_run")
                 
                 return data
             
-            logger.info(f"检测到字幕: {vid}", video_id=vid)
+            logger.info_i18n("detect_subtitle_found", video_id=vid)
             return data
             
         except TaskCancelledError as e:
             # 任务已取消
-            reason = e.reason or "用户取消"
-            logger.info(f"任务已取消: {vid} - {reason}", video_id=vid)
+            reason = e.reason or translate_log("user_cancelled")
+            logger.info_i18n("task_cancelled", video_id=vid, reason=reason)
             data.error = e
             data.error_type = ErrorType.CANCELLED
             data.error_stage = "detect"
@@ -134,12 +141,12 @@ class DetectProcessor:
             data.error_type = e.error_type
             data.error_stage = "detect"
             data.processing_failed = True
-            logger.error(f"检测字幕失败: {vid} - {e}", video_id=vid)
+            logger.error_i18n("detect_subtitle_failed", video_id=vid, error=str(e))
             return data
         except Exception as e:
             # 未知异常
             app_error = AppException(
-                message=f"检测字幕失败: {str(e)}",
+                message=translate_log("detect_subtitle_failed", video_id=vid, error=str(e)),
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
@@ -147,7 +154,7 @@ class DetectProcessor:
             data.error_type = ErrorType.UNKNOWN
             data.error_stage = "detect"
             data.processing_failed = True
-            logger.error(f"检测字幕异常: {vid} - {e}", video_id=vid)
+            logger.error_i18n("detect_subtitle_exception", video_id=vid, error=str(e))
             import traceback
             logger.debug(traceback.format_exc(), video_id=vid)
             return data

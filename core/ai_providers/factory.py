@@ -41,8 +41,9 @@ def create_llm_client(ai_config: AIConfig) -> LLMClient:
     try:
         return client_class(ai_config)
     except Exception as e:
+        # 使用翻译键格式，日志系统会自动翻译
         raise LLMException(
-            f"初始化 {provider} 客户端失败: {e}",
+            f"exception.ai_client_init_failed:provider={provider},error={str(e)}",
             LLMErrorType.UNKNOWN
         )
 

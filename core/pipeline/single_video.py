@@ -82,26 +82,26 @@ def process_single_video(
         if not force:
             status = incremental_manager.get_status(video_info.video_id)
             if status == "success":
-                logger.info(f"视频 {video_info.video_id} 已成功处理，跳过", video_id=video_info.video_id)
-                safe_log(on_log, "INFO", f"视频 {video_info.video_id} 已成功处理，跳过", video_info.video_id)
+                msg = logger.info_i18n("video_already_processed", video_id=video_info.video_id)
+                safe_log(on_log, "INFO", msg, video_info.video_id)
                 return True
         
         # 检查取消状态
         if cancel_token and cancel_token.is_cancelled():
             reason = cancel_token.get_reason() or "用户取消"
-            logger.info(f"任务已取消: {reason}", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", f"任务已取消: {reason}", video_info.video_id)
+            msg = logger.info_i18n("task_cancelled", reason=reason, video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
             raise TaskCancelledError(f"任务已取消: {reason}")
         
-        logger.info(f"开始处理视频: {video_info.title} ({video_info.video_id})", video_id=video_info.video_id)
-        safe_log(on_log, "INFO", f"开始处理视频: {video_info.title}", video_info.video_id)
+        msg = logger.info_i18n("video_processing_start", title=video_info.title, video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         
         # 1. 字幕检测
         if cancel_token and cancel_token.is_cancelled():
             raise TaskCancelledError("任务已取消")
         
-        logger.info("开始字幕检测...", video_id=video_info.video_id)
-        safe_log(on_log, "INFO", "开始字幕检测...", video_info.video_id)
+        msg = logger.info_i18n("detect_start", video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         
         detector = SubtitleDetector(proxy_manager=proxy_manager, cookie_manager=cookie_manager)
         detection_result = detector.detect(video_info.url)
@@ -122,22 +122,22 @@ def process_single_video(
                 incremental_manager.mark_failed(video_info.video_id, error_msg)
             return False
             
-            logger.info(f"视频 {video_info.video_id} 无字幕，跳过", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", f"视频无字幕，跳过", video_info.video_id)
+            msg = logger.info_i18n("video_no_subtitle", video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
             return True
         
-        logger.info(f"检测到字幕: 自动字幕={detection_result.has_auto_captions}, 手动字幕={detection_result.has_manual_captions}",
-                   video_id=video_info.video_id)
-        safe_log(on_log, "INFO", 
-                f"检测到字幕: 自动字幕={detection_result.has_auto_captions}, 手动字幕={detection_result.has_manual_captions}",
-                video_info.video_id)
+        msg = logger.info_i18n("detect_subtitle_found", 
+                              has_auto=str(detection_result.has_auto_captions),
+                              has_manual=str(detection_result.has_manual_captions),
+                              video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         
         # 2. 字幕下载
         if cancel_token and cancel_token.is_cancelled():
             raise TaskCancelledError("任务已取消")
         
-        logger.info("开始下载字幕...", video_id=video_info.video_id)
-        safe_log(on_log, "INFO", "开始下载字幕...", video_info.video_id)
+        msg = logger.info_i18n("download_start", video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         
         downloader = SubtitleDownloader(
             proxy_manager=proxy_manager,
@@ -160,8 +160,7 @@ def process_single_video(
         
         # 检查下载结果
         if not download_result.get("original"):
-            error_msg = "原始字幕下载失败"
-            logger.error(error_msg, video_id=video_info.video_id)
+            error_msg = logger.error_i18n("download_original_failed", video_id=video_info.video_id)
             safe_log(on_log, "ERROR", error_msg, video_info.video_id)
             failure_logger.log_failure(
                 video_id=video_info.video_id,
@@ -174,8 +173,10 @@ def process_single_video(
             processing_failed = True
             return False
         
-        logger.info(f"字幕下载完成: 原始字幕={download_result.get('original') is not None}", video_id=video_info.video_id)
-        safe_log(on_log, "INFO", "字幕下载完成", video_info.video_id)
+        msg = logger.info_i18n("download_complete", 
+                              has_original=str(download_result.get('original') is not None),
+                              video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         
         # 3. 字幕翻译
         translation_result = {}
@@ -184,8 +185,8 @@ def process_single_video(
             if cancel_token and cancel_token.is_cancelled():
                 raise TaskCancelledError("任务已取消")
             
-            logger.info("开始翻译字幕...", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", "开始翻译字幕...", video_info.video_id)
+            msg = logger.info_i18n("translation_start", video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
             
             translator = SubtitleTranslator(
                 llm_client=translation_llm,
@@ -200,12 +201,11 @@ def process_single_video(
                     video_title=video_info.title,
                     cancel_token=cancel_token
                 )
-                logger.info(f"翻译完成: {len(translation_result)} 个目标语言", video_id=video_info.video_id)
-                safe_log(on_log, "INFO", f"翻译完成: {len(translation_result)} 个目标语言", video_info.video_id)
+                msg = logger.info_i18n("translation_complete", count=len(translation_result), video_id=video_info.video_id)
+                safe_log(on_log, "INFO", msg, video_info.video_id)
             except AppException as e:
                 if e.error_type == ErrorType.AI_QUOTA_EXCEEDED:
-                    error_msg = f"AI 配额已用尽: {e.message}"
-                    logger.error(error_msg, video_id=video_info.video_id)
+                    error_msg = logger.error_i18n("translation_quota_exceeded", error=e.message, video_id=video_info.video_id)
                     safe_log(on_log, "ERROR", error_msg, video_info.video_id)
                     failure_logger.log_failure(
                         video_id=video_info.video_id,
@@ -222,8 +222,7 @@ def process_single_video(
         elif language_config.target_languages and not translation_llm:
             # 如果配置了目标语言但没有 LLM，记录警告
             if translation_llm_init_error_type:
-                error_msg = f"翻译 LLM 初始化失败: {translation_llm_init_error}"
-                logger.warning(error_msg, video_id=video_info.video_id)
+                error_msg = logger.warning_i18n("translation_llm_init_failed", error=translation_llm_init_error, video_id=video_info.video_id)
                 safe_log(on_log, "WARNING", error_msg, video_info.video_id)
                 # 继续处理，只输出原始字幕
         
@@ -234,8 +233,8 @@ def process_single_video(
             if cancel_token and cancel_token.is_cancelled():
                 raise TaskCancelledError("任务已取消")
             
-            logger.info("开始生成摘要...", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", "开始生成摘要...", video_info.video_id)
+            msg = logger.info_i18n("summary_start", video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
             
             summarizer = Summarizer(
                 llm_client=summary_llm,
@@ -249,12 +248,11 @@ def process_single_video(
                     output_dir=temp_dir,
                     cancel_token=cancel_token
                 )
-                logger.info("摘要生成完成", video_id=video_info.video_id)
-                safe_log(on_log, "INFO", "摘要生成完成", video_info.video_id)
+                msg = logger.info_i18n("summary_complete", video_id=video_info.video_id)
+                safe_log(on_log, "INFO", msg, video_info.video_id)
             except AppException as e:
                 if e.error_type == ErrorType.AI_QUOTA_EXCEEDED:
-                    error_msg = f"AI 配额已用尽: {e.message}"
-                    logger.error(error_msg, video_id=video_info.video_id)
+                    error_msg = logger.error_i18n("summary_quota_exceeded", error=e.message, video_id=video_info.video_id)
                     safe_log(on_log, "ERROR", error_msg, video_info.video_id)
                     failure_logger.log_failure(
                         video_id=video_info.video_id,
@@ -274,8 +272,8 @@ def process_single_video(
             if cancel_token and cancel_token.is_cancelled():
                 raise TaskCancelledError("任务已取消")
             
-            logger.info("开始写入输出文件...", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", "开始写入输出文件...", video_info.video_id)
+            msg = logger.info_i18n("output_start", video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
             
             output_writer.write_all(
                 video_info=video_info,
@@ -289,32 +287,32 @@ def process_single_video(
                 summary_llm=summary_llm
             )
             
-            logger.info("输出文件写入完成", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", "输出文件写入完成", video_info.video_id)
+            msg = logger.info_i18n("output_complete", video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
         else:
-            logger.info("干跑模式：跳过文件写入", video_id=video_info.video_id)
-            safe_log(on_log, "INFO", "干跑模式：跳过文件写入", video_info.video_id)
+            msg = logger.info_i18n("output_skipped", video_id=video_info.video_id)
+            safe_log(on_log, "INFO", msg, video_info.video_id)
         
         # 6. 更新增量状态
         if not dry_run:
             incremental_manager.mark_success(video_info.video_id)
         
-        logger.info(f"视频 {video_info.video_id} 处理成功", video_id=video_info.video_id)
-        safe_log(on_log, "INFO", "视频处理成功", video_info.video_id)
+        msg = logger.info_i18n("video_processing_complete", video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         
         return True
         
     except TaskCancelledError as e:
-        logger.info(f"任务已取消: {e.message}", video_id=video_info.video_id)
-        safe_log(on_log, "INFO", f"任务已取消: {e.message}", video_info.video_id)
+        msg = logger.info_i18n("task_cancelled", reason=e.message, video_id=video_info.video_id)
+        safe_log(on_log, "INFO", msg, video_info.video_id)
         processing_failed = True
         return False
         
     except AppException as e:
         import traceback
-        logger.error(f"处理失败 [{e.error_type.value}]: {e.message}", video_id=video_info.video_id)
+        error_msg = logger.error_i18n("exception.processing_failed", error=e.message, video_id=video_info.video_id)
         logger.debug(traceback.format_exc(), video_id=video_info.video_id)
-        safe_log(on_log, "ERROR", f"处理失败: {e.message}", video_info.video_id)
+        safe_log(on_log, "ERROR", error_msg, video_info.video_id)
         
         failure_logger.log_failure(
             video_id=video_info.video_id,
@@ -335,9 +333,9 @@ def process_single_video(
         if "llm" in str(e).lower() or "api" in str(e).lower():
             error_type = map_llm_error_to_app_error(e)
         
-        logger.error(f"未知错误: {e}", video_id=video_info.video_id)
+        error_msg = logger.error_i18n("exception.unknown_error", error=str(e), video_id=video_info.video_id)
         logger.debug(traceback.format_exc(), video_id=video_info.video_id)
-        safe_log(on_log, "ERROR", f"未知错误: {e}", video_info.video_id)
+        safe_log(on_log, "ERROR", error_msg, video_info.video_id)
         
         failure_logger.log_failure(
             video_id=video_info.video_id,

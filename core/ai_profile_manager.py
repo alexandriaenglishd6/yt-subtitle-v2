@@ -58,7 +58,7 @@ class AIProfileManager:
             return True
         
         if not self.profile_file.exists():
-            logger.debug(f"AI Profile 配置文件不存在: {self.profile_file}，将使用默认配置")
+            logger.debug_i18n("ai_profile_file_not_found", path=str(self.profile_file))
             self._loaded = True
             return False
         
@@ -140,7 +140,7 @@ class AIProfileManager:
         # 从 task_mapping 中查找对应的 profile 名称
         profile_name = self.task_mapping.get(task_type)
         if not profile_name:
-            logger.debug(f"任务类型 '{task_type}' 未配置 profile 映射")
+            logger.debug_i18n("ai_profile_task_not_mapped", task_type=task_type)
             return None
         
         return self.get_profile(profile_name)
@@ -166,7 +166,7 @@ class AIProfileManager:
         
         # 回退到 fallback_config
         if fallback_config:
-            logger.debug(f"任务类型 '{task_type}' 未配置 Profile，使用回退配置")
+            logger.debug_i18n("ai_profile_task_fallback", task_type=task_type)
             return fallback_config
         
         return None

@@ -104,6 +104,67 @@
 
 ## 2025-12
 
+### 2025-12-16
+
+- **阶段 / 里程碑**：Task 4 - 日志国际化基础设施 + 核心日志迁移（P0/P1 用户可见日志）  
+- **参与 AI / 工具**：Cursor IDE、Auto (Agent Router)  
+- **完成的任务编号**：
+  - ✅ 修复运行参数页面并发数警告提示的硬编码中文
+  - ✅ 修复代理测试相关的所有硬编码中文日志（认证信息、测试成功/失败消息）
+  - ✅ 修复 Cookie 测试失败消息的硬编码中文
+  - ✅ 修复翻译测试相关的日志（AI 语言提取失败）
+  - ✅ 修复主题切换和语言切换相关的日志
+  - ✅ 修复任务开始、字幕检测、任务完成等核心日志的硬编码中文
+  - ✅ 添加大量新的翻译键到 `ui/i18n/zh_CN.json` 和 `ui/i18n/en_US.json`
+- **主要修改点总结**：
+  - **运行参数页面国际化**（`ui/pages/run_params_page.py`）：
+    - 将并发数警告提示（高/中/低三个级别）迁移到翻译键：`concurrency_warning_high`、`concurrency_warning_medium`、`concurrency_warning_low`
+  - **代理测试日志国际化**（`ui/pages/network_settings_page.py`）：
+    - 代理认证信息日志：`log.proxy_has_auth`、`log.proxy_socks_with_auth`
+    - 代理测试成功消息：`log.proxy_test_success_http`、`log.proxy_test_success_ytdlp`、`log.proxy_test_success_cookie_required`、`log.proxy_test_success_youtube`
+    - 代理测试总结：`log.proxy_test_success_summary`
+    - 代理连接错误消息：`log.proxy_connection_timeout`、`log.proxy_connection_failed` 及其变体
+  - **代理失败处理国际化**（`core/fetcher.py`）：
+    - 代理失败消息：`log.proxy_failed_try_next`
+  - **任务开始日志国际化**（`ui/business_logic.py`、`core/pipeline/batch.py`）：
+    - 普通模式：`log.task_start`
+    - 分阶段模式：`log.task_start_staged`
+  - **Cookie 测试失败国际化**（`core/cookie_manager.py`）：
+    - 使用已存在的翻译键：`cookie_test_failed`
+  - **字幕检测日志国际化**（`core/staged_pipeline/processors/detect.py`）：
+    - 字幕检测信息：`log.detect_subtitle_info`
+  - **任务完成日志国际化**（`core/staged_pipeline/scheduler.py`）：
+    - 使用已存在的翻译键：`log.task_complete`
+  - **主题和语言切换日志国际化**（`ui/main_window.py`）：
+    - 主题切换：`log.theme_changed`、`log.theme_saved`
+    - 语言切换：`log.language_change_callback`、`log.language_current_new`、`log.language_set`、`log.language_saved`、`log.ui_text_refreshed`、`log.language_no_change`、`log.language_unknown`
+  - **AI 语言提取失败国际化**（`core/ai_providers/google_translate.py`）：
+    - 使用翻译键：`log.ai_extract_language_failed`
+- **新增/更新的文档**：
+  - 无（代码修改为主）
+- **遇到的问题 / 风险**：
+  - **已解决**：运行参数页面并发数警告提示硬编码中文 - 已迁移到翻译键
+  - **已解决**：代理测试过程中的所有日志消息硬编码中文 - 已全部迁移到翻译键
+  - **已解决**：Cookie 测试失败消息硬编码中文 - 已使用翻译键
+  - **已解决**：主题和语言切换时的日志消息硬编码中文 - 已全部迁移到翻译键
+  - **已解决**：任务开始、字幕检测、任务完成等核心日志硬编码中文 - 已全部迁移到翻译键
+  - **已解决**：`core/staged_pipeline/scheduler.py` 中缺少 `t()` 函数导入 - 已添加导入
+- **Git 提交记录**：
+  - `fix: migrate remaining UI hardcoded Chinese (concurrency warnings, proxy errors, theme/language change logs, AI extract language)`
+  - `fix: add missing translation keys for language change and proxy connection errors`
+  - `fix: add missing log.proxy_connection_failed_socks_detail translation key`
+  - `fix: migrate remaining hardcoded Chinese in proxy tests, cookie tests, and task start logs`
+  - `fix: migrate remaining hardcoded Chinese in detect processor and scheduler completion log`
+  - `fix: add missing import for t() function in scheduler`
+  - `fix: add missing log.detect_subtitle_info translation key`
+- **下一步计划**：
+  - 完成 Task 4 的测试验证（切换英文，验证所有日志均为英文）
+  - 触发 2-3 个异常路径，验证 GUI 弹窗展示翻译后的 `exception.*` key
+  - 验证敏感信息在日志中已脱敏
+  - 验证 GUI 日志面板（append_log）展示的内容同样已脱敏
+  - 提交 PR，合并到 main 分支
+  - 开始 Task 5（如果 Task 4 完全完成）
+
 ### 2025-12-14
 
 - **阶段 / 里程碑**：UI 下拉框高度调整与手动翻页功能尝试  

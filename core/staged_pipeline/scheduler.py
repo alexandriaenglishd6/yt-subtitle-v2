@@ -12,6 +12,7 @@ from core.logger import get_logger
 from core.exceptions import ErrorType
 from core.cancel_token import CancelToken
 from core.failure_logger import FailureLogger
+from ui.i18n_manager import t
 
 from .data_types import StageData
 from .queue import StageQueue
@@ -112,6 +113,7 @@ class StagedPipeline:
             force=self.force,
             dry_run=self.dry_run,
             cancel_token=self.cancel_token,
+            language_config=self.language_config,  # 传递语言配置，用于增量检查
             on_log=self.on_log,
         )
         
@@ -232,7 +234,7 @@ class StagedPipeline:
         self._success_count = 0
         self._failed_count = 0
         
-        logger.info(f"开始处理 {self._total_count} 个视频（分阶段队列模式）", run_id=self.run_id)
+        logger.info_i18n("processing_start_staged", count=self._total_count, run_id=self.run_id)
         
         try:
             # 1. 启动所有阶段
@@ -286,7 +288,7 @@ class StagedPipeline:
             )
             
             logger.info(
-                f"处理完成: 总计 {self._total_count}, 成功 {self._success_count}, 失败 {self._failed_count}",
+                t("log.task_complete", total=self._total_count, success=self._success_count, failed=self._failed_count),
                 run_id=self.run_id
             )
             

@@ -221,7 +221,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
         self.cookie_textbox.delete("1.0", "end")
         self._show_cookie_placeholder()
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空 Cookie")
+            self.on_log_message("INFO", t("cookie_cleared"))
     
     def _show_cookie_placeholder(self):
         """显示 Cookie 占位符"""
@@ -292,9 +292,9 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     if self.on_update_cookie_status:
                                         self.on_update_cookie_status(cookie_text, region, "success")
                                     if self.on_log_message:
-                                        self.on_log_message("INFO", f"已保存 Cookie 和地区信息: {region}")
+                                        self.on_log_message("INFO", t("cookie_region_saved", region=region))
                                 except Exception as e:
-                                    logger.error(f"保存地区信息失败: {e}")
+                                    logger.error_i18n("cookie_region_save_failed", error=str(e))
                             self.after(0, save_with_region)
                     else:
                         # 如果未检测到地区信息，提示用户并只保存 Cookie（保留现有地区信息）
@@ -307,7 +307,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     if self.on_update_cookie_status:
                                         self.on_update_cookie_status(cookie_text, self.network_region, "success")
                                 except Exception as e:
-                                    logger.error(f"保存 Cookie 失败: {e}")
+                                    logger.error_i18n("cookie_save_failed", error=str(e))
                             self.after(0, save_cookie_only)
                         else:
                             # 即使不保存，也更新状态显示（测试成功）
@@ -380,18 +380,18 @@ class NetworkSettingsPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("cookie_save_success"))
             except Exception as e:
-                logger.error(f"保存 Cookie 失败: {e}")
+                logger.error_i18n("cookie_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("cookie_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_cookie 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_cookie")
     
     def _on_clear_proxies(self):
         """清空代理列表"""
         self.proxy_textbox.delete("1.0", "end")
         self._show_proxy_placeholder()
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空代理列表")
+            self.on_log_message("INFO", t("proxy_list_cleared"))
     
     def _show_proxy_placeholder(self):
         """显示代理占位符"""
@@ -440,11 +440,11 @@ class NetworkSettingsPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("proxy_save_success"))
             except Exception as e:
-                logger.error(f"保存代理设置失败: {e}")
+                logger.error_i18n("proxy_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("proxy_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_proxies 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_proxies")
     
     def _on_test_proxies(self):
         """测试代理连通性"""
@@ -469,7 +469,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
         
         # 添加测试开始日志
         if self.on_log_message:
-            self.on_log_message("INFO", f"开始测试 {len(proxies)} 个代理...")
+            self.on_log_message("INFO", t("log.proxy_test_start", count=len(proxies)))
         
         def test_in_thread():
             """在后台线程中测试代理"""
@@ -545,14 +545,14 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}"
                     else:
                         safe_proxy = proxy
-                    log_info(f"测试代理 {i}/{total}: {safe_proxy}")
+                    log_info(t("log.proxy_test_item", current=i, total=total, proxy=safe_proxy))
                     
                     try:
                         # 验证代理格式
                         parsed = urlparse(proxy)
                         if not parsed.scheme or not parsed.hostname:
-                            error_msg = "无效的代理格式"
-                            log_error(f"代理 {i} 格式无效: {proxy}")
+                            error_msg = t("proxy_format_invalid")
+                            log_error(t("proxy_format_invalid_detail", index=i, proxy=proxy))
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
@@ -567,14 +567,14 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         if has_auth:
                             # 只显示用户名，不显示密码（隐私保护）
                             auth_info = f", 用户名: {parsed.username or '(无)'}, 密码: {'已设置' if parsed.password else '未设置'}"
-                        log_info(f"代理类型: {proxy_type}, 地址: {parsed.hostname}:{parsed.port or '默认'}{auth_info}")
+                        log_info(t("log.proxy_type", type=proxy_type, address=f"{parsed.hostname}:{parsed.port or 'default'}{auth_info}"))
                         
                         # 验证代理URL格式（包含认证信息）
                         if has_auth:
-                            log_debug(f"代理包含认证信息: 用户名={parsed.username}, 密码={'已设置' if parsed.password else '未设置'}")
+                            log_debug(t("log.proxy_has_auth", username=parsed.username, password_status="已设置" if parsed.password else "未设置"))
                             # 验证URL解析是否正确
                             if parsed.username and not parsed.password:
-                                log_error(f"警告: 代理包含用户名但缺少密码，可能导致认证失败")
+                                log_error(t("proxy_warning_username_no_password"))
                         
                         # 对于SOCKS5代理，需要特殊处理认证信息
                         # requests库理论上支持从URL中提取认证信息，但在某些情况下可能不工作
@@ -584,21 +584,21 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         # 对于SOCKS代理，验证URL格式是否正确
                         if parsed.scheme.lower() in ["socks4", "socks5", "socks5h"]:
                             if has_auth:
-                                log_debug(f"使用带认证的SOCKS代理: {parsed.scheme}://{parsed.username}:***@{parsed.hostname}:{parsed.port}")
+                                log_debug(t("log.proxy_socks_with_auth", proxy=f"{parsed.scheme}://{parsed.username}:***@{parsed.hostname}:{parsed.port}"))
                                 # 验证URL是否包含完整的认证信息
                                 if not parsed.username or not parsed.password:
-                                    log_error(f"警告: SOCKS代理认证信息不完整（用户名: {'有' if parsed.username else '无'}, 密码: {'有' if parsed.password else '无'}）")
+                                    log_error(t("proxy_warning_socks_auth_incomplete", username_status="有" if parsed.username else "无", password_status="有" if parsed.password else "无"))
                             else:
-                                log_debug(f"使用无认证的SOCKS代理: {parsed.scheme}://{parsed.hostname}:{parsed.port}")
+                                log_debug(t("log.proxy_socks_no_auth", proxy=f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"))
                             
                             # 验证代理URL是否包含 '@' 符号（表示有认证信息）
                             if has_auth and '@' not in test_proxy_url:
-                                log_error(f"错误: 代理URL格式异常，应该包含认证信息但未找到 '@' 符号")
+                                log_error(t("proxy_error_url_format"))
                         
                         # 使用 yt-dlp 测试代理（与实际使用场景一致）
                         # yt-dlp 能够正确处理包含认证信息的 SOCKS5 代理
                         # 这样测试结果更能反映实际使用情况
-                        log_debug(f"使用 yt-dlp 测试代理（与实际使用场景一致）")
+                        log_debug(t("log.proxy_test_ytdlp"))
                         
                         # 查找 yt-dlp 可执行文件
                         yt_dlp_path = shutil.which("yt-dlp")
@@ -627,7 +627,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     )
                                     if response.status_code in [200, 301, 302, 303, 307, 308]:
                                         safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                        log_info(f"代理 {i} 测试成功: {safe_proxy} (通过 {test_url}, 状态码: {response.status_code})")
+                                        log_info(t("log.proxy_test_success_http", index=i, proxy=safe_proxy, test_url=test_url, status_code=response.status_code))
                                         test_success = True
                                         last_error = None
                                         break
@@ -643,7 +643,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                             test_video_url = "https://www.youtube.com/watch?v=jNQXAC9IVRw"  # 公开的测试视频
                             
                             try:
-                                log_debug(f"  使用 yt-dlp 测试代理连接...")
+                                log_debug(t("log.proxy_test_ytdlp_connecting"))
                                 
                                 # 构建 yt-dlp 命令
                                 cmd = [
@@ -675,7 +675,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 if result.returncode == 0:
                                     # 成功获取视频信息，代理可用
                                     safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                    log_info(f"代理 {i} 测试成功: {safe_proxy} (通过 yt-dlp 测试)")
+                                    log_info(t("log.proxy_test_success_ytdlp", index=i, proxy=safe_proxy))
                                     test_success = True
                                     last_error = None
                                     last_exception = None
@@ -685,7 +685,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 ]):
                                     # 代理连接成功，但需要 Cookie 认证（这说明代理是工作的）
                                     safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                    log_info(f"代理 {i} 测试成功: {safe_proxy} (代理连接正常，但测试视频需要 Cookie 认证)")
+                                    log_info(t("log.proxy_test_success_cookie_required", index=i, proxy=safe_proxy))
                                     log_debug(f"  注意: {error_msg[:150]}")
                                     test_success = True
                                     last_error = None
@@ -706,7 +706,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     if "ERROR:" in error_output and "youtube" in error_lower:
                                         # 能够连接到 YouTube 服务器，说明代理是工作的
                                         safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
-                                        log_info(f"代理 {i} 测试成功: {safe_proxy} (代理连接正常，可访问 YouTube)")
+                                        log_info(t("log.proxy_test_success_youtube", index=i, proxy=safe_proxy))
                                         log_debug(f"  详细信息: {error_msg[:150]}")
                                         test_success = True
                                         last_error = None
@@ -717,10 +717,10 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                         log_debug(f"  yt-dlp 测试失败: {last_error}")
                                         test_success = False
                             except subprocess.TimeoutExpired:
-                                last_error = f"连接超时（超过 {timeout} 秒）"
+                                last_error = t("log.proxy_connection_timeout", timeout=timeout)
                                 last_exception = None
                                 test_success = False
-                                log_debug(f"  yt-dlp 测试超时")
+                                log_debug(t("log.proxy_test_ytdlp_timeout"))
                             except Exception as e:
                                 last_error = str(e)[:200]
                                 last_exception = e
@@ -781,18 +781,18 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         results.append({
                             "proxy": proxy,
                             "success": False,
-                            "error": "连接超时（代理可能较慢或不可用）"
+                            "error": t("log.proxy_connection_failed_slow")
                         })
                     except requests.exceptions.ConnectionError as e:
                         error_msg = str(e)
-                        log_error(f"代理 {i} 连接错误: {error_msg[:200]}")
+                        log_error(t("log.proxy_connection_error", index=i, error=error_msg[:200]))
                         
                         # 分析连接错误类型
                         if "Max retries exceeded" in error_msg:
-                            error_detail = "连接失败：代理服务器无响应（可能已失效或网络不通）"
+                            error_detail = t("log.proxy_connection_failed_no_response")
                             # 如果是SOCKS代理，提供更详细的提示
                             if parsed.scheme.lower() in ["socks4", "socks5", "socks5h"]:
-                                error_detail += "（SOCKS代理：请检查代理地址、端口、用户名和密码是否正确，以及防火墙设置）"
+                                error_detail += f" ({t('log.proxy_connection_failed_socks_detail')})"
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
@@ -802,7 +802,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
-                                "error": "连接失败：代理服务器拒绝连接"
+                                "error": t("log.proxy_connection_failed_refused")
                             })
                         elif "SOCKS" in error_msg:
                             # SOCKS 连接错误
@@ -810,13 +810,13 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": "连接失败：SOCKS 代理认证失败（请检查用户名和密码）"
+                                    "error": t("log.proxy_connection_failed_auth")
                                 })
                             else:
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": "连接失败：SOCKS 代理连接失败（请检查代理地址和端口）"
+                                    "error": t("log.proxy_connection_failed_socks")
                                 })
                         else:
                             # 提取更简洁的错误信息
@@ -828,13 +828,13 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": f"连接失败: {caused_by_part}"
+                                    "error": t("log.proxy_connection_failed", detail=caused_by_part)
                                 })
                             else:
                                 results.append({
                                     "proxy": proxy,
                                     "success": False,
-                                    "error": f"连接失败: {error_msg[:80]}"
+                                    "error": t("log.proxy_connection_failed", detail=error_msg[:80])
                                 })
                     except Exception as e:
                         error_msg = str(e)
@@ -849,7 +849,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                             results.append({
                                 "proxy": proxy,
                                 "success": False,
-                                "error": "连接失败：代理服务器无响应"
+                                "error": t("log.proxy_connection_failed_no_response")
                             })
                         else:
                             results.append({
@@ -872,9 +872,9 @@ class NetworkSettingsPage(ctk.CTkFrame):
                     if self.on_log_message:
                         # 显示测试总结
                         if success_count > 0:
-                            self.on_log_message("INFO", f"测试完成: {success_count}/{total} 个代理可用")
+                            self.on_log_message("INFO", t("log.proxy_test_success_summary", success=success_count, total=total))
                         if failed_count > 0:
-                            self.on_log_message("WARN", f"测试完成: {failed_count}/{total} 个代理失败")
+                            self.on_log_message("WARN", t("log.proxy_test_complete", failed=failed_count, total=total))
                         
                         # 显示每个代理的测试结果（只显示失败的结果，成功的已在测试过程中显示）
                         for result in results:
@@ -887,7 +887,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                         failed_proxy = f"{failed_parsed.scheme}://{failed_parsed.username or ''}:***@{failed_parsed.hostname}:{failed_parsed.port or ''}"
                                 except Exception:
                                     pass  # 如果解析失败，使用原始URL
-                                self.on_log_message("ERROR", f"代理测试失败: {failed_proxy} - {result['error']}")
+                                self.on_log_message("ERROR", t("log.proxy_test_failed_detail", proxy=failed_proxy, error=result['error']))
                 
                 self.after(0, update_ui)
                 

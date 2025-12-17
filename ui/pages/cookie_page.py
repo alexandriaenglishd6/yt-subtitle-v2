@@ -125,7 +125,7 @@ class CookiePage(ctk.CTkFrame):
         """清空 Cookie"""
         self.cookie_textbox.delete("1.0", "end")
         if self.on_log_message:
-            self.on_log_message("INFO", "已清空 Cookie")
+            self.on_log_message("INFO", t("cookie_cleared"))
     
     def _on_test_cookie(self):
         """测试 Cookie"""
@@ -186,9 +186,9 @@ class CookiePage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("cookie_save_success"))
             except Exception as e:
-                logger.error(f"保存 Cookie 失败: {e}")
+                logger.error_i18n("cookie_save_failed", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", t("cookie_save_failed", error=str(e)))
         else:
-            logger.warning("on_save_cookie 回调未设置")
+            logger.warning_i18n("callback_not_set", callback="on_save_cookie")
 

@@ -40,7 +40,7 @@ class SubtitleDetector:
             DetectionResult 对象，包含字幕检测结果
         """
         try:
-            logger.info(f"开始检测字幕: {video_info.video_id}")
+            logger.info_i18n("detect_subtitle_start", video_id=video_info.video_id)
             
             # 使用 yt-dlp 获取字幕信息
             subtitle_info = self._get_subtitle_info_ytdlp(video_info.url)
@@ -88,16 +88,15 @@ class SubtitleDetector:
             )
             
             if has_subtitles:
-                logger.info(
-                    f"字幕检测完成: {video_info.video_id} - "
-                    f"人工字幕: {len(manual_languages)} 种, "
-                    f"自动字幕: {len(auto_languages)} 种"
-                )
+                logger.info_i18n("detect_subtitle_complete", 
+                                 video_id=video_info.video_id,
+                                 manual_count=len(manual_languages),
+                                 auto_count=len(auto_languages))
                 # 输出详细语言列表
                 if manual_languages:
-                    logger.info(f"  人工字幕语言: {', '.join(manual_languages)}")
+                    logger.info_i18n("detect_manual_languages", languages=', '.join(manual_languages))
                 if auto_languages:
-                    logger.info(f"  自动字幕语言: {', '.join(auto_languages)}")
+                    logger.info_i18n("detect_auto_languages", languages=', '.join(auto_languages))
             else:
                 logger.warning(f"视频无可用字幕: {video_info.video_id}")
             
@@ -148,7 +147,7 @@ class SubtitleDetector:
                 cookie_file = self.cookie_manager.get_cookie_file_path()
                 if cookie_file:
                     cmd.extend(["--cookies", cookie_file])
-                    logger.info(f"使用 Cookie 文件检测字幕: {cookie_file}")
+                    logger.info_i18n("cookie_file_detect_subtitle", cookie_file=cookie_file)
                 else:
                     logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径（字幕检测）")
             else:

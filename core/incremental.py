@@ -3,6 +3,8 @@
 使用 yt-dlp --download-archive 格式记录已成功处理的视频
 """
 import re
+import hashlib
+import json
 from pathlib import Path
 from typing import Set, Optional
 from datetime import datetime
@@ -11,6 +13,46 @@ from config.manager import ConfigManager
 from core.logger import get_logger
 
 logger = get_logger()
+
+
+def _get_language_config_hash(language_config) -> Optional[str]:
+    """计算语言配置的哈希值
+    
+    Args:
+        language_config: LanguageConfig 对象或字典
+    
+    Returns:
+        语言配置的哈希值（16 位十六进制字符串），如果 language_config 为 None 则返回 None
+    """
+    if language_config is None:
+        return None
+    
+    try:
+        # 如果是 LanguageConfig 对象，转换为字典
+        if hasattr(language_config, 'to_dict'):
+            config_dict = language_config.to_dict()
+        elif isinstance(language_config, dict):
+            config_dict = language_config
+        else:
+            return None
+        
+        # 只考虑影响输出的配置项（忽略 UI 语言）
+        relevant_config = {
+            "subtitle_target_languages": sorted(config_dict.get("subtitle_target_languages", [])),
+            "summary_language": config_dict.get("summary_language"),
+            "source_language": config_dict.get("source_language"),
+            "bilingual_mode": config_dict.get("bilingual_mode"),
+            "translation_strategy": config_dict.get("translation_strategy"),
+            "subtitle_format": config_dict.get("subtitle_format"),
+        }
+        
+        # 计算哈希值
+        config_json = json.dumps(relevant_config, sort_keys=True)
+        hash_obj = hashlib.md5(config_json.encode('utf-8'))
+        return hash_obj.hexdigest()[:16]  # 使用前 16 位，足够区分不同的配置
+    except Exception as e:
+        logger.warning(f"计算语言配置哈希值失败: {e}")
+        return None
 
 
 class IncrementalManager:
@@ -69,15 +111,16 @@ class IncrementalManager:
         """
         return self.archives_dir / f"playlist_{playlist_id}.txt"
     
-    def is_processed(self, video_id: str, archive_path: Path) -> bool:
+    def is_processed(self, video_id: str, archive_path: Path, language_config_hash: Optional[str] = None) -> bool:
         """判断视频是否已处理过
         
         Args:
             video_id: 视频 ID
             archive_path: archive 文件路径
+            language_config_hash: 语言配置的哈希值（可选），如果提供则检查是否匹配
         
         Returns:
-            如果视频已处理过则返回 True，否则返回 False
+            如果视频已处理过且语言配置匹配（如果提供了哈希值）则返回 True，否则返回 False
         """
         if not archive_path.exists():
             return False
@@ -86,26 +129,49 @@ class IncrementalManager:
             with open(archive_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 # yt-dlp archive 格式：youtube <video_id> 或 youtube <video_id> <ext>
-                # 检查是否包含该 video_id
+                # 扩展格式（如果包含语言配置哈希）：youtube <video_id> # lang_hash=<hash>
                 pattern = rf"youtube\s+{re.escape(video_id)}(\s|$)"
-                return bool(re.search(pattern, content))
+                if not re.search(pattern, content):
+                    return False
+                
+                # 如果提供了语言配置哈希，检查是否匹配
+                if language_config_hash:
+                    # 查找该视频 ID 对应的语言配置哈希
+                    lang_hash_pattern = rf"youtube\s+{re.escape(video_id)}\s+(?:[^\s]+\s+)?#\s*lang_hash=([a-f0-9]+)"
+                    match = re.search(lang_hash_pattern, content)
+                    if match:
+                        stored_hash = match.group(1)
+                        # 如果哈希值不匹配，说明语言配置已变化，需要重新处理
+                        if stored_hash != language_config_hash:
+                            return False
+                    else:
+                        # 如果 archive 中没有语言配置哈希，说明是旧格式，为了安全起见，重新处理
+                        return False
+                
+                return True
         except Exception as e:
             logger.warning(f"读取 archive 文件失败: {e}")
             return False
     
-    def mark_as_processed(self, video_id: str, archive_path: Path) -> None:
+    def mark_as_processed(self, video_id: str, archive_path: Path, language_config_hash: Optional[str] = None) -> None:
         """标记视频为已处理
         
         Args:
             video_id: 视频 ID
             archive_path: archive 文件路径
+            language_config_hash: 语言配置的哈希值（可选），如果提供则记录到 archive 中
         """
         from core.failure_logger import _append_line_safe
         
         try:
             # yt-dlp archive 格式：youtube <video_id>
+            # 扩展格式（如果提供了语言配置哈希）：youtube <video_id> # lang_hash=<hash>
+            if language_config_hash:
+                line = f"youtube {video_id} # lang_hash={language_config_hash}\n"
+            else:
+                line = f"youtube {video_id}\n"
             # 使用线程安全的追加写入
-            if not _append_line_safe(archive_path, f"youtube {video_id}\n"):
+            if not _append_line_safe(archive_path, line):
                 raise Exception("追加写入失败")
         except Exception as e:
             logger.error(f"写入 archive 文件失败: {e}")

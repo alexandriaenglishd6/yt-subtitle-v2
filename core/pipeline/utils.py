@@ -30,7 +30,7 @@ def safe_log(
         try:
             on_log(level, message, video_id)
         except Exception as e:
-            logger.warning(f"日志回调执行失败: {e}")
+            logger.warning_i18n("log_callback_failed", error=str(e))
 
 
 def cleanup_temp_dir(temp_dir: Path):
@@ -40,7 +40,7 @@ def cleanup_temp_dir(temp_dir: Path):
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
     except Exception as e:
-        logger.warning(f"清理临时文件失败: {e}")
+        logger.warning_i18n("cleanup_temp_failed", error=str(e))
 
 
 def handle_processing_error(
