@@ -403,7 +403,7 @@ class Logger:
         console_output: bool = True,
         file_output: bool = True,
         enable_json_events: bool = False,
-        cleanup_old_logs: bool = True,
+        auto_cleanup: bool = True,
         max_log_age_days: int = 14,
     ):
         """初始化日志器
@@ -415,7 +415,7 @@ class Logger:
             console_output: 是否输出到控制台
             file_output: 是否输出到文件
             enable_json_events: 是否启用 JSON 事件输出（用于统计脚本）
-            cleanup_old_logs: 是否在初始化时清理过期日志（默认 True）
+            auto_cleanup: 是否在初始化时清理过期日志（默认 True）
             max_log_age_days: 日志最大保留天数（默认 14 天）
         """
         self.name = name
@@ -437,10 +437,12 @@ class Logger:
             return
         
         # 清理过期日志（在创建 handler 之前）
-        if cleanup_old_logs and file_output:
+        if auto_cleanup and file_output:
             try:
                 log_dir = log_file.parent if log_file else get_user_data_dir() / "logs"
-                cleaned_count = cleanup_old_logs(log_dir, max_log_age_days)
+                # 导入清理函数（避免与参数名冲突）
+                from core.logger import cleanup_old_logs as do_cleanup
+                cleaned_count = do_cleanup(log_dir, max_log_age_days)
                 if cleaned_count > 0:
                     # 使用标准 logging 记录清理信息（此时还没有自定义 logger）
                     temp_logger = logging.getLogger(f"{name}.cleanup")
@@ -856,7 +858,7 @@ def get_logger(
             console_output=console_output,
             file_output=file_output,
             enable_json_events=enable_json_events,
-            cleanup_old_logs=cleanup_old_logs,
+            auto_cleanup=cleanup_old_logs,
             max_log_age_days=max_log_age_days,
         )
     
