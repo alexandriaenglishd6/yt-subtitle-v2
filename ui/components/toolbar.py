@@ -55,8 +55,7 @@ class Toolbar(ctk.CTkFrame):
         button_frame.grid(row=0, column=1, padx=16, pady=8, sticky="e")
         
         # UI 语言切换
-        # 使用固定文本，避免翻译问题
-        lang_values = ["中文", "English"]
+        lang_values = [t("language_zh"), t("language_en")]
         self.lang_combo = ctk.CTkComboBox(
             button_frame,
             values=lang_values,
@@ -65,9 +64,9 @@ class Toolbar(ctk.CTkFrame):
         )
         current_lang = get_language()
         if current_lang == "zh-CN":
-            self.lang_combo.set("中文")
+            self.lang_combo.set(t("language_zh"))
         else:
-            self.lang_combo.set("English")
+            self.lang_combo.set(t("language_en"))
         self.lang_combo.pack(side="left", padx=4)
         
         # 主题切换
@@ -142,17 +141,16 @@ class Toolbar(ctk.CTkFrame):
         """刷新语言相关文本"""
         # 更新语言下拉框
         if hasattr(self, 'lang_combo'):
-            # 使用固定文本，避免翻译问题
-            lang_values = ["中文", "English"]
+            lang_values = [t("language_zh"), t("language_en")]
             original_command = self.lang_combo.cget("command")
             self.lang_combo.configure(command=None)
             self.lang_combo.configure(values=lang_values)
             current_lang = get_language()
             # 使用固定文本设置值，避免翻译问题
             if current_lang == "zh-CN":
-                self.lang_combo.set("中文")  # 固定文本
+                self.lang_combo.set(t("language_zh"))
             else:
-                self.lang_combo.set("English")  # 固定文本
+                self.lang_combo.set(t("language_en"))
             self.lang_combo.configure(command=original_command)
         
         # 更新按钮文本
