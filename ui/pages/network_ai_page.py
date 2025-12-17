@@ -249,7 +249,7 @@ class NetworkAIPage(ctk.CTkFrame):
             if self.on_log_message:
                 self.on_log_message("INFO", "已从剪贴板粘贴 Cookie")
         except Exception as e:
-            logger.error(f"粘贴 Cookie 失败: {e}")
+            logger.error_i18n("log.cookie_paste_failed", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", f"粘贴 Cookie 失败: {e}")
     
@@ -288,7 +288,7 @@ class NetworkAIPage(ctk.CTkFrame):
                 
                 cookie_manager.cleanup()
             except Exception as e:
-                logger.error(f"测试 Cookie 时出错: {e}")
+                logger.error_i18n("log.cookie_test_error", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", f"{t('cookie_test_failed')}: {e}")
             finally:
@@ -301,7 +301,7 @@ class NetworkAIPage(ctk.CTkFrame):
                                 text=t("cookie_test")
                             )
                     except Exception as e:
-                        logger.debug(f"恢复按钮失败（可能已销毁）: {e}")
+                        logger.debug_i18n("log.cookie_restore_button_failed", error=str(e))
                 
                 self.after(0, restore_button)
         
@@ -421,7 +421,7 @@ class NetworkAIPage(ctk.CTkFrame):
             help_label.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 16))
             
         except Exception as e:
-            logger.debug(f"获取 AI Profile 状态失败: {e}")
+            logger.debug_i18n("log.ai_profile_status_fetch_failed", error=str(e))
             # 如果获取失败，不显示状态信息（静默失败）
     
     def _build_ai_config_fields(self, parent_frame, ai_config: dict, prefix: str, start_row: int = 1):
@@ -548,11 +548,11 @@ class NetworkAIPage(ctk.CTkFrame):
                 if self.on_log_message:
                     self.on_log_message("INFO", t("ai_save_success"))
         except ValueError as e:
-            logger.error(f"AI 配置格式错误: {e}")
+            logger.error_i18n("log.ai_config_format_error", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", f"{t('ai_save_failed')}: {e}")
         except Exception as e:
-            logger.error(f"保存 AI 配置失败: {e}")
+            logger.error_i18n("log.ai_config_save_failed", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", t("ai_save_failed", error=str(e)))
     

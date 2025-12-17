@@ -65,7 +65,12 @@ class TaskCancelledError(AppException):
         Args:
             reason: 取消原因（可选）
         """
-        message = f"任务已取消{f'：{reason}' if reason else ''}"
+        # 使用国际化翻译
+        from core.logger import translate_exception
+        if reason:
+            message = translate_exception("exception.task_cancelled_with_reason", reason=reason)
+        else:
+            message = translate_exception("exception.task_cancelled", reason="")
         super().__init__(
             message=message,
             error_type=ErrorType.CANCELLED
@@ -81,8 +86,11 @@ class LocalModelError(AppException):
     
     def __init__(self):
         """初始化本地模型错误"""
+        # 使用国际化翻译
+        from core.logger import translate_exception
+        message = translate_exception("exception.local_model_not_running")
         super().__init__(
-            message="本地模型服务未启动，请先运行 Ollama 或 LM Studio",
+            message=message,
             error_type=ErrorType.EXTERNAL_SERVICE
         )
 

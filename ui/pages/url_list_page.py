@@ -28,8 +28,13 @@ class UrlListPage(ctk.CTkFrame):
         on_save_translation_ai: Optional[Callable[[dict], None]] = None,
         on_save_summary_ai: Optional[Callable[[dict], None]] = None,
         initial_url_list_text: str = "",
+        initial_force_rerun: bool = False,
+        on_save_force_rerun: Optional[Callable[[bool], None]] = None,
         **kwargs
     ):
+        # 从 kwargs 中移除自定义参数，避免传递给父类
+        kwargs.pop('on_save_force_rerun', None)
+        kwargs.pop('initial_force_rerun', None)
         super().__init__(parent, **kwargs)
         self.on_check_new = on_check_new
         self.on_start_processing = on_start_processing
@@ -43,6 +48,8 @@ class UrlListPage(ctk.CTkFrame):
         self.on_save_translation_ai = on_save_translation_ai
         self.on_save_summary_ai = on_save_summary_ai
         self.initial_url_list_text = initial_url_list_text or ""
+        self.initial_force_rerun = initial_force_rerun
+        self.on_save_force_rerun = on_save_force_rerun
         self.grid_columnconfigure(0, weight=1)
         self._build_ui()
     
@@ -167,8 +174,12 @@ class UrlListPage(ctk.CTkFrame):
         self.force_rerun_checkbox = ctk.CTkCheckBox(
             button_frame,
             text=t("force_rerun_label"),
-            font=body_font()
+            font=body_font(),
+            command=self._on_force_rerun_changed
         )
+        # 从配置中恢复状态
+        if self.initial_force_rerun:
+            self.force_rerun_checkbox.select()
         self.force_rerun_checkbox.pack(side="left", padx=16, pady=8)
         
         # 语言配置区域（与频道模式保持一致）
@@ -694,6 +705,12 @@ class UrlListPage(ctk.CTkFrame):
             from core.logger import get_logger
             logger = get_logger()
             logger.error(t("save_language_config_failed", error=str(e)))
+    
+    def _on_force_rerun_changed(self):
+        """强制重跑选项改变时的回调"""
+        if hasattr(self, 'on_save_force_rerun') and self.on_save_force_rerun:
+            force_rerun = self.force_rerun_checkbox.get() == 1
+            self.on_save_force_rerun(force_rerun)
     
     def refresh_language(self):
         """刷新语言相关文本"""

@@ -11,7 +11,7 @@ from typing import Optional, Dict, List
 from core.models import VideoInfo, DetectionResult
 from core.language import LanguageConfig
 from core.prompts import get_translation_prompt
-from core.logger import get_logger
+from core.logger import get_logger, translate_log
 from core.llm_client import LLMClient, LLMException, LLMErrorType
 from core.exceptions import AppException, ErrorType, map_llm_error_to_app_error, TaskCancelledError
 from config.manager import AIConfig
@@ -81,23 +81,22 @@ class SubtitleTranslator:
         # 清空之前的错误信息
         self._last_translation_errors.clear()
         
-        logger.info(
-            f"SubtitleTranslator.translate 开始，目标语言列表: {target_languages if target_languages else language_config.subtitle_target_languages}, "
-            f"输出目录: {output_path}, 已下载的官方字幕: {list(download_result.get('official_translations', {}).keys())}",
+        logger.info_i18n(
+            "translator_translate_start",
+            target_languages=target_languages if target_languages else language_config.subtitle_target_languages,
+            output_dir=str(output_path),
+            official_subtitles=list(download_result.get('official_translations', {}).keys()),
             video_id=video_info.video_id
         )
         
         if not detection_result.has_subtitles:
-            logger.warning(f"视频无可用字幕，跳过翻译: {video_info.video_id}")
+            logger.warning_i18n("video_no_subtitle_skip_translation", video_id=video_info.video_id)
             return result
         
         # 确定需要翻译的语言列表（如果未指定，则翻译所有目标语言）
         languages_to_translate = target_languages if target_languages is not None else language_config.subtitle_target_languages
         
-        logger.info(
-            f"需要翻译的语言: {languages_to_translate}",
-            video_id=video_info.video_id
-        )
+        logger.info_i18n("translation_languages_needed", languages=languages_to_translate, video_id=video_info.video_id)
         
         # 确保输出目录存在
         output_path.mkdir(parents=True, exist_ok=True)
@@ -106,22 +105,16 @@ class SubtitleTranslator:
         for target_lang in languages_to_translate:
             # 检查取消状态
             if cancel_token and cancel_token.is_cancelled():
-                reason = cancel_token.get_reason() or "用户取消"
-                logger.info(f"翻译被取消: {reason}", video_id=video_info.video_id)
+                reason = cancel_token.get_reason() or translate_log("user_cancelled")
+                logger.info_i18n("translation_cancelled", reason=reason, video_id=video_info.video_id)
                 raise TaskCancelledError(reason)
             
-            logger.info(
-                f"开始翻译目标语言: {target_lang}",
-                video_id=video_info.video_id
-            )
+            logger.info_i18n("translation_target_start", target_lang=target_lang, video_id=video_info.video_id)
             translated_path = output_path / f"translated.{target_lang}.srt"
             
             # 检查是否已存在翻译文件（避免重复调用 AI）
             if translated_path.exists() and not force_retranslate:
-                logger.info(
-                    f"翻译文件已存在，跳过翻译: {translated_path.name}",
-                    video_id=video_info.video_id
-                )
+                logger.info_i18n("translation_file_exists_skip", file_name=translated_path.name, video_id=video_info.video_id)
                 result[target_lang] = translated_path
                 continue
             
@@ -154,10 +147,7 @@ class SubtitleTranslator:
             
             # 需要调用 AI 翻译
             # 选择源字幕（优先常见语言的官方字幕，其次原始字幕）
-            logger.debug(
-                f"选择源字幕文件用于翻译 {target_lang}",
-                video_id=video_info.video_id
-            )
+            logger.debug_i18n("selecting_source_subtitle_for_translation", target_lang=target_lang, video_id=video_info.video_id)
             source_subtitle_path = self._select_source_subtitle(
                 download_result,
                 detection_result,
@@ -172,17 +162,11 @@ class SubtitleTranslator:
                 result[target_lang] = None
                 continue
             
-            logger.info(
-                f"已选择源字幕文件: {source_subtitle_path} (目标语言: {target_lang})",
-                video_id=video_info.video_id
-            )
+            logger.info_i18n("source_subtitle_selected", path=str(source_subtitle_path), target_lang=target_lang, video_id=video_info.video_id)
             
             # 调用 AI 翻译
             try:
-                logger.info(
-                    f"调用 AI 翻译: {source_subtitle_path.name} -> {target_lang}",
-                    video_id=video_info.video_id
-                )
+                logger.info_i18n("calling_ai_translation", source_file=source_subtitle_path.name, target_lang=target_lang, video_id=video_info.video_id)
                 translated_path = self._translate_with_ai(
                     source_subtitle_path,
                     target_lang,
@@ -194,7 +178,10 @@ class SubtitleTranslator:
                 if translated_path:
                     result[target_lang] = translated_path
                     logger.info(
-                        f"AI 翻译完成: {translated_path.name} (路径: {translated_path}, 文件存在: {translated_path.exists()})",
+                        translate_log("ai_translation_complete", 
+                                     file_name=translated_path.name,
+                                     path=str(translated_path),
+                                     exists=translated_path.exists()),
                         video_id=video_info.video_id
                     )
                 else:
@@ -208,32 +195,26 @@ class SubtitleTranslator:
                 raise
             except LLMException as e:
                 # 将 LLMException 适配为 AppException
+                error_msg = translate_log("ai_translation_failed", target_lang=target_lang, error=str(e))
                 app_error = AppException(
-                    message=f"AI 翻译失败 ({target_lang}): {e}",
+                    message=error_msg,
                     error_type=map_llm_error_to_app_error(e.error_type.value),
                     cause=e
                 )
-                logger.error(
-                    f"AI 翻译失败: {app_error}",
-                    video_id=video_info.video_id,
-                    error_type=app_error.error_type.value
-                )
+                logger.error_i18n("ai_translation_failed", target_lang=target_lang, error=str(app_error), video_id=video_info.video_id, error_type=app_error.error_type.value)
                 # 保存错误信息，供 pipeline 使用
                 self._last_translation_errors[target_lang] = app_error
                 result[target_lang] = None
                 # 不抛出异常，继续处理其他语言
             except Exception as e:
                 # 未映射的异常，转换为 AppException
+                error_msg = translate_log("ai_translation_failed", target_lang=target_lang, error=str(e))
                 app_error = AppException(
-                    message=f"AI 翻译失败 ({target_lang}): {e}",
+                    message=error_msg,
                     error_type=ErrorType.UNKNOWN,
                     cause=e
                 )
-                logger.error(
-                    f"AI 翻译失败: {app_error}",
-                    video_id=video_info.video_id,
-                    error_type=app_error.error_type.value
-                )
+                logger.error_i18n("ai_translation_failed", target_lang=target_lang, error=str(app_error), video_id=video_info.video_id, error_type=app_error.error_type.value)
                 # 保存错误信息，供 pipeline 使用
                 self._last_translation_errors[target_lang] = app_error
                 result[target_lang] = None
@@ -323,10 +304,7 @@ class SubtitleTranslator:
         # 优先级2：使用原始字幕（通常是检测到的第一个人工字幕或自动字幕）
         original_path = download_result.get("original")
         if original_path and original_path.exists():
-            logger.info(
-                f"选择原始字幕作为翻译源 (目标语言: {target_language})",
-                video_id=video_id
-            )
+            logger.info_i18n("selecting_original_as_source", target_language=target_language, video_id=video_id)
             return original_path
         
         # 优先级3：使用检测结果中的其他人工字幕（非常见语言）
@@ -423,7 +401,7 @@ class SubtitleTranslator:
             # 读取源字幕文件
             subtitle_text = self._read_srt_file(source_subtitle_path)
             if not subtitle_text:
-                logger.error(f"无法读取源字幕文件: {source_subtitle_path}")
+                logger.error_i18n("source_subtitle_read_failed", path=str(source_subtitle_path))
                 return None
             
             # 获取 video_id 用于日志
@@ -434,19 +412,13 @@ class SubtitleTranslator:
             if not source_language:
                 # 如果无法从文件名提取，使用检测结果
                 source_language = self._determine_source_language(detection_result)
-                logger.warning(
-                    f"无法从文件名提取源语言，使用检测结果: {source_language} (文件: {source_subtitle_path.name})",
-                    video_id=video_id
-                )
+                logger.warning_i18n("source_language_extract_failed", source_lang=source_language, file_name=source_subtitle_path.name, video_id=video_id)
             
             if not source_language:
-                logger.error(f"无法确定源语言，文件: {source_subtitle_path.name}", video_id=video_id)
+                logger.error_i18n("source_language_undetermined", file_name=source_subtitle_path.name, video_id=video_id)
                 return None
             
-            logger.info(
-                f"确定源语言: {source_language} (从文件: {source_subtitle_path.name})",
-                video_id=video_id
-            )
+            logger.info_i18n("source_language_determined", source_lang=source_language, file_name=source_subtitle_path.name, video_id=video_id)
             
             # 生成翻译 Prompt
             prompt = get_translation_prompt(
@@ -457,23 +429,20 @@ class SubtitleTranslator:
             
             # 检查取消状态（在调用 AI 前）
             if cancel_token and cancel_token.is_cancelled():
-                reason = cancel_token.get_reason() or "用户取消"
-                logger.info(f"翻译被取消: {reason}", video_id=video_id)
+                reason = cancel_token.get_reason() or translate_log("user_cancelled")
+                logger.info_i18n("translation_cancelled", reason=reason, video_id=video_id)
                 raise TaskCancelledError(reason)
             
             # 调用 AI API
             translated_text = self._call_ai_api(prompt, cancel_token)
             if not translated_text:
-                logger.error("AI API 调用失败")
+                logger.error_i18n("ai_api_call_failed")
                 return None
             
             # 保存翻译后的字幕文件（使用原子写）
             from core.failure_logger import _atomic_write
             if not _atomic_write(output_path, translated_text, mode="w"):
-                logger.error(
-                    "保存翻译文件失败",
-                    error_type=ErrorType.FILE_IO.value
-                )
+                logger.error_i18n("translation_save_failed", error_type=ErrorType.FILE_IO.value)
                 return None
             
             return output_path
@@ -483,39 +452,33 @@ class SubtitleTranslator:
             raise
         except LLMException as e:
             # 将 LLMException 适配为 AppException
+            error_msg = translate_log("ai_translation_error", error=str(e))
             app_error = AppException(
-                message=f"AI 翻译过程出错: {e}",
+                message=error_msg,
                 error_type=map_llm_error_to_app_error(e.error_type.value),
                 cause=e
             )
-            logger.error(
-                f"AI 翻译过程出错: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("ai_translation_error", error=str(app_error), error_type=app_error.error_type.value)
             return None
         except (OSError, IOError, PermissionError) as e:
             # 文件IO错误
+            error_msg = translate_log("ai_translation_error", error=str(e))
             app_error = AppException(
-                message=f"AI 翻译过程文件IO错误: {e}",
+                message=error_msg,
                 error_type=ErrorType.FILE_IO,
                 cause=e
             )
-            logger.error(
-                f"AI 翻译过程文件IO错误: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("ai_translation_error", error=str(app_error), error_type=app_error.error_type.value)
             return None
         except Exception as e:
             # 未映射的异常，转换为 AppException
+            error_msg = translate_log("ai_translation_error", error=str(e))
             app_error = AppException(
-                message=f"AI 翻译过程出错: {e}",
+                message=error_msg,
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
-            logger.error(
-                f"AI 翻译过程出错: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("ai_translation_error", error=str(app_error), error_type=app_error.error_type.value)
             return None
     
     def _extract_language_from_filename(self, filename: str) -> Optional[str]:

@@ -117,7 +117,7 @@ class CookieSectionMixin:
             if self.on_log_message:
                 self.on_log_message("INFO", "已从剪贴板粘贴 Cookie")
         except Exception as e:
-            logger.error(f"粘贴 Cookie 失败: {e}")
+            logger.error_i18n("log.cookie_paste_failed", error=str(e))
             if self.on_log_message:
                 self.on_log_message("ERROR", f"粘贴 Cookie 失败: {e}")
     
@@ -237,7 +237,7 @@ class CookieSectionMixin:
                 
                 cookie_manager.cleanup()
             except Exception as e:
-                logger.error(f"测试 Cookie 时出错: {e}")
+                logger.error_i18n("log.cookie_test_error", error=str(e))
                 if self.on_log_message:
                     self.on_log_message("ERROR", f"{t('cookie_test_failed')}: {e}")
             finally:
@@ -250,7 +250,7 @@ class CookieSectionMixin:
                                 text=t("cookie_test")
                             )
                     except Exception as e:
-                        logger.debug(f"恢复按钮失败（可能已销毁）: {e}")
+                        logger.debug_i18n("log.cookie_restore_button_failed", error=str(e))
                 
                 self.after(0, restore_button)
         

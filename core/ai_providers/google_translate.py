@@ -92,7 +92,7 @@ class GoogleTranslateClient:
             # 调试日志：记录提取的语言信息
             from core.logger import get_logger
             logger = get_logger()
-            logger.debug(f"GoogleTranslateClient: 提取到源语言={source_lang}, 目标语言={target_lang}, 字幕文本长度={len(subtitle_text) if subtitle_text else 0}")
+            logger.debug_i18n("google_translate_extract_languages", source_lang=source_lang, target_lang=target_lang, text_length=len(subtitle_text) if subtitle_text else 0)
             
             # 如果无法从 prompt 中提取字幕格式，尝试其他方法
             if not subtitle_text or not source_lang or not target_lang:
@@ -125,7 +125,8 @@ class GoogleTranslateClient:
                         translator = GoogleTranslator(source=source_lang_short, target=target_lang_short)
                         translated_text = translator.translate(subtitle_text)
                 else:
-                    raise LLMException("无法从 prompt 中提取字幕文本", LLMErrorType.UNKNOWN)
+                    from core.logger import translate_log
+                    raise LLMException(translate_log("subtitle_text_extract_failed"), LLMErrorType.UNKNOWN)
             else:
                 # 正常模式：提取到了字幕格式
                 # 转换语言代码格式（Google 翻译使用短格式，如 "zh", "en"）
@@ -133,7 +134,7 @@ class GoogleTranslateClient:
                 target_lang_short = self._normalize_lang_code(target_lang)
                 
                 # 调试日志：记录标准化后的语言代码
-                logger.debug(f"GoogleTranslateClient: 标准化后源语言={source_lang_short}, 目标语言={target_lang_short}")
+                logger.debug_i18n("google_translate_normalized_languages", source_lang=source_lang_short, target_lang=target_lang_short)
                 
                 # 翻译字幕（保持 SRT 格式）
                 # 使用 Semaphore 进行并发限流
@@ -303,7 +304,7 @@ class GoogleTranslateClient:
                 # zh, zh-cn, zh_cn, zh-hans 等都视为简体中文
                 normalized = "zh-CN"
             if normalized != lang_code:
-                logger.debug(f"GoogleTranslateClient: 中文语言代码标准化 {lang_code} -> {normalized}")
+                logger.debug_i18n("google_translate_chinese_normalized", lang_code=lang_code, normalized=normalized)
             return normalized
         
         # 其他语言：使用小写的主语言代码
@@ -325,7 +326,7 @@ class GoogleTranslateClient:
         
         # 调试日志：记录语言代码转换
         if normalized != lang_code:
-            logger.debug(f"GoogleTranslateClient: 语言代码标准化 {lang_code} -> {normalized}")
+            logger.debug_i18n("google_translate_lang_normalized", lang_code=lang_code, normalized=normalized)
         
         return normalized
     
@@ -615,7 +616,9 @@ class GoogleTranslateClient:
         try:
             # 调试日志：记录翻译参数
             logger.debug(f"GoogleTranslateClient._translate_subtitle_block: source={source_lang}, target={target_lang}, text_length={len(text_to_translate)}")
-            logger.debug(f"GoogleTranslateClient._translate_subtitle_block: 原文前50字符: {text_to_translate[:50] if len(text_to_translate) > 50 else text_to_translate}")
+            from core.logger import translate_log
+            preview = text_to_translate[:50] if len(text_to_translate) > 50 else text_to_translate
+            logger.debug(translate_log("original_text_preview", preview=preview))
             
             # 标准化源语言代码（处理语言名称如"简体中文"、"英语"等）
             actual_source_lang = self._normalize_lang_code(self._language_name_to_code(source_lang))
@@ -632,7 +635,7 @@ class GoogleTranslateClient:
                 # 其他语言使用小写的短格式
                 actual_target_lang = self._normalize_lang_code(actual_target_lang)
             
-            logger.debug(f"GoogleTranslateClient: 实际使用源语言={actual_source_lang}, 目标语言={actual_target_lang}")
+            logger.debug_i18n("google_translate_actual_languages", source_lang=actual_source_lang, target_lang=actual_target_lang)
             
             translator = GoogleTranslator(source=actual_source_lang, target=actual_target_lang)
             # 注意：translator.translate() 是阻塞调用，无法在调用期间中断
@@ -640,7 +643,8 @@ class GoogleTranslateClient:
             translated_text = translator.translate(text_to_translate)
             
             # 调试日志：记录翻译结果
-            logger.debug(f"GoogleTranslateClient._translate_subtitle_block: 翻译结果前50字符: {translated_text[:50] if len(translated_text) > 50 else translated_text}")
+            preview = translated_text[:50] if len(translated_text) > 50 else translated_text
+            logger.debug(translate_log("translated_text_preview", preview=preview))
             
             # 检查翻译结果是否与原文相同（可能是翻译失败但没有抛出异常）
             if translated_text == text_to_translate:

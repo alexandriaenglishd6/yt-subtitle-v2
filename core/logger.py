@@ -68,11 +68,12 @@ def translate_log(key: str, **kwargs) -> str:
         return key
     
     try:
-        # 确保 key 有 log. 前缀
-        if not key.startswith("log."):
-            full_key = f"log.{key}"
-        else:
+        # 如果已经有 log. 或 exception. 前缀，直接使用
+        if key.startswith("log.") or key.startswith("exception."):
             full_key = key
+        else:
+            # 默认添加 log. 前缀
+            full_key = f"log.{key}"
         
         # 调用 i18n_manager 的 t() 函数
         text = i18n.t(full_key, default=key)
@@ -443,7 +444,10 @@ class Logger:
                 if cleaned_count > 0:
                     # 使用标准 logging 记录清理信息（此时还没有自定义 logger）
                     temp_logger = logging.getLogger(f"{name}.cleanup")
-                    temp_logger.info(f"已清理 {cleaned_count} 个过期日志文件（超过 {max_log_age_days} 天）")
+                    # 使用国际化翻译
+                    from core.logger import translate_log
+                    message = translate_log("log.cleanup_old_logs", cleaned_count=cleaned_count, max_log_age_days=max_log_age_days)
+                    temp_logger.info(message)
             except Exception:
                 # 清理失败不影响日志系统初始化
                 pass
@@ -565,6 +569,27 @@ class Logger:
         # 合并额外字段
         merged_extra = {**extra_fields, **kwargs}
         
+        # Python logging 的保留字段（不能作为 extra 传递）
+        RESERVED_FIELDS = {
+            'filename', 'lineno', 'funcName', 'pathname', 'process', 'processName',
+            'thread', 'threadName', 'created', 'msecs', 'relativeCreated',
+            'levelname', 'levelno', 'message', 'name', 'args', 'exc_info',
+            'exc_text', 'stack_info', 'getMessage', 'module', 'levelname'
+        }
+        
+        # 过滤掉保留字段
+        filtered_extra = {k: v for k, v in merged_extra.items() if k not in RESERVED_FIELDS}
+        
+        # 再次确保 extra 中没有保留字段（双重检查）
+        safe_extra = {
+            'run_id': run_id,
+            'task': task,
+            'video_id': final_video_id,
+            **filtered_extra
+        }
+        # 最终过滤，确保没有任何保留字段
+        final_extra = {k: v for k, v in safe_extra.items() if k not in RESERVED_FIELDS}
+        
         # 创建 LogRecord（注入上下文信息）
         record = self.logger.makeRecord(
             self.logger.name,
@@ -575,12 +600,7 @@ class Logger:
             (),  # args
             None,  # exc_info
             func="",
-            extra={
-                'run_id': run_id,
-                'task': task,
-                'video_id': final_video_id,
-                **merged_extra
-            }
+            extra=final_extra
         )
         
         # 记录日志

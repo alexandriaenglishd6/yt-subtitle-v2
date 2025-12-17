@@ -110,15 +110,11 @@ def normalize_language_code(lang_code: str) -> str:
     if lang_code_lower in ["zh-tw", "zh_tw"]:
         return "zh-TW"
     
-    # 其他语言：提取主语言代码（简短格式）
-    # 例如：en-US -> en, ja-JP -> ja, ar-SA -> ar
+    # 其他语言：提取主语言代码（简短格式），统一转换为小写
+    # 例如：en-US -> en, EN-US -> en, EN -> en, ja-JP -> ja, JA -> ja
     main_code = lang_code.split("-")[0].split("_")[0].lower()
     
-    # 如果已经是简短格式，直接返回（保持原大小写风格）
-    if "-" not in lang_code and "_" not in lang_code:
-        return lang_code
-    
-    # 返回简短格式
+    # 返回简短格式（统一小写）
     return main_code
 
 

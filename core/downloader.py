@@ -70,7 +70,7 @@ class SubtitleDownloader:
         }
         
         if not detection_result.has_subtitles:
-            logger.warning(f"视频无可用字幕，跳过下载: {video_info.video_id}")
+            logger.warning_i18n("video_no_subtitle_skip_download", video_id=video_info.video_id)
             return result
         
         try:
@@ -99,7 +99,7 @@ class SubtitleDownloader:
                 result["original"] = original_path
                 
                 if original_path:
-                    logger.info(f"已下载原始字幕: {original_path.name}", video_id=video_info.video_id)
+                    logger.info_i18n("original_subtitle_downloaded", file_name=original_path.name, video_id=video_info.video_id)
             
             # 步骤 2: 下载官方翻译字幕（针对每个目标语言）
             # 定义常见语言列表（按优先级排序，用于当目标语言没有官方字幕时的备用选择）
@@ -181,10 +181,7 @@ class SubtitleDownloader:
                             video_id=video_info.video_id
                         )
                     else:
-                        logger.warning(
-                            f"无法下载官方翻译字幕 ({target_lang})",
-                            video_id=video_info.video_id
-                        )
+                        logger.warning_i18n("official_translation_download_failed", lang=target_lang, video_id=video_info.video_id)
                 else:
                     logger.info(
                         f"目标语言 {target_lang} 无可用官方字幕",
@@ -255,24 +252,20 @@ class SubtitleDownloader:
             return result
             
         except AppException as e:
-            logger.error(
-                f"下载字幕失败: {e}",
-                video_id=video_info.video_id,
-                error_type=e.error_type.value
-            )
+            from core.logger import translate_log
+            error_msg = translate_log("download_subtitle_failed", error=str(e))
+            logger.error_i18n("download_subtitle_failed", error=str(e), video_id=video_info.video_id, error_type=e.error_type.value)
             return result
         except Exception as e:
             # 未映射的异常，转换为 AppException
+            from core.logger import translate_log
+            error_msg = translate_log("download_subtitle_failed", error=str(e))
             app_error = AppException(
-                message=f"下载字幕失败: {e}",
+                message=error_msg,
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
-            logger.error(
-                f"下载字幕失败: {app_error}",
-                video_id=video_info.video_id,
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("download_subtitle_failed", error=str(app_error), video_id=video_info.video_id, error_type=app_error.error_type.value)
             return result
     
     def _determine_source_language(
@@ -303,14 +296,16 @@ class SubtitleDownloader:
             specified_lang = language_config.source_language
             # 检查是否存在（先检查人工字幕，再检查自动字幕）
             if specified_lang in detection_result.manual_languages:
-                logger.info(
-                    f"使用指定的源语言（人工字幕）: {specified_lang}",
+                logger.info_i18n(
+                    "using_specified_source_lang_manual",
+                    lang=specified_lang,
                     video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
                 )
                 return specified_lang
             elif specified_lang in detection_result.auto_languages:
-                logger.info(
-                    f"使用指定的源语言（自动字幕）: {specified_lang}",
+                logger.info_i18n(
+                    "using_specified_source_lang_auto",
+                    lang=specified_lang,
                     video_id=detection_result.video_id if hasattr(detection_result, 'video_id') else None
                 )
                 return specified_lang
@@ -412,18 +407,18 @@ class SubtitleDownloader:
             # 如果配置了代理，添加代理参数
             if proxy:
                 cmd.extend(["--proxy", proxy])
-                logger.debug(f"使用代理下载字幕: {proxy}")
+                logger.debug_i18n("using_proxy_download_subtitle", proxy=proxy)
             
             # 如果配置了 Cookie，添加 Cookie 参数
             if self.cookie_manager:
                 cookie_file = self.cookie_manager.get_cookie_file_path()
                 if cookie_file:
                     cmd.extend(["--cookies", cookie_file])
-                    logger.info(f"使用 Cookie 文件下载字幕: {cookie_file}")
+                    logger.info_i18n("using_cookie_download_subtitle", cookie_file=cookie_file)
                 else:
-                    logger.warning("Cookie 管理器存在，但无法获取 Cookie 文件路径（字幕下载）")
+                    logger.warning_i18n("cookie_manager_no_path_download")
             else:
-                logger.debug("未配置 Cookie 管理器（字幕下载）")
+                logger.debug_i18n("cookie_manager_not_configured_download")
             
             cmd.append(url)
             
@@ -471,8 +466,10 @@ class SubtitleDownloader:
                 
                 if actual_paths:
                     # 文件已经生成，即使 yt-dlp 报错也继续处理
-                    logger.warning(
-                        f"yt-dlp 返回错误码 {result.returncode}，但字幕文件已生成，继续处理: {actual_paths[0].name}",
+                    logger.warning_i18n(
+                        "ytdlp_error_but_file_generated",
+                        returncode=result.returncode,
+                        file_name=actual_paths[0].name,
                         error_type=ErrorType.CONTENT.value if is_ffmpeg_error else None
                     )
                     # 直接处理文件，不抛出异常
@@ -489,7 +486,7 @@ class SubtitleDownloader:
                                     pass
                                 return expected_path
                             else:
-                                logger.warning(f"原子写字幕文件失败，保留临时文件: {actual_path}")
+                                logger.warning_i18n("atomic_write_subtitle_failed", path=str(actual_path))
                                 return actual_path
                         else:
                             return expected_path
@@ -508,7 +505,7 @@ class SubtitleDownloader:
                     # 文件未生成，检查是否是 ffmpeg 错误
                     if is_ffmpeg_error:
                         # ffmpeg 错误：尝试不使用转换，直接下载原始格式
-                        logger.warning("检测到 ffmpeg 错误，尝试不使用格式转换下载字幕")
+                        logger.warning_i18n("ffmpeg_error_retry_no_convert")
                         # 重新调用，但不使用 --convert-subs
                         return self._download_subtitle_no_convert(
                             url, lang_code, output_dir, output_filename, is_auto, proxy
@@ -586,50 +583,47 @@ class SubtitleDownloader:
                 # 检查是否已经存在目标文件
                 if expected_path.exists():
                     return expected_path
-                logger.warning(f"未找到下载的字幕文件: {output_filename}")
+                logger.warning_i18n("subtitle_file_not_found", file_name=output_filename)
                 return None
             
         except subprocess.TimeoutExpired:
             # 超时错误：标记代理失败
             if proxy and self.proxy_manager:
                 self.proxy_manager.mark_failure(proxy, "超时")
-                logger.warning(f"代理 {proxy} 超时（字幕下载）")
+                logger.warning_i18n("proxy_timeout_download", proxy=proxy)
             
+            from core.logger import translate_log
+            error_msg = translate_log("download_subtitle_timeout", lang_code=lang_code)
             app_error = AppException(
-                message=f"下载字幕超时: {lang_code}",
+                message=error_msg,
                 error_type=ErrorType.TIMEOUT
             )
-            logger.error(
-                f"下载字幕超时: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("download_subtitle_timeout", lang_code=lang_code, error_type=app_error.error_type.value)
             raise app_error
         except AppException:
             # 重新抛出 AppException
             raise
         except (OSError, IOError, PermissionError) as e:
             # 文件IO错误
+            from core.logger import translate_log
+            error_msg = translate_log("download_subtitle_file_io_error", error=str(e))
             app_error = AppException(
-                message=f"下载字幕时文件IO错误: {e}",
+                message=error_msg,
                 error_type=ErrorType.FILE_IO,
                 cause=e
             )
-            logger.error(
-                f"下载字幕时文件IO错误: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("download_subtitle_file_io_error", error=str(app_error), error_type=app_error.error_type.value)
             raise app_error
         except Exception as e:
             # 未映射的异常，转换为 AppException
+            from core.logger import translate_log
+            error_msg = translate_log("download_subtitle_error", error=str(e))
             app_error = AppException(
-                message=f"下载字幕时出错: {e}",
+                message=error_msg,
                 error_type=ErrorType.UNKNOWN,
                 cause=e
             )
-            logger.error(
-                f"下载字幕时出错: {app_error}",
-                error_type=app_error.error_type.value
-            )
+            logger.error_i18n("download_subtitle_error", error=str(app_error), error_type=app_error.error_type.value)
             raise app_error
     
     def _download_subtitle_no_convert(
@@ -688,7 +682,7 @@ class SubtitleDownloader:
             )
             
             if result.returncode != 0:
-                logger.error(f"yt-dlp 下载字幕失败（无转换模式）: {result.stderr}")
+                logger.error_i18n("ytdlp_download_failed_no_convert", error=result.stderr)
                 return None
             
             # 查找下载的文件（可能是 .vtt, .ttml 等格式）
@@ -699,7 +693,7 @@ class SubtitleDownloader:
                 actual_path = actual_paths[0]
                 # 如果是非 srt 格式，尝试转换为 srt（如果可能）
                 if actual_path.suffix != ".srt":
-                    logger.warning(f"下载的字幕格式为 {actual_path.suffix}，可能需要手动转换")
+                    logger.warning_i18n("subtitle_format_non_srt", format=actual_path.suffix)
                     # 直接使用原始格式
                     if actual_path != output_path:
                         try:
@@ -711,13 +705,13 @@ class SubtitleDownloader:
                                     pass
                                 return output_path
                         except Exception as e:
-                            logger.error(f"复制字幕文件失败: {e}")
+                            logger.error_i18n("copy_subtitle_file_failed", error=str(e))
                 return actual_path
             
             return None
             
         except Exception as e:
-            logger.error(f"下载字幕失败（无转换模式）: {e}")
+            logger.error_i18n("download_subtitle_failed_no_convert", error=str(e))
             return None
     
     def _verify_subtitle_language(self, subtitle_path: Path, expected_lang: str) -> Optional[str]:
@@ -758,7 +752,7 @@ class SubtitleDownloader:
             # 如果无法确定，返回 None
             return None
         except Exception as e:
-            logger.debug(f"语言验证失败: {e}")
+            logger.debug_i18n("language_verification_failed", error=str(e))
             return None
     
     def download_by_lang(

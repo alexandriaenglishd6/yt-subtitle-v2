@@ -7,10 +7,6 @@ from dataclasses import dataclass
 
 from core.models import VideoInfo, DetectionResult
 from core.exceptions import ErrorType
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from core.language import LanguageConfig
 
 
 @dataclass
@@ -33,5 +29,4 @@ class StageData:
     is_processed: bool = False  # 是否已处理（用于增量管理）
     processing_failed: bool = False  # 处理是否失败（用于资源清理）
     run_id: Optional[str] = None  # 批次ID（run_id），用于日志和失败记录
-    language_config: Optional['LanguageConfig'] = None  # 语言配置（用于增量检查时考虑语言变化）
 

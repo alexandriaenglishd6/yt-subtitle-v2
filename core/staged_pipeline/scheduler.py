@@ -113,7 +113,6 @@ class StagedPipeline:
             force=self.force,
             dry_run=self.dry_run,
             cancel_token=self.cancel_token,
-            language_config=self.language_config,  # 传递语言配置，用于增量检查
             on_log=self.on_log,
         )
         
@@ -223,7 +222,7 @@ class StagedPipeline:
             统计信息：{"total": 总数, "success": 成功数, "failed": 失败数}
         """
         if not videos:
-            logger.warning("视频列表为空")
+            logger.warning_i18n("log.task_video_list_empty")
             return {
                 "total": 0,
                 "success": 0,
@@ -256,7 +255,7 @@ class StagedPipeline:
             # 等待所有队列为空且所有任务完成
             while True:
                 if self.cancel_token and self.cancel_token.is_cancelled():
-                    logger.info("检测到取消信号，停止处理")
+                    logger.info_i18n("log.cancel_signal_detected")
                     break
                 
                 # 检查所有阶段是否完成

@@ -37,7 +37,7 @@
 | 2025-12-06 | Milestone-1 P0-5 | CLI 从项目骨架到字幕检测闭环                     | `ide_任务表.md` P0-1~P0-5, `docs/P0-1_to_P0-5_影响分析.md`   |
 | 2025-12-08 | Milestone-2 P0-20| CLI 完整流水线 + 并发 + 代理 + Cookie + Smoke Test | `v2_final_plan.md`, `acceptance_criteria.md`, `docs/P0-19_最终验证报告.md` |
 | 2025-12-09 | Milestone-3 P0-25| GUI 完整实现 + 配置绑定 + 双语字幕输出           | `ide_任务表.md` P0-21~P0-25, P1-1, `docs/cookie_setup_guide.md` |
-| 2025-12-09 | Milestone-3 P0-25| GUI 完整实现 + 配置绑定 + 双语字幕输出           | `ide_任务表.md` P0-21~P0-25, P1-1, `docs/cookie_setup_guide.md` |
+| 2025-12-17 | Task 4 完成      | 日志国际化基础设施 + 核心日志迁移完成            | `docs/docsrefactoring-task-list.md` Task 4, `test_summary_i18n.py` |
 
 ---
 
@@ -103,6 +103,61 @@
 ## 5. 每日工作日志
 
 ## 2025-12
+
+### 2025-12-17
+
+**Task 4 完成：日志国际化基础设施 + 核心日志迁移**
+
+#### 主要完成内容
+
+1. **摘要部分国际化修复**
+   - 修复 `core/summarizer.py` 中所有硬编码的中文日志消息
+   - 添加翻译键：`summary_source_translated`、`summary_source_original`、`summary_source_translated_lang`、`summary_file_exists_skip`、`summary_ai_generate_failed`、`summary_save_failed`、`summary_generate_complete`、`summary_generate_error`、`summary_generate_file_io_error`
+   - 修复异常消息国际化，使用 `exception.*` 前缀
+
+2. **Logger 增强**
+   - 增强 `translate_log` 函数，支持 `exception.` 前缀（之前只支持 `log.` 前缀）
+   - 修复 logger 保留字段过滤，添加双重检查避免 `filename` 冲突
+   - 确保所有异常消息能正确翻译
+
+3. **测试脚本创建**
+   - 创建 `test_summary_i18n.py` 测试脚本，可单独测试摘要部分国际化
+   - 支持切换语言（`--lang en-US` 或 `--lang zh-CN`）
+   - 包含 5 个测试场景：翻译字幕作为摘要源、原始字幕作为摘要源、其他语言翻译字幕、LLM 不可用、无可用字幕
+   - 所有测试场景通过，日志消息正确翻译
+
+4. **代码扫描和修复**
+   - 使用 `find_chinese_smart.py` 扫描代码中的硬编码中文
+   - 修复了 `core/summarizer.py`、`core/translator.py`、`core/downloader.py`、`core/failure_logger.py` 等文件中的硬编码
+   - 修复了 `ui/main_window.py` 中"恢复频道URL"的硬编码
+
+5. **翻译键补充**
+   - 在 `ui/i18n/zh_CN.json` 和 `en_US.json` 中添加了所有摘要相关的翻译键
+   - 确保所有日志消息都有对应的翻译
+
+#### 测试验证
+
+- ✅ 摘要部分国际化测试：所有日志消息正确翻译（中英文）
+- ✅ 错误消息国际化：异常消息正确显示翻译后的文本
+- ✅ 语言切换测试：英文和中文模式下所有消息正确显示
+- ✅ Logger 功能测试：`info_i18n`、`error_i18n`、`warning_i18n` 正常工作
+- ✅ 保留字段过滤测试：`filename` 冲突已解决
+
+#### 相关文件
+
+- `core/logger.py` - Logger 增强（支持 exception. 前缀，双重检查保留字段）
+- `core/summarizer.py` - 摘要部分国际化修复
+- `test_summary_i18n.py` - 摘要部分测试脚本
+- `ui/i18n/zh_CN.json` 和 `en_US.json` - 翻译键补充
+
+#### 提交信息
+
+- 分支：`refactor/log_i18n`
+- 提交：完成 Task 4，所有测试通过
+- 合并：已合并到 `main` 分支
+- 完成时间：2025-12-17
+
+---
 
 ### 2025-12-16
 

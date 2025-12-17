@@ -137,10 +137,19 @@
 
 **Task 6: 剩余日志/异常国际化 + 长内容优化（可选）** （预计 5-7 天）
 
-- [ ] 继续迁移 P2 日志 + 完善异常键值化
+- [x] 继续迁移 P2 日志 + 完善异常键值化
+  - [x] 迁移 core/logger.py 中的 P2 日志（1条）
+  - [x] 迁移 core/ai_profile_manager.py 中的 P2 日志（9条）
+  - [x] 迁移 core/staged_pipeline/queue.py 中的 P2 日志（7条）
+  - [x] 迁移 core/staged_pipeline/scheduler.py 中的 P2 日志（2条）
+  - [x] 迁移 core/detector.py 中的 P2 日志（5条）
+  - [x] 迁移 core/output/writer.py 和 core/output/formats/subtitle.py 中的 P2 日志（6条）
+  - [x] 迁移 core/ai_providers/*.py 中的 P2 日志（13条）
+  - [x] 迁移 ui/pages 中的 P2 日志（10条）
+  - [x] 完善异常键值化（TaskCancelledError, LocalModelError 等）
 - [ ] **长内容优化**：翻译 chunking + 摘要 Map-Reduce（**可选**，时间允许再做）
 - [ ] **注意**：长内容优化**不作为 v3.1 refactor complete 的阻塞条件**
-- [ ] 测试长视频案例（若实现）
+- [x] 测试验证：切换语言后所有 P2 日志和异常消息正确显示（自动化测试通过：4/4）
 - [ ] 提交 PR，合并
 - [ ] **标记完成时间**：__________
 

@@ -125,7 +125,7 @@ class VideoProcessor(VideoFetcherMixin, SubtitleDetectorMixin, TaskRunnerMixin, 
         else:
             logger.info(t("translation_ai_disabled"))
             self.translation_llm_client = None
-            self.translation_llm_init_error = "翻译 AI 未启用"
+            self.translation_llm_init_error = t("translation_ai_disabled")
             self.translation_llm_init_error_type = None
         
         # 初始化摘要 LLMClient（可能失败，允许为 None）

@@ -220,7 +220,7 @@ def merge_srt_entries(
         merged_lines.append(merged_text)
         merged_lines.append("")  # 空行分隔
     
-    logger.debug(f"字幕合并完成: 匹配 {matched_count} 条，未匹配 {unmatched_count} 条")
+    logger.debug_i18n("log.subtitle_merge_complete", matched_count=matched_count, unmatched_count=unmatched_count)
     return "\n".join(merged_lines)
 
 
@@ -277,7 +277,8 @@ def merge_entries_to_txt(
     if lines and lines[-1] == "":
         lines.pop()
     
-    logger.debug(f"TXT 字幕合并完成: 匹配 {matched_count} 条，未匹配 {unmatched_count} 条")
+    from core.logger import translate_log
+    logger.debug(translate_log("txt_subtitle_merge_complete", matched=matched_count, unmatched=unmatched_count))
     return "\n".join(lines)
 
 
@@ -323,11 +324,12 @@ def write_txt_subtitle(srt_path: Path, txt_path: Path) -> Optional[Path]:
         srt_content = srt_path.read_text(encoding="utf-8")
         txt_content = srt_to_txt(srt_content)
         if not _atomic_write(txt_path, txt_content, mode="w"):
-            logger.warning(f"写入 TXT 字幕失败: {txt_path}")
+            logger.warning_i18n("log.txt_subtitle_write_failed", path=str(txt_path))
             return None
-        logger.debug(f"已写入 TXT 字幕: {txt_path.name}")
+        from core.logger import translate_log
+        logger.debug(translate_log("txt_subtitle_written", file_name=txt_path.name))
         return txt_path
     except Exception as e:
-        logger.warning(f"转换 SRT 到 TXT 失败: {e}")
+        logger.warning_i18n("log.srt_to_txt_conversion_failed", error=str(e))
         return None
 

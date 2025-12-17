@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Callable, Any
 
-from core.logger import get_logger, set_log_context, clear_log_context
+from core.logger import get_logger, set_log_context, clear_log_context, translate_log
 from core.exceptions import ErrorType, AppException, TaskCancelledError
 from core.cancel_token import CancelToken
 from ..data_types import StageData
@@ -128,11 +128,8 @@ class OutputProcessor:
             
             # 步骤 2: 更新增量记录（仅在成功时，Dry Run 模式下跳过）
             if self.archive_path and not self.dry_run:
-                # 计算语言配置哈希值并记录到 archive 中
-                from core.incremental import _get_language_config_hash
-                lang_hash = _get_language_config_hash(self.language_config) if self.language_config else None
-                self.incremental_manager.mark_as_processed(vid, self.archive_path, lang_hash)
-                logger.debug(f"已更新增量记录: {vid}", video_id=vid)
+                self.incremental_manager.mark_as_processed(vid, self.archive_path)
+                logger.debug(translate_log("incremental_record_updated", video_id=vid), video_id=vid)
             elif self.archive_path and self.dry_run:
                 logger.debug(f"[Dry Run] 跳过更新增量记录: {vid}", video_id=vid)
             
@@ -176,7 +173,7 @@ class OutputProcessor:
             if data.temp_dir_created and data.temp_dir and data.temp_dir.exists():
                 try:
                     shutil.rmtree(data.temp_dir)
-                    logger.debug(f"已清理临时目录: {data.temp_dir}", video_id=vid)
+                    logger.debug(translate_log("temp_dir_cleaned", temp_dir=str(data.temp_dir)), video_id=vid)
                 except Exception as e:
                     logger.warning(f"清理临时文件失败: {e}", video_id=vid)
             

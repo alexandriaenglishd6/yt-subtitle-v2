@@ -566,12 +566,16 @@ class NetworkSettingsPage(ctk.CTkFrame):
                         auth_info = ""
                         if has_auth:
                             # 只显示用户名，不显示密码（隐私保护）
-                            auth_info = f", 用户名: {parsed.username or '(无)'}, 密码: {'已设置' if parsed.password else '未设置'}"
+                            username_display = parsed.username or t("username_none")
+                            password_status = t("password_set") if parsed.password else t("password_not_set")
+                            # auth_info 作为 address 的一部分，会在 log.proxy_type 中格式化
+                            auth_info = f", {t('username_label')}: {username_display}, {t('password_label')}: {password_status}"
                         log_info(t("log.proxy_type", type=proxy_type, address=f"{parsed.hostname}:{parsed.port or 'default'}{auth_info}"))
                         
                         # 验证代理URL格式（包含认证信息）
                         if has_auth:
-                            log_debug(t("log.proxy_has_auth", username=parsed.username, password_status="已设置" if parsed.password else "未设置"))
+                            password_status = t("password_set") if parsed.password else t("password_not_set")
+                            log_debug(t("log.proxy_has_auth", username=parsed.username, password_status=password_status))
                             # 验证URL解析是否正确
                             if parsed.username and not parsed.password:
                                 log_error(t("proxy_warning_username_no_password"))
@@ -686,7 +690,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     # 代理连接成功，但需要 Cookie 认证（这说明代理是工作的）
                                     safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
                                     log_info(t("log.proxy_test_success_cookie_required", index=i, proxy=safe_proxy))
-                                    log_debug(f"  注意: {error_msg[:150]}")
+                                    log_debug(t("log.proxy_note", message=error_msg[:150]))
                                     test_success = True
                                     last_error = None
                                     last_exception = None
@@ -698,7 +702,7 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                     # 真正的连接错误
                                     last_error = error_msg if error_msg else f"yt-dlp 返回错误码 {result.returncode}"
                                     last_exception = None
-                                    log_debug(f"  yt-dlp 测试失败（连接错误）: {last_error}")
+                                    log_debug(t("log.ytdlp_test_failed_connection", error=last_error))
                                     test_success = False
                                 else:
                                     # 其他错误（可能是视频不存在、需要 Cookie 等，但不一定是代理问题）
@@ -707,14 +711,14 @@ class NetworkSettingsPage(ctk.CTkFrame):
                                         # 能够连接到 YouTube 服务器，说明代理是工作的
                                         safe_proxy = f"{parsed.scheme}://{parsed.username or ''}:***@{parsed.hostname}:{parsed.port or ''}" if (parsed.username or parsed.password) else proxy
                                         log_info(t("log.proxy_test_success_youtube", index=i, proxy=safe_proxy))
-                                        log_debug(f"  详细信息: {error_msg[:150]}")
+                                        log_debug(t("log.proxy_detail", message=error_msg[:150]))
                                         test_success = True
                                         last_error = None
                                         last_exception = None
                                     else:
                                         last_error = error_msg if error_msg else f"yt-dlp 返回错误码 {result.returncode}"
                                         last_exception = None
-                                        log_debug(f"  yt-dlp 测试失败: {last_error}")
+                                        log_debug(t("log.ytdlp_test_failed", error=last_error))
                                         test_success = False
                             except subprocess.TimeoutExpired:
                                 last_error = t("log.proxy_connection_timeout", timeout=timeout)

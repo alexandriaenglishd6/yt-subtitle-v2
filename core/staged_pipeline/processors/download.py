@@ -4,7 +4,7 @@ DOWNLOAD 阶段处理器
 from pathlib import Path
 from typing import Optional, Callable
 
-from core.logger import get_logger, set_log_context, clear_log_context
+from core.logger import get_logger, set_log_context, clear_log_context, translate_log
 from core.exceptions import ErrorType, AppException, TaskCancelledError
 from core.cancel_token import CancelToken
 from core.downloader import SubtitleDownloader
@@ -103,8 +103,8 @@ class DownloadProcessor:
             
             # 检查下载结果
             if not download_result.get("original"):
-                error_msg = "下载原始字幕失败"
-                logger.error(error_msg, video_id=vid)
+                error_msg = translate_log("download_original_subtitle_failed")
+                logger.error_i18n("download_original_subtitle_failed", video_id=vid)
                 if self.on_log:
                     try:
                         self.on_log("ERROR", error_msg, vid)
@@ -116,7 +116,7 @@ class DownloadProcessor:
                     data.error_type = ErrorType.NETWORK
                     data.processing_failed = True
                 else:
-                    data.skip_reason = "下载原始字幕失败（Dry Run）"
+                    data.skip_reason = translate_log("download_original_subtitle_failed_dry_run")
                 
                 return data
             

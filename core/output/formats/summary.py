@@ -37,7 +37,8 @@ def write_summary(
                 message=f"原子写摘要文件失败: {target_path}",
                 error_type=ErrorType.FILE_IO
             )
-        logger.debug(f"已写入摘要: {target_path.name}")
+        from core.logger import translate_log
+        logger.debug(translate_log("summary_written", file_name=target_path.name))
         return target_path
     except (OSError, IOError, PermissionError) as e:
         # 文件IO错误

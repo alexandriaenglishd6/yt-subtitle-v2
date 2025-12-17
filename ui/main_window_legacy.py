@@ -216,7 +216,9 @@ class MainWindow(ctk.CTk):
             saved_channel_url = self.state_manager.get("channel_url", "")
             # 调试日志（可移除）
             if saved_channel_url:
-                get_logger().debug(f"恢复频道URL: {saved_channel_url[:50]}...")
+                from core.logger import translate_log
+                logger = get_logger()
+                logger.debug_i18n("channel_url_restored", url=saved_channel_url[:50])
             page = ChannelPage(
                 self.page_container,
                 on_check_new=self._on_check_new_videos,
@@ -230,7 +232,9 @@ class MainWindow(ctk.CTk):
                 summary_ai_config=self.app_config.summary_ai.to_dict(),
                 on_save_translation_ai=self._on_save_translation_ai,
                 on_save_summary_ai=self._on_save_summary_ai,
-                initial_channel_url=saved_channel_url
+                initial_channel_url=saved_channel_url,
+                initial_force_rerun=self.app_config.force_rerun,
+                on_save_force_rerun=self._on_save_force_rerun
             )
             page.pack(fill="both", expand=True)
             self.current_page = page
@@ -246,7 +250,8 @@ class MainWindow(ctk.CTk):
             saved_url_list_text = self.state_manager.get("url_list_text", "")
             # 调试日志（可移除）
             if saved_url_list_text:
-                get_logger().debug(f"恢复URL列表文本，长度: {len(saved_url_list_text)}")
+                logger = get_logger()
+                logger.debug_i18n("url_list_restored", length=len(saved_url_list_text))
             page = UrlListPage(
                 self.page_container,
                 on_check_new=self._on_check_new_urls,
@@ -260,7 +265,9 @@ class MainWindow(ctk.CTk):
                 summary_ai_config=self.app_config.summary_ai.to_dict(),
                 on_save_translation_ai=self._on_save_translation_ai,
                 on_save_summary_ai=self._on_save_summary_ai,
-                initial_url_list_text=saved_url_list_text
+                initial_url_list_text=saved_url_list_text,
+                initial_force_rerun=self.app_config.force_rerun,
+                on_save_force_rerun=self._on_save_force_rerun
             )
             page.pack(fill="both", expand=True)
             self.current_page = page
@@ -628,7 +635,7 @@ class MainWindow(ctk.CTk):
             cookie_status = t("cookie_status_not_configured")
         
         if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_cookie_status'):
-            self.log_panel.update_cookie_status(cookie_status)
+            self.log_panel.update_cookie_status(cookie_status, cookie=cookie, region=region, test_result=test_result)
     
     def _on_save_proxies(self, proxies: list):
         """保存代理列表"""
@@ -721,13 +728,28 @@ class MainWindow(ctk.CTk):
             reinit_processor=True  # 重试次数和输出目录变化需要重新初始化处理器
         )
     
+    def _on_save_force_rerun(self, force_rerun: bool):
+        """保存强制重跑选项
+        
+        Args:
+            force_rerun: 是否强制重跑
+        """
+        def update_config(cfg):
+            cfg.force_rerun = force_rerun
+        
+        self._save_config(
+            update_fn=update_config,
+            success_msg="",  # 静默保存，不显示消息
+            error_msg_prefix="",
+            reinit_processor=False
+        )
+    
     def _on_language_changed(self, value: str):
         """语言切换回调"""
         # 直接比较显示文本，因为翻译文件中 language_zh 和 language_en 的值是固定的
         # zh_CN.json: "language_zh": "中文", "language_en": "English"
         # en_US.json: "language_zh": "中文", "language_en": "English"
         logger = get_logger()
-        logger.info_i18n("language_change_callback", value=value)
         
         if value == "中文":
             new_lang = "zh-CN"
@@ -738,13 +760,17 @@ class MainWindow(ctk.CTk):
             return
         
         current_lang = get_language()
-        logger.info_i18n("language_current_new", current=current_lang, new=new_lang)
         
         if current_lang == new_lang:
             logger.info_i18n("language_no_change")
             return
         
+        # 先切换语言，这样后续的日志都会使用新语言
         set_language(new_lang)
+        
+        # 现在使用新语言记录日志
+        logger.info_i18n("language_change_callback", value=value)
+        logger.info_i18n("language_current_new", current=current_lang, new=new_lang)
         logger.info_i18n("language_set", lang=new_lang, test=t('app_name'))
         
         # 保存到配置
@@ -754,7 +780,7 @@ class MainWindow(ctk.CTk):
                 self.config_manager.save(self.app_config)
                 logger.info_i18n("language_saved")
         except Exception as e:
-            logger.error(f"保存语言设置失败: {e}")
+            logger.error_i18n("language_save_failed", error=str(e))
         
         # 刷新 UI 文本
         self._refresh_ui_texts()
@@ -843,6 +869,9 @@ class MainWindow(ctk.CTk):
         if hasattr(self, 'log_panel') and hasattr(self.log_panel, 'update_stats'):
             current_stats = self.state_manager.get("stats", {"total": 0, "success": 0, "failed": 0})
             self.log_panel.update_stats(current_stats, current_status)
+        
+        # 重新更新 Cookie 状态（确保使用新语言）
+        self._update_cookie_status()
         
         # 重新构建当前页面（确保所有文本都更新）
         if self.current_page_name:
