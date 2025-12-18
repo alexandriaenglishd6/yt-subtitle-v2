@@ -104,6 +104,7 @@ class AppConfig:
     """
     language: LanguageConfig = field(default_factory=LanguageConfig)
     concurrency: int = 10  # 下载并发数，默认 10
+    ai_concurrency: int = 5  # AI 并发数（翻译/摘要），默认 5
     retry_count: int = 2  # 重试次数，默认 2（用于网络错误、限流等可重试错误）
     proxies: list[str] = field(default_factory=list)  # 代理列表
     cookie: str = ""  # Cookie 字符串
@@ -122,6 +123,7 @@ class AppConfig:
         result = {
             "language": self.language.to_dict(),
             "concurrency": self.concurrency,
+            "ai_concurrency": self.ai_concurrency,
             "retry_count": self.retry_count,
             "proxies": self.proxies,
             "cookie": self.cookie,
@@ -164,6 +166,7 @@ class AppConfig:
         return cls(
             language=LanguageConfig.from_dict(data.get("language", {})),
             concurrency=data.get("concurrency", 10),  # 默认下载并发数 10
+            ai_concurrency=data.get("ai_concurrency", 5),  # 默认 AI 并发数 5
             retry_count=data.get("retry_count", 2),
             proxies=data.get("proxies", []),
             cookie=data.get("cookie", ""),

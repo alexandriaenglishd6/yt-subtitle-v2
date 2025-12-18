@@ -38,6 +38,7 @@
 | 2025-12-08 | Milestone-2 P0-20| CLI 完整流水线 + 并发 + 代理 + Cookie + Smoke Test | `v2_final_plan.md`, `acceptance_criteria.md`, `docs/P0-19_最终验证报告.md` |
 | 2025-12-09 | Milestone-3 P0-25| GUI 完整实现 + 配置绑定 + 双语字幕输出           | `ide_任务表.md` P0-21~P0-25, P1-1, `docs/cookie_setup_guide.md` |
 | 2025-12-17 | Task 4 完成      | 日志国际化基础设施 + 核心日志迁移完成            | `docs/docsrefactoring-task-list.md` Task 4, `test_summary_i18n.py` |
+| 2025-12-18 | v3.1 重构完成    | 完成 P0-P2 所有重构任务，最终清理 legacy 文件      | `docs/docsrefactoring-task-list.md`, `tests/` |
 
 ---
 
@@ -104,6 +105,70 @@
 
 ## 2025-12
 
+### 2025-12-18
+
+**v3.1.0 重构全面完成：功能优化与最终回归**
+
+#### 主要完成内容
+
+1. **AI 并发线程设置 (Task 7 扩展)**
+   - 在“运行参数”页面增加了“AI 并发线程”独立设置。
+   - 实现了滑块与输入框联动，并增加了高并发警告提示（高、中、低三档）。
+   - 将 AI 并发参数接入配置系统和流水线，实现了 AI 请求与普通任务请求的并发分离。
+
+2. **全面国际化与硬编码清理 (Task 4 & 后续修复)**
+   - 彻底解决了日志和 UI 中的硬编码中文问题，特别是 Cookie 认证错误和 Google 翻译日志。
+   - 重构了 `cli/ai_smoke_test.py`、`cli/main.py`、`core/ai_providers/google_translate.py` 等模块，使用 i18n 键值对。
+   - 完善了 `ui/i18n/en_US.json` 和 `ui/i18n/zh_CN.json`，增加了 100+ 新翻译键。
+   - 修复了 AI 连接测试中错误的提供商名称显示问题。
+
+3. **日志增强：时间戳显示**
+   - 在 GUI 日志面板中增加了精确的时间戳显示（格式：`[YYYY-MM-DD HH:MM:SS]`）。
+   - 确保日志在切换语言、过滤级别时能够保持时间戳的一致性。
+
+4. **API Key 安全增强**
+   - 实现了 API Key 的掩码显示（前4位和后4位可见，中间用 * 隐藏）。
+   - 增加了“管理所有 Key”高级配置框，同样支持掩码显示和安全同步。
+   - 增加了“清除所有 Key”功能。
+
+5. **翻译逻辑优化与 Bug 修复**
+   - **修复 `AttributeError`**: 修复了 `VideoInfo` 缺少 `source_lang` 导致翻译异常的问题。
+   - **跳过同语言翻译**: 当源语言与目标语言相同时，自动跳过 AI 翻译，直接使用官方或原始字幕。
+   - **修复 `SameFileError`**: 修复了官方字幕复制到翻译字幕路径相同时的报错。
+
+6. **主题色彩优化**
+   - 调整了“浅灰”主题的背景色深度（亮度提升约 20%），并优化了文本对比度。
+   - 使 UI 视觉风格与旧版本工具保持一致，提升了视觉舒适度。
+
+7. **最终收尾：清理与回归**
+   - 删除了重构过程中保留的所有旧版单文件（`*_legacy.py`）。
+   - 运行了全流程回归测试（分阶段流水线、国际化、UI 结构），全部通过。
+   - 完成代码风格检查（ruff），修复了 50+ 个 Undefined name (t) 和未使用变量等问题。
+   - 发布重构完成版本并打 Tag `v3.1.0-refactor-complete`。
+
+#### 修改点总结
+
+- `core/staged_pipeline/processors/translate.py`: 修复 `AttributeError` 和同语言翻译逻辑。
+- `core/models.py`: `VideoInfo` 字段调整。
+- `ui/pages/translation_summary_page.py`: API Key 掩码逻辑与 UI 修复。
+- `ui/themes.py`: “浅灰”主题颜色调整。
+- `ui/components/log_panel.py`: 增加时间戳显示。
+- `cli/`: 完成 CLI 命令的完全国际化。
+- `ruff check`: 修复了所有代码风格和语法潜在问题。
+
+#### 测试验证
+
+- ✅ **回归测试**：`tests/` 下所有测试脚本通过。
+- ✅ **国际化测试**：中英文切换后，日志和 UI 均无中文遗漏。
+- ✅ **代码质量**：`ruff check` 报告 0 错误。
+
+#### 提交信息
+
+- 完成 v3.1.0 重构所有预定任务，系统达到发布状态。
+- 标记重构完成时间：2025-12-18。
+
+---
+
 ### 2025-12-17
 
 **Task 4 完成：日志国际化基础设施 + 核心日志迁移**
@@ -154,6 +219,50 @@
 
 - 分支：`refactor/log_i18n`
 - 提交：完成 Task 4，所有测试通过
+- 合并：已合并到 `main` 分支
+- 完成时间：2025-12-17
+
+---
+
+**后续修复和清理工作**
+
+#### 主要完成内容
+
+1. **Logger 清理 Bug 修复**（`fix/logger_cleanup_bug` 分支）
+   - 修复 `core/logger.py` 第 443 行的参数名与函数名冲突问题
+   - 问题：参数 `cleanup_old_logs: bool` 与函数 `cleanup_old_logs()` 重名，导致调用失败（`TypeError: 'bool' object is not callable`）
+   - 修复方案：将参数重命名为 `auto_cleanup`，在函数调用时使用别名 `do_cleanup` 避免冲突
+   - 删除 `core/ai_providers/local_model.py` 中未使用的 `import threading`
+   - 提交 PR，合并到 main
+
+2. **翻译键补充**（`fix/add_missing_translations` 分支）
+   - 添加 7 个缺失的翻译键到 `ui/i18n/zh_CN.json` 和 `ui/i18n/en_US.json`：
+     - `log.missing_detection_result` - "缺少检测结果"
+     - `log.missing_download_result` - "缺少下载结果"
+     - `log.missing_summary_result` - "缺少摘要结果"
+     - `log.missing_translation_result` - "缺少翻译结果"
+     - `log.no_subtitles_dry_run` - "无字幕（Dry Run）"
+     - `log.playlist_video_count` - "播放列表视频数量: {count}"
+     - `log.summary_failed_dry_run` - "摘要失败（Dry Run）"
+   - 验证所有键在中文和英文翻译文件中都存在
+   - 提交 PR，合并到 main
+
+3. **文档状态更新**
+   - 更新 `docs/docsrefactoring-task-list.md`：
+     - Task 5 和 Task 6 的 PR 状态从"已提交到远程分支，待创建 PR"改为"已合并到 main"
+     - 添加"后续修复和清理工作"部分，记录所有后续修复工作（脚本清理、无用文件清理、Logger Bug 修复、翻译键补充）
+
+#### 相关文件
+
+- `core/logger.py` - Logger 清理 Bug 修复（参数重命名）
+- `core/ai_providers/local_model.py` - 删除未使用的 import
+- `ui/i18n/zh_CN.json` 和 `ui/i18n/en_US.json` - 添加 7 个缺失的翻译键
+- `docs/docsrefactoring-task-list.md` - 更新任务状态和后续修复记录
+
+#### 提交信息
+
+- 分支：`fix/logger_cleanup_bug`、`fix/add_missing_translations`
+- 提交：修复 Logger 清理 Bug 和补充缺失的翻译键
 - 合并：已合并到 `main` 分支
 - 完成时间：2025-12-17
 

@@ -12,4 +12,3 @@ __all__ = [
     "process_single_video",
     "process_video_list",
 ]
-

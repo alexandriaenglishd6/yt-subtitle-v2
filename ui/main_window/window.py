@@ -3,6 +3,7 @@
 实现四区结构：顶部工具栏 + 左侧侧边栏 + 中间主区 + 底部日志框
 使用组件化架构，main_window 仅负责布局和事件接线
 """
+
 import customtkinter as ctk
 from typing import Optional
 
@@ -37,7 +38,7 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         super().__init__()
         
         # 窗口基本设置（先设置默认标题，i18n 初始化后会更新）
-        self.title("YouTube 字幕工具 v2")
+        self.title(t("app_name"))
         self.geometry("1600x1000")
         self.minsize(1000, 700)
         
@@ -68,7 +69,9 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         global_logger.add_callback(self._on_log_message)
         
         # 初始化业务逻辑处理器
-        self.video_processor = VideoProcessor(self.config_manager, self.app_config)
+        self.video_processor = VideoProcessor(
+            self.config_manager, self.app_config, event_bus=self.event_bus, quiet=True
+        )
         
         # 当前页面
         self.current_page: Optional[ctk.CTkFrame] = None
@@ -97,7 +100,7 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
     def _init_i18n(self):
         """初始化 i18n，从配置读取语言设置"""
         try:
-            if hasattr(self.app_config, 'ui_language') and self.app_config.ui_language:
+            if hasattr(self.app_config, "ui_language") and self.app_config.ui_language:
                 set_language(self.app_config.ui_language)
             else:
                 set_language("zh-CN")
@@ -107,7 +110,7 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
     def _load_theme_from_config(self) -> ThemeName:
         """从配置加载主题设置"""
         try:
-            if hasattr(self.app_config, 'theme') and self.app_config.theme:
+            if hasattr(self.app_config, "theme") and self.app_config.theme:
                 theme_name = self.app_config.theme
                 if theme_name in ["light", "light_gray", "dark_gray", "claude_warm"]:
                     return theme_name
@@ -130,15 +133,12 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
             on_language_changed=self._on_language_changed,
             on_theme_changed=self._on_theme_changed,
             on_open_output=self._on_open_output_folder,
-            on_open_config=self._on_open_failed_links
+            on_open_config=self._on_open_failed_links,
         )
         self.toolbar.grid(row=0, column=0, columnspan=2, sticky="ew")
         
         # 2. 左侧侧边栏
-        self.sidebar = Sidebar(
-            self,
-            on_page_changed=self._switch_page
-        )
+        self.sidebar = Sidebar(self, on_page_changed=self._switch_page)
         self.sidebar.grid(row=1, column=0, sticky="nsew")
         
         # 3. 中间主内容区
@@ -152,7 +152,7 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         self.page_container.pack(fill="both", expand=True)
         
         # 4. 底部日志框
-        self.log_panel = LogPanel(self, height=300)  # 200 * 1.5 = 300（增加 50%）
+        self.log_panel = LogPanel(self, height=450)  # 300 * 1.5 = 450 (再次增加 50%)
         self.log_panel.grid(row=2, column=0, columnspan=2, sticky="ew")
         
         # 5. 默认显示频道页面
@@ -162,3 +162,6 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         """订阅事件"""
         self.event_bus.subscribe(EventType.STATUS_CHANGED, self._on_status_changed)
         self.event_bus.subscribe(EventType.STATS_UPDATED, self._on_stats_updated)
+        self.event_bus.subscribe(
+            EventType.COOKIE_STATUS_CHANGED, self._on_cookie_status_changed
+        )

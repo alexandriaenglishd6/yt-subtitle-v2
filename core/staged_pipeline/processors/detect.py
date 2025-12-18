@@ -1,6 +1,7 @@
 """
 DETECT 阶段处理器
 """
+
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -18,10 +19,10 @@ MAX_TITLE_DISPLAY_LENGTH = 50
 
 class DetectProcessor:
     """检测处理器
-    
+
     负责检测视频是否有字幕
     """
-    
+
     def __init__(
         self,
         cookie_manager,
@@ -33,7 +34,7 @@ class DetectProcessor:
         on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
     ):
         """初始化检测处理器
-        
+
         Args:
             cookie_manager: Cookie 管理器
             incremental_manager: 增量管理器
@@ -50,42 +51,51 @@ class DetectProcessor:
         self.dry_run = dry_run
         self.cancel_token = cancel_token
         self.on_log = on_log
-    
+
     def process(self, data: StageData) -> StageData:
         """处理 DETECT 阶段
-        
+
         1. 检查增量记录（如果 force=False，跳过已处理视频）
         2. 执行字幕检测
         3. 如果没有字幕，设置 skip_reason 并记录失败
-        
+
         Args:
             data: 阶段数据
-            
+
         Returns:
             处理后的阶段数据
         """
         vid = data.video_info.video_id
         title_preview = data.video_info.title[:MAX_TITLE_DISPLAY_LENGTH]
-        
+
         try:
             # 设置日志上下文
             if data.run_id:
                 set_log_context(run_id=data.run_id, task="detect", video_id=vid)
-            
-            logger.info_i18n("detect_subtitle_info", video_id=vid, title_preview=title_preview)
-            
+
+            logger.info_i18n(
+                "detect_subtitle_info", video_id=vid, title_preview=title_preview
+            )
+
             # 检查取消状态
             if self.cancel_token and self.cancel_token.is_cancelled():
-                reason = self.cancel_token.get_reason() or translate_log("user_cancelled")
+                reason = self.cancel_token.get_reason() or translate_log(
+                    "log.user_cancelled"
+                )
                 raise TaskCancelledError(reason)
-            
+
             # 检查增量记录（如果 force=False）
             if not self.force and self.archive_path:
                 if self.incremental_manager.is_processed(vid, self.archive_path):
                     data.is_processed = True
                     from ui.i18n_manager import t
-                    data.skip_reason = t("log.video_already_processed_skip", video_id=vid)
-                    skip_msg = logger.info_i18n("video_already_processed_skip", video_id=vid)
+
+                    data.skip_reason = t(
+                        "log.video_already_processed_skip", video_id=vid
+                    )
+                    skip_msg = logger.info_i18n(
+                        "video_already_processed_skip", video_id=vid
+                    )
                     # 添加提示：如果语言配置变化，可以使用"强制重跑"选项
                     hint_msg = translate_log("video_skip_hint_force_rerun")
                     if self.on_log:
@@ -95,35 +105,35 @@ class DetectProcessor:
                         except Exception:
                             pass
                     return data
-            
+
             # 执行字幕检测
             detector = SubtitleDetector(cookie_manager=self.cookie_manager)
             detection_result = detector.detect(data.video_info)
             data.detection_result = detection_result
-            
+
             # 检查是否有字幕
             if not detection_result.has_subtitles:
-                error_msg = "视频无可用字幕，跳过处理"
+                error_msg = t("log.detect_no_subtitle")
                 logger.warning(error_msg, video_id=vid)
                 if self.on_log:
                     try:
                         self.on_log("WARN", error_msg, vid)
                     except Exception:
                         pass
-                
+
                 if not self.dry_run:
                     # 失败记录会在 StageQueue._log_failure 中处理
-                    data.skip_reason = "无可用字幕"
+                    data.skip_reason = t("no_subtitle_available")
                     data.error_type = ErrorType.CONTENT
                     data.processing_failed = True
                 else:
-                    data.skip_reason = translate_log("no_subtitles_dry_run")
-                
+                    data.skip_reason = translate_log("log.no_subtitles_dry_run")
+
                 return data
-            
+
             logger.info_i18n("detect_subtitle_found", video_id=vid)
             return data
-            
+
         except TaskCancelledError as e:
             # 任务已取消
             reason = e.reason or translate_log("user_cancelled")
@@ -143,9 +153,11 @@ class DetectProcessor:
         except Exception as e:
             # 未知异常
             app_error = AppException(
-                message=translate_log("detect_subtitle_failed", video_id=vid, error=str(e)),
+                message=translate_log(
+                    "log.detect_subtitle_failed", video_id=vid, error=str(e)
+                ),
                 error_type=ErrorType.UNKNOWN,
-                cause=e
+                cause=e,
             )
             data.error = app_error
             data.error_type = ErrorType.UNKNOWN
@@ -153,9 +165,9 @@ class DetectProcessor:
             data.processing_failed = True
             logger.error_i18n("detect_subtitle_exception", video_id=vid, error=str(e))
             import traceback
+
             logger.debug(traceback.format_exc(), video_id=vid)
             return data
         finally:
             # 清理日志上下文
             clear_log_context()
-

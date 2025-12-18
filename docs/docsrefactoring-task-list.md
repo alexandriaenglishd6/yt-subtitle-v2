@@ -12,7 +12,7 @@
 |--------|--------|----------|------|
 | **P0** | ai_providers 拆分 + staged_pipeline 拆分 | 2周 | ✅ Task 1 和 Task 2 已完成（代码拆分完成，测试通过，已合并到 main） |
 | **P1** | output + pipeline 拆分 + 日志国际化基础设施 + 核心日志迁移 | 2-3周 | ✅ Task 3 已完成（代码拆分完成，测试通过，已合并到 main） |
-| **P2** | UI 层拆分 + 剩余日志/异常迁移 + 长内容优化（可选） | 2-3周 | 未开始 |
+| **P2** | UI 层拆分 + 剩余日志/异常迁移 + API Key 安全增强 | 2-3周 | ✅ 已完成（UI 拆分、国际化 100% 覆盖、API Key 安全性增强） |
 
 ---
 
@@ -132,10 +132,10 @@
 - [x] 拆分 UI 大文件（已移动到包结构：ui/main_window/, ui/business_logic/, ui/pages/network_settings/）
 - [x] 更新导入，按实际错误修复
 - [x] 手动测试所有页面功能（自动化测试通过：4/4）
-- [x] 提交 PR，合并（已提交到远程分支，待创建 PR）
+- [x] 提交 PR，合并（已合并到 main）
 - [x] **标记完成时间**：2025-12-17
 
-**Task 6: 剩余日志/异常国际化 + 长内容优化（可选）** （预计 5-7 天）
+**Task 6: 剩余日志/异常国际化 + API Key 安全增强** （预计 5-7 天）
 
 - [x] 继续迁移 P2 日志 + 完善异常键值化
   - [x] 迁移 core/logger.py 中的 P2 日志（1条）
@@ -147,33 +147,55 @@
   - [x] 迁移 core/ai_providers/*.py 中的 P2 日志（13条）
   - [x] 迁移 ui/pages 中的 P2 日志（10条）
   - [x] 完善异常键值化（TaskCancelledError, LocalModelError 等）
-- [ ] **长内容优化**：翻译 chunking + 摘要 Map-Reduce（**可选**，时间允许再做）
-- [ ] **注意**：长内容优化**不作为 v3.1 refactor complete 的阻塞条件**
+  - [x] **最终补漏**：通过代码扫描修复所有硬编码中文日志（Cookie 认证、Google 翻译等）
+- [x] **API Key 安全增强**：
+  - [x] 实现 API Key 掩码显示（前4后4可见）
+  - [x] 增加高级 Key 管理框，同样支持掩码
+  - [x] 增加“清除所有 Key”功能
 - [x] 测试验证：切换语言后所有 P2 日志和异常消息正确显示（自动化测试通过：4/4）
-- [x] 提交 PR，合并（已提交到远程分支，待创建 PR）
+- [x] 提交 PR，合并（已合并到 main）
 - [x] **标记完成时间**：2025-12-18
+
+**后续修复和清理工作** （Task 5 和 Task 6 完成后的补充工作）
+
+- [x] **脚本清理**（`cleanup/scripts` 分支）
+  - [x] 将有用的测试脚本移动到 `tests/` 目录
+  - [x] 删除临时工具脚本
+  - [x] 将中文文件名的脚本重命名为英文
+  - [x] 提交 PR，合并到 main
+- [x] **无用文件清理**（`cleanup/unused_files_v2` 分支）
+  - [x] 删除临时测试 URL 文件
+  - [x] 删除其他无用临时文件
+  - [x] 提交 PR，合并到 main
+- [x] **Logger 清理 Bug 修复**（`fix/logger_cleanup_bug` 分支）
+  - [x] 修复 `logger.py` 中参数名与函数名冲突的问题（`cleanup_old_logs` → `auto_cleanup`）
+  - [x] 删除 `local_model.py` 中未使用的 `import threading`
+  - [x] 提交 PR，合并到 main
+- [x] **翻译键补充**（`fix/add_missing_translations` 分支）
+  - [x] 添加 7 个缺失的翻译键到 `zh_CN.json` 和 `en_US.json`
+  - [x] 提交 PR，合并到 main
 
 **Task 7: Custom OpenAI UI 配置 + 供应商预填示例** （预计 2-3 天，可插入任意阶段）
 
-- [ ] 在 AI 设置页面增加 “Custom OpenAI 兼容” 选项
-- [ ] 供应商预填示例（仅示例，不强制）：
-  - Gemini（OpenAI 兼容）：base_url = `https://generativelanguage.googleapis.com/v1beta/openai/`（Gemini 官方 OpenAI compatibility 根路径，使用 Gemini API Key） (Google AI for Developers)
-  - 本地（LM Studio）：base_url = `http://localhost:1234/v1`
-  - 本地（Ollama）：base_url = `http://localhost:11434/v1`
-- [ ] 测试兼容端点
-- [ ] 提交 PR，合并
-- [ ] **标记完成时间**：__________
+- [x] 在 AI 设置页面增加 “Custom OpenAI 兼容” 选项（已添加 custom_openai 和 gemini_openai 别名）
+- [x] 供应商预填示例（仅示例，不强制）：
+  - [x] Gemini（OpenAI 兼容）：base_url = `https://generativelanguage.googleapis.com/v1beta/openai/`（Gemini 官方 OpenAI compatibility 根路径，使用 Gemini API Key） (Google AI for Developers)
+  - [x] 本地（LM Studio）：base_url = `http://localhost:1234/v1`
+  - [x] 本地（Ollama）：base_url = `http://localhost:11434/v1`
+- [x] 测试兼容端点（已通过测试脚本验证别名注册和客户端初始化逻辑）
+- [x] 提交 PR，合并
+- [x] **标记完成时间**：2025-12-18
 
 ---
 
 ### 最终收尾（P1 结束后执行）
 
-- [ ] **删除所有 legacy 文件**（含回滚检查）
-- [ ] 全流程回归测试
-- [ ] 代码风格检查
-- [ ] 更新 README / 文档
-- [ ] 打 Tag：`v3.1.0-refactor-complete`
-- [ ] **项目重构完成时间**：__________
+- [x] **删除所有 legacy 文件**（含回滚检查）
+- [x] 全流程回归测试
+- [x] 代码风格检查
+- [x] 更新 README / 文档
+- [x] 打 Tag：`v3.1.0-refactor-complete` (已完成)
+- [x] **项目重构完成时间**：2025-12-18
 
 ---
 

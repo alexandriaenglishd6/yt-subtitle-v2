@@ -13,8 +13,8 @@ sys.path.insert(0, str(project_root))
 try:
     import customtkinter as ctk
 except ImportError:
-    print("错误：未安装 customtkinter")
-    print("请运行：pip install customtkinter")
+    print("Error: customtkinter not installed")
+    print("Please run: pip install customtkinter")
     sys.exit(1)
 
 from ui.main_window import MainWindow

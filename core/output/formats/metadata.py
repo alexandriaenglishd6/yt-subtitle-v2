@@ -2,6 +2,7 @@
 元数据输出格式处理
 支持 JSON 格式
 """
+
 import json
 from pathlib import Path
 from typing import Optional, Dict
@@ -29,10 +30,10 @@ def write_metadata(
     summary_path: Optional[Path],
     run_id: Optional[str] = None,
     translation_llm: Optional[LLMClient] = None,
-    summary_llm: Optional[LLMClient] = None
+    summary_llm: Optional[LLMClient] = None,
 ) -> Path:
     """写入元数据文件
-    
+
     Args:
         video_dir: 视频输出目录
         video_info: 视频信息
@@ -44,60 +45,60 @@ def write_metadata(
         run_id: 批次ID（run_id），可选
         translation_llm: 翻译 LLM 客户端（可选），用于获取 provider 和 model 信息
         summary_llm: 摘要 LLM 客户端（可选），用于获取 provider 和 model 信息
-    
+
     Returns:
         写入的文件路径
     """
     video_dir.mkdir(parents=True, exist_ok=True)
     metadata_path = video_dir / "metadata.json"
-    
+
     try:
         # 获取翻译 AI 信息
         translation_ai_info = None
         if translation_llm:
             # 从 LLMClient 实例获取 provider 和 model
-            provider = getattr(translation_llm, 'provider_name', None)
+            provider = getattr(translation_llm, "provider_name", None)
             if not provider:
                 # 尝试从 ai_config 获取
-                ai_config = getattr(translation_llm, 'ai_config', None)
+                ai_config = getattr(translation_llm, "ai_config", None)
                 if ai_config:
-                    provider = getattr(ai_config, 'provider', None)
-            
+                    provider = getattr(ai_config, "provider", None)
+
             model = None
-            ai_config = getattr(translation_llm, 'ai_config', None)
+            ai_config = getattr(translation_llm, "ai_config", None)
             if ai_config:
-                model = getattr(ai_config, 'model', None)
-            
+                model = getattr(ai_config, "model", None)
+
             if provider or model:
                 translation_ai_info = {
                     "provider": provider,
                     "model": model,
-                    "prompt_version": PROMPT_VERSION
+                    "prompt_version": PROMPT_VERSION,
                 }
-        
+
         # 获取摘要 AI 信息
         summary_ai_info = None
         if summary_llm:
             # 从 LLMClient 实例获取 provider 和 model
-            provider = getattr(summary_llm, 'provider_name', None)
+            provider = getattr(summary_llm, "provider_name", None)
             if not provider:
                 # 尝试从 ai_config 获取
-                ai_config = getattr(summary_llm, 'ai_config', None)
+                ai_config = getattr(summary_llm, "ai_config", None)
                 if ai_config:
-                    provider = getattr(ai_config, 'provider', None)
-            
+                    provider = getattr(ai_config, "provider", None)
+
             model = None
-            ai_config = getattr(summary_llm, 'ai_config', None)
+            ai_config = getattr(summary_llm, "ai_config", None)
             if ai_config:
-                model = getattr(ai_config, 'model', None)
-            
+                model = getattr(ai_config, "model", None)
+
             if provider or model:
                 summary_ai_info = {
                     "provider": provider,
                     "model": model,
-                    "prompt_version": PROMPT_VERSION
+                    "prompt_version": PROMPT_VERSION,
                 }
-        
+
         # 构建元数据
         metadata = {
             "tool_version": TOOL_VERSION,
@@ -128,10 +129,14 @@ def write_metadata(
             "translation_ai": translation_ai_info,
             "summary_ai": summary_ai_info,
             "files": {
-                "original": str(download_result.get("original")) if download_result.get("original") else None,
+                "original": str(download_result.get("original"))
+                if download_result.get("original")
+                else None,
                 "official_translations": {
                     lang: str(path) if path else None
-                    for lang, path in download_result.get("official_translations", {}).items()
+                    for lang, path in download_result.get(
+                        "official_translations", {}
+                    ).items()
                 },
                 "translated": {
                     lang: str(path) if path else None
@@ -140,29 +145,32 @@ def write_metadata(
                 "summary": str(summary_path) if summary_path else None,
             },
         }
-        
+
         # 写入 JSON 文件（使用原子写）
         json_content = json.dumps(metadata, ensure_ascii=False, indent=2)
+        from core.logger import translate_exception
         if not _atomic_write(metadata_path, json_content, mode="w"):
             raise AppException(
-                message=f"原子写元数据文件失败: {metadata_path}",
-                error_type=ErrorType.FILE_IO
+                message=translate_exception("exception.atomic_write_metadata_failed", path=str(metadata_path)),
+                error_type=ErrorType.FILE_IO,
             )
-        
+
         from core.logger import translate_log
+
         logger.debug(translate_log("metadata_written", file_name=metadata_path.name))
         return metadata_path
-        
+
     except (OSError, IOError, PermissionError) as e:
         # 文件IO错误
+        from core.logger import translate_exception
         app_error = AppException(
-            message=f"写入元数据失败: {e}",
+            message=translate_exception("exception.write_metadata_failed", error=str(e)),
             error_type=ErrorType.FILE_IO,
-            cause=e
+            cause=e,
         )
         logger.error(
-            f"写入元数据失败: {app_error}",
-            error_type=app_error.error_type.value
+            translate_exception("exception.write_metadata_failed", error=str(app_error)),
+            extra={"error_type": app_error.error_type.value},
         )
         raise app_error
     except AppException:
@@ -170,14 +178,14 @@ def write_metadata(
         raise
     except Exception as e:
         # 未映射的异常，转换为 AppException
+        from core.logger import translate_exception
         app_error = AppException(
-            message=f"写入元数据失败: {e}",
+            message=translate_exception("exception.write_metadata_failed", error=str(e)),
             error_type=ErrorType.UNKNOWN,
-            cause=e
+            cause=e,
         )
         logger.error(
-            f"写入元数据失败: {app_error}",
-            error_type=app_error.error_type.value
+            translate_exception("exception.write_metadata_failed", error=str(app_error)),
+            extra={"error_type": app_error.error_type.value},
         )
         raise app_error
-

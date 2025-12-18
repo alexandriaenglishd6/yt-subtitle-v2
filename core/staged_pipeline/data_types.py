@@ -1,6 +1,7 @@
 """
 阶段数据容器定义
 """
+
 from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
@@ -12,9 +13,10 @@ from core.exceptions import ErrorType
 @dataclass
 class StageData:
     """阶段数据容器
-    
+
     用于在阶段之间传递视频处理数据
     """
+
     video_info: VideoInfo
     detection_result: Optional[DetectionResult] = None
     download_result: Optional[Dict[str, Any]] = None
@@ -29,4 +31,3 @@ class StageData:
     is_processed: bool = False  # 是否已处理（用于增量管理）
     processing_failed: bool = False  # 处理是否失败（用于资源清理）
     run_id: Optional[str] = None  # 批次ID（run_id），用于日志和失败记录
-

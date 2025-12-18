@@ -2,6 +2,7 @@
 网络设置页面
 包含 Cookie 和代理配置
 """
+
 import customtkinter as ctk
 from typing import Callable, Optional
 
@@ -18,7 +19,7 @@ logger = get_logger()
 
 class NetworkSettingsPage(CookieSectionMixin, ProxySectionMixin, ctk.CTkFrame):
     """网络设置页面"""
-    
+
     def __init__(
         self,
         parent,
@@ -28,8 +29,10 @@ class NetworkSettingsPage(CookieSectionMixin, ProxySectionMixin, ctk.CTkFrame):
         on_save_cookie: Optional[Callable[[str, Optional[str]], None]] = None,
         on_save_proxies: Optional[Callable[[list], None]] = None,
         on_log_message: Optional[Callable[[str, str], None]] = None,
-        on_update_cookie_status: Optional[Callable[[str, Optional[str], Optional[str]], None]] = None,
-        **kwargs
+        on_update_cookie_status: Optional[
+            Callable[[str, Optional[str], Optional[str]], None]
+        ] = None,
+        **kwargs,
     ):
         super().__init__(parent, **kwargs)
         self.grid_columnconfigure(0, weight=1)
@@ -41,24 +44,24 @@ class NetworkSettingsPage(CookieSectionMixin, ProxySectionMixin, ctk.CTkFrame):
         self.on_log_message = on_log_message
         self.on_update_cookie_status = on_update_cookie_status
         self._build_ui()
-    
+
     def _build_ui(self):
         """构建 UI"""
         # 创建滚动框架
         scroll_frame = ctk.CTkScrollableFrame(self)
         scroll_frame.pack(fill="both", expand=True, padx=16, pady=16)
         scroll_frame.grid_columnconfigure(0, weight=1)
-        
+
         # 标题
         title = ctk.CTkLabel(
             scroll_frame,
             text=t("network_settings_group"),
-            font=title_font(weight="bold")
+            font=title_font(weight="bold"),
         )
         title.pack(pady=(0, 24))
-        
+
         # Cookie 配置区域
         self._build_cookie_section(scroll_frame)
-        
+
         # 代理配置区域
         self._build_proxy_section(scroll_frame)

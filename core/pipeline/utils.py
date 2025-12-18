@@ -1,6 +1,7 @@
 """
 流水线工具函数
 """
+
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -16,10 +17,10 @@ def safe_log(
     on_log: Optional[Callable[[str, str, Optional[str]], None]],
     level: str,
     message: str,
-    video_id: Optional[str] = None
+    video_id: Optional[str] = None,
 ):
     """安全的日志回调执行
-    
+
     Args:
         on_log: 日志回调函数（可能为 None）
         level: 日志级别
@@ -37,6 +38,7 @@ def cleanup_temp_dir(temp_dir: Path):
     """清理临时目录"""
     try:
         import shutil
+
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
     except Exception as e:
@@ -51,10 +53,10 @@ def handle_processing_error(
     run_id: Optional[str],
     on_log: Optional[Callable],
     reason: str,
-    dry_run: bool = False
+    dry_run: bool = False,
 ):
     """处理视频处理过程中的错误（统一错误处理）
-    
+
     Args:
         error_msg: 错误消息
         error_type: 错误类型
@@ -65,16 +67,18 @@ def handle_processing_error(
         reason: 失败原因
     """
     import traceback
-    
+
     # 生成清晰的错误消息（包含错误类型和原因）
     error_type_name = get_error_type_display_name(error_type)
     detailed_msg = f"[{error_type_name}] {video_info.video_id} - {reason}"
-    
-    logger.error(detailed_msg, video_id=video_info.video_id, error_type=error_type.value)
+
+    logger.error(
+        detailed_msg, video_id=video_info.video_id, error_type=error_type.value
+    )
     logger.debug(traceback.format_exc(), video_id=video_info.video_id)
-    
+
     safe_log(on_log, "ERROR", detailed_msg, video_info.video_id)
-    
+
     if not dry_run:
         failure_logger.log_failure(
             video_id=video_info.video_id,
@@ -83,16 +87,16 @@ def handle_processing_error(
             error_type=error_type,
             batch_id=run_id,
             channel_id=video_info.channel_id,
-            channel_name=video_info.channel_name
+            channel_name=video_info.channel_name,
         )
 
 
 def get_error_type_display_name(error_type: ErrorType) -> str:
     """获取错误类型的显示名称
-    
+
     Args:
         error_type: 错误类型
-    
+
     Returns:
         错误类型的显示名称
     """
@@ -110,4 +114,3 @@ def get_error_type_display_name(error_type: ErrorType) -> str:
         ErrorType.UNKNOWN: "未知错误",
     }
     return error_type_names.get(error_type, "未知错误")
-

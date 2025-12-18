@@ -3,9 +3,9 @@
 - 继承 OpenAICompatibleClient
 - 增强：长超时、心跳检测、预热、友好报错
 """
+
 from __future__ import annotations
 
-from typing import Optional
 import requests
 
 from .openai_compatible import OpenAICompatibleClient
@@ -27,7 +27,11 @@ class LocalModelClient(OpenAICompatibleClient):
         original_timeout = ai_config.timeout_seconds
         ai_config.timeout_seconds = max(ai_config.timeout_seconds, self.MIN_TIMEOUT)
         if ai_config.timeout_seconds != original_timeout:
-            logger.debug_i18n("log.local_model_timeout_adjusted", original_timeout=original_timeout, new_timeout=ai_config.timeout_seconds)
+            logger.debug_i18n(
+                "log.local_model_timeout_adjusted",
+                original_timeout=original_timeout,
+                new_timeout=ai_config.timeout_seconds,
+            )
 
         super().__init__(ai_config)
 
@@ -70,7 +74,9 @@ class LocalModelClient(OpenAICompatibleClient):
             super().generate("Hi", max_tokens=5)
 
             self.ai_config.timeout_seconds = original_timeout
-            logger.info_i18n("log.local_model_warmup_complete", model=self.ai_config.model)
+            logger.info_i18n(
+                "log.local_model_warmup_complete", model=self.ai_config.model
+            )
 
         except Exception as e:
             logger.debug_i18n("log.local_model_warmup_failed", error=str(e))
@@ -88,4 +94,3 @@ class LocalModelClient(OpenAICompatibleClient):
             self._warmup()
 
         return super().generate(prompt, **kwargs)
-
