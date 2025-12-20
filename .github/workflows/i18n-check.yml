@@ -1,0 +1,84 @@
+# i18n 检查工作流（Required Status Check）
+#
+# 功能：
+# 1. 检查翻译文件 key 一致性（必须通过）
+# 2. 检测 core/ 和 ui/ 目录下的硬编码中文字符串
+#
+# 注意：此检查需要在 GitHub 分支保护设置中设为 required status check
+# Settings → Branches → Branch protection rules → Require status checks
+
+name: i18n Check
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'core/i18n/locales/*.json'
+      - 'core/**/*.py'
+      - 'ui/**/*.py'
+      - 'scripts/check_i18n.py'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'core/i18n/locales/*.json'
+      - 'core/**/*.py'
+      - 'ui/**/*.py'
+      - 'scripts/check_i18n.py'
+
+jobs:
+  check-i18n:
+    name: i18n Key Consistency & Hardcoded String Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Check i18n key consistency
+        id: key_check
+        run: |
+          echo "=========================================="
+          echo "Checking i18n key consistency..."
+          echo "=========================================="
+          python scripts/check_i18n.py
+          echo "key_check_passed=true" >> $GITHUB_OUTPUT
+
+      - name: Check for hardcoded Chinese strings
+        id: hardcode_check
+        run: |
+          echo "=========================================="
+          echo "Checking for hardcoded Chinese strings..."
+          echo "=========================================="
+          # 排除注释行、docstring、日志翻译调用、测试文件
+          # 查找 core/ 和 ui/ 中的硬编码中文
+          FOUND_HARDCODED=$(grep -rn "[\u4e00-\u9fa5]" core/ ui/ --include="*.py" \
+            | grep -v "# " \
+            | grep -v '"""' \
+            | grep -v "'''" \
+            | grep -v "_i18n\|t(\|tn(\|translate" \
+            | grep -v "test_\|_test\.py" \
+            | grep -v "locales/" \
+            || true)
+          
+          if [ -n "$FOUND_HARDCODED" ]; then
+            echo "❌ Found hardcoded Chinese strings:"
+            echo "$FOUND_HARDCODED"
+            echo ""
+            echo "Please use t('key') or logger.*_i18n('key') instead."
+            # 警告但不阻断（可根据需要改为 exit 1）
+            echo "::warning::Found hardcoded Chinese strings in source code"
+          else
+            echo "✅ No hardcoded Chinese strings found"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "i18n Check Summary"
+          echo "=========================================="
+          echo "Key consistency: ${{ steps.key_check.outcome }}"
+          echo "Hardcode check: ${{ steps.hardcode_check.outcome }}"
