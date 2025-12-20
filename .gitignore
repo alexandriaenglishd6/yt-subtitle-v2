@@ -35,14 +35,15 @@ ENV/
 # 输出目录（用户可随时清空）
 out/
 *.srt
-*.md
-!README.md
-!docs/**/*.md
+# *.md  # 已注释：允许 AI 访问所有 .md 文件
+# !README.md
+# !docs/**/*.md
 
 # 用户数据目录（配置和增量记录）
 # 注意：实际路径在用户目录下，这里只是防止误提交
 *.json
 !ui/i18n/*.json
+!core/i18n/locales/*.json
 
 # 日志
 *.log

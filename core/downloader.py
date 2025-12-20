@@ -14,6 +14,7 @@ from core.logger import get_logger, translate_log
 from core.exceptions import AppException, ErrorType
 from core.fetcher import _map_ytdlp_error_to_app_error
 from core.failure_logger import _atomic_write
+from core.language_utils import lang_matches
 
 logger = get_logger()
 
@@ -144,34 +145,8 @@ class SubtitleDownloader:
                     reason = cancel_token.get_reason() or translate_log("user_cancelled")
                     raise TaskCancelledError(reason)
 
-                # 辅助函数：检查语言代码是否匹配（处理 en vs en-US 的情况）
-                def lang_matches(lang1: str, lang2: str) -> bool:
-                    """检查两个语言代码是否匹配（考虑主语言代码）
 
-                    特殊处理：
-                    - zh-CN 和 zh-TW 不互相匹配（需要精确匹配）
-                    - 其他语言使用主语言代码匹配（如 en-US 匹配 en）
-                    """
-                    if lang1 == lang2:
-                        return True
-
-                    # 特殊处理：zh-CN 和 zh-TW 不互相匹配
-                    lang1_lower = lang1.lower()
-                    lang2_lower = lang2.lower()
-                    if (
-                        lang1_lower in ["zh-cn", "zh_cn"]
-                        and lang2_lower in ["zh-tw", "zh_tw"]
-                    ) or (
-                        lang1_lower in ["zh-tw", "zh_tw"]
-                        and lang2_lower in ["zh-cn", "zh_cn"]
-                    ):
-                        return False
-
-                    # 其他语言：提取主语言代码进行匹配
-                    main1 = lang1.split("-")[0].split("_")[0].lower()
-                    main2 = lang2.split("-")[0].split("_")[0].lower()
-                    return main1 == main2
-
+                # lang_matches() 已从 core.language_utils 导入
                 # 检查是否有官方字幕（人工或自动）匹配目标语言（支持 en vs en-US 匹配）
                 matched_lang = None
                 is_auto = False

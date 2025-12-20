@@ -1,0 +1,78 @@
+{
+  "profiles": {
+    "subtitle_translate_default": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "base_url": null,
+      "timeout_seconds": 30,
+      "max_retries": 2,
+      "max_concurrency": 5,
+      "api_keys": {
+        "openai": "env:YTSUB_API_KEY"
+      },
+      "enabled": true
+    },
+    "subtitle_translate_fast": {
+      "provider": "google_translate",
+      "model": "google_translate_free",
+      "timeout_seconds": 10,
+      "max_retries": 1,
+      "max_concurrency": 10,
+      "api_keys": {},
+      "enabled": true
+    },
+    "subtitle_translate_local": {
+      "provider": "openai",
+      "model": "qwen2.5:7b",
+      "base_url": "http://localhost:11434/v1",
+      "timeout_seconds": 60,
+      "max_retries": 2,
+      "max_concurrency": 3,
+      "api_keys": {
+        "openai": "ollama"
+      },
+      "enabled": true
+    },
+    "subtitle_summarize_default": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "base_url": null,
+      "timeout_seconds": 60,
+      "max_retries": 2,
+      "max_concurrency": 3,
+      "api_keys": {
+        "openai": "env:YTSUB_API_KEY"
+      },
+      "enabled": true
+    },
+    "subtitle_summarize_quality": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "base_url": null,
+      "timeout_seconds": 120,
+      "max_retries": 3,
+      "max_concurrency": 2,
+      "api_keys": {
+        "openai": "env:YTSUB_API_KEY"
+      },
+      "enabled": true
+    },
+    "subtitle_summarize_local": {
+      "provider": "openai",
+      "model": "llama3.2:3b",
+      "base_url": "http://localhost:11434/v1",
+      "timeout_seconds": 120,
+      "max_retries": 2,
+      "max_concurrency": 2,
+      "api_keys": {
+        "openai": "ollama"
+      },
+      "enabled": true
+    }
+  },
+  "task_mapping": {
+    "subtitle_translate": "subtitle_translate_default",
+    "subtitle_summarize": "subtitle_summarize_default"
+  }
+}
+

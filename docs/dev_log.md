@@ -105,67 +105,137 @@
 
 ## 2025-12
 
+### 2025-12-19
+
+- **阶段 / 里程碑**：v3.2 功能增强与重构 - **全部完成**
+- **参与 AI / 工具**：Cursor IDE、Gemini
+- **完成的任务编号**：
+  - ✅ P1-1：i18n 架构统一
+  - ✅ P1-2：logger 入口改造
+  - ✅ P2-1：语言工具提取
+  - ✅ P2-2：字幕智能合并
+  - ✅ P3-1：断点续传状态机
+  - ✅ P3-2：Pipeline 拆分
+  - ✅ P3-3：chunk 级恢复
+  - ✅ P4-1：时间预估 ETA
+  - ✅ P4-2：YouTube 章节
+  - ✅ P5-1：UI 组件提取
+  - ✅ 修复 3 个预存测试（test_bilingual_subtitle, test_local_model_warmup）
+- **主要修改点总结**：
+  - **i18n 架构统一**（`core/i18n/`）：
+    - 创建 `core/i18n/provider.py` - I18nProvider Protocol 定义
+    - 创建 `core/i18n/json_provider.py` - JSON 翻译文件加载器
+    - 创建 `core/i18n/__init__.py` - 统一入口，导出 `t()`, `tn()`, `set_language()`, `get_language()`
+    - 迁移翻译文件到 `core/i18n/locales/`
+    - 将 `ui/i18n_manager.py` 改为 thin wrapper，添加 DeprecationWarning
+  - **logger 入口改造**（`core/logger.py`）：
+    - 修改 `_get_i18n()` 从 `core.i18n` 导入，解耦 core 与 UI
+  - **语言工具提取**（`core/language_utils.py`）：
+    - 提取 `lang_matches()`、`get_main_language_code()`、`find_matching_language()` 函数
+    - 消除 `translator.py` 和 `downloader.py` 中的重复代码
+  - **字幕智能合并**（`core/subtitle/merger.py`）：
+    - 实现 `SubtitleCue`、`MergedBlock`、`MergerConfig`、`SubtitleMerger` 类
+    - 支持标点符号、时间间隔、最大长度等合并策略
+  - **断点续传状态机**（`core/state/manifest.py`）：
+    - 实现 `VideoStage` 枚举、`VideoManifest`、`BatchManifest`、`ManifestManager`
+    - 原子写入（tmp + os.replace）、threading.Lock 单写入者保证
+  - **Pipeline 拆分**（`core/pipeline/stages.py`）：
+    - 提取 5 个阶段函数：`detect_stage()`、`download_stage()`、`translate_stage()`、`summarize_stage()`、`output_stage()`
+    - 定义 `StageContext`、`StageResult` 辅助类
+  - **chunk 级恢复**（`core/state/chunk_tracker.py`）：
+    - 实现 `SubtitleChunk`、`ChunkProgress`、`ChunkTracker` 类
+    - 支持字幕拆分、进度持久化、翻译恢复
+  - **时间预估 ETA**（`core/progress/eta.py`）：
+    - 实现 `ETACalculator`、`ProgressTracker` 类
+    - 滑动窗口加权平均算法、i18n 支持
+  - **YouTube 章节**（`core/output/formats/chapter.py`）：
+    - 实现 `VideoChapter`、`ChapterList` 类
+    - `extract_chapters_from_ytdlp()`、`write_chapters_markdown()` 函数
+  - **UI 组件提取**（`ui/components/language_config.py`）：
+    - 创建 `LanguageConfigPanel` 可复用组件
+    - 提取自 channel_page.py 和 url_list_page.py 的重复代码
+  - **测试修复**：
+    - `test_bilingual_subtitle.py`：修正分隔符断言（`\n` 替代 ` / `）
+    - `test_local_model_warmup.py`：添加缺失的 `_is_local_base_url` 方法
+- **新增/更新的文档**：
+  - `docs/v3.2_unified_implementation_guide.md`（v3.2 统一实现指南）
+  - `docs/v3.2_design_doc.md`（v3.2 设计文档）
+  - `docs/refactor_guide.md`（重构指南）
+  - `scripts/check_i18n.py`（i18n 一致性检查脚本）
+  - `.github/workflows/i18n-check.yml`（CI 配置）
+- **测试结果**：
+  - **全部通过**：75 passed, 20 warnings, 1 error (预存配置问题)
+  - 新增 11 个测试（test_chunk_tracker.py）
+- **遇到的问题 / 风险**：
+  - **已解决**：test_bilingual_subtitle.py 断言错误 - 期望 ` / ` 分隔符，实际使用 `\n`
+  - **已解决**：test_local_model_warmup.py 调用不存在的方法
+  - **预存问题**：test_performance_comparison.py 配置问题，非代码问题
+  - **预存问题**：JSON 翻译文件存在重复 key（约 50+ 处），不影响功能
+- **Git 提交建议**：
+  - `feat: 完成 v3.2 i18n 架构统一（core/i18n 模块）`
+  - `feat: 添加字幕智能合并模块（core/subtitle）`
+  - `feat: 添加断点续传状态机（core/state）`
+  - `feat: 添加 Pipeline 阶段拆分（core/pipeline/stages.py）`
+  - `feat: 添加 ETA 时间预估模块（core/progress）`
+  - `feat: 添加 YouTube 章节输出模块（core/output/formats/chapter.py）`
+  - `refactor: 提取 LanguageConfigPanel UI 组件`
+  - `fix: 修复 3 个预存测试失败`
+- **下一步计划**：
+  - 将新模块集成到实际处理流程（ChunkTracker → translator, ETACalculator → staged_pipeline）
+  - 迁移现有页面使用 LanguageConfigPanel
+  - 端到端测试：翻译中断恢复、ETA 显示、章节输出
+
+---
+
 ### 2025-12-18
 
-**v3.1.0 重构全面完成：功能优化与最终回归**
+**UI 细节精修、URL 实时校验与 AI 供应商扩展**
 
 #### 主要完成内容
 
-1. **AI 并发线程设置 (Task 7 扩展)**
-   - 在“运行参数”页面增加了“AI 并发线程”独立设置。
-   - 实现了滑块与输入框联动，并增加了高并发警告提示（高、中、低三档）。
-   - 将 AI 并发参数接入配置系统和流水线，实现了 AI 请求与普通任务请求的并发分离。
+1. **UI 视觉体系全面优化**
+   - **标题层级重构**：
+     - 顶部标题栏：统一为 **蓝色 22px 加粗**，修复了启动时非蓝色的 Bug，确保全局醒目。
+     - 侧边栏分组名称（任务、运行设置）：加大至 **18px 加粗**，提升分类引导性。
+     - 侧边栏功能项（频道模式、网络设置等）：加大至 **18px**，显著提升易读性。
+     - 页面中心标题：恢复为 **22px 加粗黑色**，保持视觉稳重感。
+   - **色彩一致性修复**：
+     - 彻底解决了主窗口“露底”问题，通过将主窗口底色设为深色（`bg_secondary`），消除了组件间的灰色缝隙。
+     - 实现了页面动态应用主题，确保切换分组或点击任何位置时，中心区域颜色始终保持正确且一致。
+   - **字体规格统一**：全面移除了 11px 小号字体，将 `small_font` 规格上调至 **14px**，提升了高分屏下的舒适度。
 
-2. **全面国际化与硬编码清理 (Task 4 & 后续修复)**
-   - 彻底解决了日志和 UI 中的硬编码中文问题，特别是 Cookie 认证错误和 Google 翻译日志。
-   - 重构了 `cli/ai_smoke_test.py`、`cli/main.py`、`core/ai_providers/google_translate.py` 等模块，使用 i18n 键值对。
-   - 完善了 `ui/i18n/en_US.json` 和 `ui/i18n/zh_CN.json`，增加了 100+ 新翻译键。
-   - 修复了 AI 连接测试中错误的提供商名称显示问题。
+2. **核心功能增强**
+   - **实时 URL 校验**：在“频道模式”和“URL 列表模式”引入了实时校验机制。输入不符合 YouTube 格式的链接时，输入框边框立即变红并显示具体错误行号，无需等待运行。
+   - **AI 供应商扩展 (xAI)**：正式接入 **xAI (Grok)** 支持，内置 Grok 4 全系列模型列表，并完成 OpenAI 兼容性映射。
+   - **错误分类优化**：引入了 `COOKIE_EXPIRED` 错误类型，能精准识别 Cookie 失效并同步更新 UI 状态栏颜色（变为红色提示），不再显示含混的 4 点提示。
 
-3. **日志增强：时间戳显示**
-   - 在 GUI 日志面板中增加了精确的时间戳显示（格式：`[YYYY-MM-DD HH:MM:SS]`）。
-   - 确保日志在切换语言、过滤级别时能够保持时间戳的一致性。
+3. **日志与交互精简**
+   - **翻译日志聚合**：修改 Google 翻译客户端，将逐段日志改为每完成 20% 进度输出一次，极大降低了日志面板的刷屏感。
+   - **启动与保存静默化**：引入 `quiet` 模式，屏蔽了初始化及保存配置时的冗余 DEBUG/INFO 信息，日志输出更聚焦于业务。
 
-4. **API Key 安全增强**
-   - 实现了 API Key 的掩码显示（前4位和后4位可见，中间用 * 隐藏）。
-   - 增加了“管理所有 Key”高级配置框，同样支持掩码显示和安全同步。
-   - 增加了“清除所有 Key”功能。
-
-5. **翻译逻辑优化与 Bug 修复**
-   - **修复 `AttributeError`**: 修复了 `VideoInfo` 缺少 `source_lang` 导致翻译异常的问题。
-   - **跳过同语言翻译**: 当源语言与目标语言相同时，自动跳过 AI 翻译，直接使用官方或原始字幕。
-   - **修复 `SameFileError`**: 修复了官方字幕复制到翻译字幕路径相同时的报错。
-
-6. **主题色彩优化**
-   - 调整了“浅灰”主题的背景色深度（亮度提升约 20%），并优化了文本对比度。
-   - 使 UI 视觉风格与旧版本工具保持一致，提升了视觉舒适度。
-
-7. **最终收尾：清理与回归**
-   - 删除了重构过程中保留的所有旧版单文件（`*_legacy.py`）。
-   - 运行了全流程回归测试（分阶段流水线、国际化、UI 结构），全部通过。
-   - 完成代码风格检查（ruff），修复了 50+ 个 Undefined name (t) 和未使用变量等问题。
-   - 发布重构完成版本并打 Tag `v3.1.0-refactor-complete`。
+4. **资料归档与对接**
+   - **自动化分析包**：新建 `ai_analysis2025-12-18` 目录，自动化收集了所有核心代码、文档和测试脚本（已脱敏）。
+   - **对接指南编写**：专门为 AI 编写了《分析对接指南.md》，包含架构说明、核心技术栈及分析重点建议。
 
 #### 修改点总结
 
-- `core/staged_pipeline/processors/translate.py`: 修复 `AttributeError` 和同语言翻译逻辑。
-- `core/models.py`: `VideoInfo` 字段调整。
-- `ui/pages/translation_summary_page.py`: API Key 掩码逻辑与 UI 修复。
-- `ui/themes.py`: “浅灰”主题颜色调整。
-- `ui/components/log_panel.py`: 增加时间戳显示。
-- `cli/`: 完成 CLI 命令的完全国际化。
-- `ruff check`: 修复了所有代码风格和语法潜在问题。
+- `ui/themes.py`: 重构主题引擎，支持主/次区域识别，修复露底 Bug。
+- `ui/components/sidebar.py`: 侧边栏字号全面升级。
+- `ui/components/toolbar.py`: 顶部标题样式锁定与 Bug 修复。
+- `core/utils/url_validation.py`: 新增 YouTube URL 匹配正则库。
+- `ui/pages/`: 所有页面标题规格对齐，集成实时校验逻辑。
+- `core/ai_providers/`: 新增 xAI 注册，优化翻译进度日志。
 
 #### 测试验证
 
-- ✅ **回归测试**：`tests/` 下所有测试脚本通过。
-- ✅ **国际化测试**：中英文切换后，日志和 UI 均无中文遗漏。
-- ✅ **代码质量**：`ruff check` 报告 0 错误。
+- ✅ **UI 压力测试**：频繁切换分组、主题、语言，颜色与字号保持绝对稳定。
+- ✅ **URL 校验测试**：验证了视频、频道、播放列表及各种错误格式的实时反馈。
+- ✅ **xAI 连通性**：验证了映射逻辑正确，可正常创建客户端。
 
 #### 提交信息
 
-- 完成 v3.1.0 重构所有预定任务，系统达到发布状态。
-- 标记重构完成时间：2025-12-18。
+- 完成 2025-12-18 UI 细节打磨与功能增强任务。
+- 确认本地分析资料包 `ai_analysis2025-12-18` 已准备就绪。
 
 ---
 

@@ -106,6 +106,31 @@ class OpenAICompatibleClient:
                 LLMErrorType.UNKNOWN,
             )
 
+    def _is_local_base_url(self, base_url: Optional[str]) -> bool:
+        """检测是否为本地服务 URL
+
+        用于判断是否需要预热本地模型（如 Ollama）
+
+        Args:
+            base_url: API base URL
+
+        Returns:
+            是否为本地服务
+        """
+        if not base_url:
+            return False
+
+        # 本地地址模式
+        local_patterns = [
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "[::1]",
+        ]
+
+        base_url_lower = base_url.lower()
+        return any(pattern in base_url_lower for pattern in local_patterns)
+
     def generate(
         self,
         prompt: str,

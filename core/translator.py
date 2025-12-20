@@ -19,6 +19,7 @@ from core.exceptions import (
     map_llm_error_to_app_error,
     TaskCancelledError,
 )
+from core.language_utils import lang_matches
 
 logger = get_logger()
 
@@ -310,22 +311,25 @@ class SubtitleTranslator:
             源字幕文件路径，如果不存在则返回 None
         """
         # 定义常见语言列表（按优先级排序，用于在检测结果中优先选择）
+        # 优先级考虑：翻译质量 + 世界使用人数
         COMMON_LANGUAGES = [
-            "en",
+            "en",       # 英语 - 使用最广泛，翻译资源最丰富
             "en-US",
-            "de",
-            "de-DE",
-            "ja",
-            "ja-JP",
-            "es",
+            "zh-CN",    # 简体中文 - 使用人数第二
+            "zh-TW",    # 繁体中文 - 港澳台用户
+            "es",       # 西班牙语 - 世界第三大语言
             "es-ES",
-            "fr",
+            "de",       # 德语 - 技术内容丰富
+            "de-DE",
+            "ja",       # 日语
+            "ja-JP",
+            "fr",       # 法语
             "fr-FR",
-            "pt",
+            "pt",       # 葡萄牙语
             "pt-PT",
-            "ru",
+            "ru",       # 俄语
             "ru-RU",
-            "ko",
+            "ko",       # 韩语
             "ko-KR",
         ]
 
@@ -334,32 +338,8 @@ class SubtitleTranslator:
             detection_result.video_id if hasattr(detection_result, "video_id") else None
         )
 
-        # 辅助函数：检查语言代码是否匹配（处理 en vs en-US 的情况）
-        def lang_matches(lang1: str, lang2: str) -> bool:
-            """检查两个语言代码是否匹配（考虑主语言代码）
 
-            特殊处理：
-            - zh-CN 和 zh-TW 不互相匹配（需要精确匹配）
-            - 其他语言使用主语言代码匹配（如 en-US 匹配 en）
-            """
-            if lang1 == lang2:
-                return True
-
-            # 特殊处理：zh-CN 和 zh-TW 不互相匹配
-            lang1_lower = lang1.lower()
-            lang2_lower = lang2.lower()
-            if (
-                lang1_lower in ["zh-cn", "zh_cn"] and lang2_lower in ["zh-tw", "zh_tw"]
-            ) or (
-                lang1_lower in ["zh-tw", "zh_tw"] and lang2_lower in ["zh-cn", "zh_cn"]
-            ):
-                return False
-
-            # 其他语言：提取主语言代码进行匹配
-            main1 = lang1.split("-")[0].split("_")[0].lower()
-            main2 = lang2.split("-")[0].split("_")[0].lower()
-            return main1 == main2
-
+        # lang_matches() 已从 core.language_utils 导入
         # 辅助函数：在检测结果中查找匹配的语言
         def find_matching_lang_in_detection(common_lang: str) -> Optional[str]:
             """在检测结果中查找与常见语言匹配的语言代码"""

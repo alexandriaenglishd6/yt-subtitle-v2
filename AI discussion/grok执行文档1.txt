@@ -1,0 +1,176 @@
+是的，**你想得非常对**。
+
+《v3.2 功能增强设计文档（最终版）》已经是一份非常高质量的**高层设计文档**（High-Level Design），它明确了“做什么、为什么做、怎么顺序做”。但要真正落地执行、避免跑偏、保证最终效果达到预期，还需要一份配套的**落地执行与施工规范文档**（Implementation Guide / Coding Convention）。
+
+这份文档的作用类似于建筑工程中的“施工图纸 + 施工规范 + 质量验收标准”，它把高层设计翻译成**开发者每天能直接对照的规则和模板**，防止在编码过程中因个人习惯不同而偏离目标。
+
+下面我为你起草一份**配套的《v3.2 落地执行与施工规范》**，直接可以和你的最终版设计文档一起放进仓库 `/docs/` 目录。
+
+---
+
+# YouTube 字幕工具 v3.2 落地执行与施工规范
+
+**版本**：v1.0  
+**日期**：2025-12-19  
+**适用范围**：所有 v3.2 新增/修改代码  
+**目的**：确保代码风格统一、避免跑偏、保证可维护性与预期效果
+
+---
+
+## 一、总体原则（必须遵守）
+
+1. **新代码零硬编码**：所有用户可见字符串（UI、日志、错误提示、输出文件内容）**必须**通过 `core.i18n.t()` 或 `ngettext()`
+2. **不臃肿**：新增代码只解决当前 Phase 目标，不提前实现“可能有用”的功能
+3. **最小必要重构**：只改动与当前目标直接相关的代码，不进行“大手术”
+4. **向后兼容**：不破坏现有功能，所有变更需通过现有测试或手动验证
+5. **日志双层规范**：稳定 event_code（英文） + 本地化 message
+
+---
+
+## 二、i18n 使用规范（Phase 1 核心）
+
+### 2.1 必须使用的导入方式
+```python
+from core.i18n import t, ngettext, set_language
+```
+
+### 2.2 字符串分类与 key 命名规范
+| 类别 | key 前缀 | 示例 |
+|------|----------|------|
+| 日志 | log. | "log.download.started" |
+| UI 文案 | ui. | "ui.button.start" |
+| 错误提示 | error. | "error.network.timeout" |
+| 字幕处理 | subtitle. | "subtitle.merge.block_too_long" |
+| 断点状态 | state. | "state.resume.from_chunk" |
+| 输出模板 | output. | "output.markdown.summary_title" |
+
+### 2.3 禁止行为
+- 直接写中文/英文字符串（即使是临时调试）
+- 字符串拼接后再翻译（如 `t("error." + code)`）
+- 在非用户可见处（如内部变量名）滥用 t()
+
+### 2.4 复数处理（提前为 10+ 语言铺路）
+```python
+ngettext("process.one_video", "process.multiple_videos", count, count=count)
+```
+
+---
+
+## 三、字幕智能合并实现规范（Phase 2）
+
+### 3.1 必须保留原始 cue
+```python
+class MergedBlock:
+    text: str
+    start_time: float  # 第一个原始 cue 的 start
+    end_time: float    # 最后一个原始 cue 的 end
+    original_cues: list[Cue]  # 用于最终输出追溯
+```
+
+### 3.2 合并规则（MVP 参数，可配置）
+- 标点断句优先（。！？.?！）
+- 时间间隔 > 1.2 秒 强制断句
+- 单块最大 1200 字符（约 800-1000 token 安全区）
+- 可选 overlap：1 句或 100 字
+
+### 3.3 输出时间轴规则（最终共识）
+- 使用块起止时间范围（不做字符比例拆回）
+- 双语 SRT 输出时，保留原始 cue 时间轴（用于视频同步）
+
+---
+
+## 四、断点续传实现规范（Phase 3）
+
+### 4.1 manifest 文件位置与命名
+```
+output_dir/
+  {video_id}/
+    manifest.json
+    subtitle.srt
+    translation.json.tmp  → 最终 os.replace
+```
+
+### 4.2 状态机设计（单一真相来源）
+```python
+class VideoStage(Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    FAILED = "failed"
+
+stages = {
+    "download": VideoStage.DONE,
+    "translate": {"status": VideoStage.DONE, "completed_chunks": [0,1,2]},
+    # ...
+}
+```
+
+### 4.3 原子写入规范
+```python
+tmp_path = Path("file.json.tmp")
+final_path = Path("file.json")
+tmp_path.write_text(data)
+os.replace(tmp_path, final_path)  # 跨平台原子操作
+```
+
+---
+
+## 五、高并发与稳定性规范（横切）
+
+### 5.1 重试策略（统一实现）
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential_jitter
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential_jitter(multiplier=1, max=30, jitter=2),
+    retry=retry_if_exception_type((NetworkError, RateLimitError)),
+    reraise=True
+)
+def api_call(...):
+    ...
+```
+
+### 5.2 日志双层规范示例
+```python
+logger.info(
+    event_code="DOWNLOAD_START",
+    extra={"video_id": vid},
+    msg=t("log.download.started", video_id=vid)
+)
+```
+
+---
+
+## 六、代码风格与质量要求
+
+1. **函数长度**：原则上 ≤ 100 行，超长必须拆分或加注释说明
+2. **类型注解**：所有新函数必须完整类型注解
+3. **文档字符串**：每个公共函数/类必须有 docstring
+4. **测试要求**：
+   - 新模块覆盖率 ≥ 80%
+   - 关键路径（如 merger、manifest）必须有单元测试
+5. **提交规范**：
+   - Commit 消息前缀：`[i18n]`, `[subtitle]`, `[state]`, `[progress]`
+   - 每次提交对应一个最小可验证功能
+
+---
+
+## 七、验证与验收标准（避免跑偏）
+
+| Phase | 验收标准 |
+|-------|----------|
+| Phase 1 | 所有新日志通过 `t()` 输出；CLI 模式日志完整本地化；无硬编码字符串 |
+| Phase 2 | 长视频翻译后可读性显著提升（手动对比 3 个样本）；块时间轴合理 |
+| Phase 3 | 中断后 `--resume` 能从失败点继续；无半截文件 |
+| Phase 4 | ETA 误差 ≤ 30%；chapters 存在时正确输出 |
+
+---
+
+**建议**：把这份《落地执行与施工规范》作为仓库 `/docs/v3.2-implementation-guide.md`，并在开发过程中随时对照检查。
+
+如果你同意这个规范，我可以：
+- 提供 Phase 1 的具体代码模板（core/i18n 完整实现 + logger 迁移示例）
+- 给出 tenacity 重试装饰器的完整封装
+
+准备好开始 Phase 1 施工了吗？

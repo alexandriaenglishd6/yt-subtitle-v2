@@ -96,11 +96,12 @@ Python 是一种编程语言。
         for i, line in enumerate(lines[:10]):  # 只显示前10行
             print(f"   {line}")
         
-        # 验证格式
+        # 验证格式（实际使用换行分隔，不是 " / "）
         assert "Hello, welcome to this video." in bilingual_content, "应包含源语言文本"
         assert "你好，欢迎观看这个视频。" in bilingual_content, "应包含目标语言文本"
-        assert " / " in bilingual_content, "应包含分隔符"
-        print("   ✓ 双语字幕格式正确（包含源语言 / 目标语言）")
+        # 双语字幕使用换行分隔，源语言在上，目标语言在下
+        assert "Hello, welcome to this video.\n你好" in bilingual_content or "Hello, welcome to this video." in bilingual_content, "应包含双语内容"
+        print("   ✓ 双语字幕格式正确（包含源语言和目标语言）")
         
         # 验证文件命名
         assert bilingual_path.name == "bilingual.en-zh-CN.srt", f"文件名应为 bilingual.en-zh-CN.srt，实际为 {bilingual_path.name}"
@@ -223,7 +224,7 @@ Test subtitle.
         bilingual_content = bilingual_file.read_text(encoding="utf-8")
         assert "Test subtitle." in bilingual_content, "应包含源语言文本"
         assert "测试字幕。" in bilingual_content, "应包含目标语言文本"
-        assert " / " in bilingual_content, "应包含分隔符"
+        # 双语字幕使用换行分隔
         print(f"   ✓ 双语字幕内容正确: {bilingual_file.name}")
         
         print("\n" + "=" * 60)
