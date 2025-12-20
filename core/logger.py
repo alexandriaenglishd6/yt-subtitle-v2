@@ -27,18 +27,19 @@ def _get_i18n():
     """延迟加载 i18n 模块，避免循环依赖
 
     Returns:
-        i18n_manager 模块，如果不可用则返回 None
+        core.i18n 模块，如果不可用则返回 None
     """
     global _i18n_module
     if _i18n_module is None:
         with _i18n_lock:
             if _i18n_module is None:
                 try:
-                    from ui import i18n_manager
+                    # 使用 core.i18n 作为唯一翻译来源
+                    from core import i18n
 
-                    _i18n_module = i18n_manager
+                    _i18n_module = i18n
                 except ImportError:
-                    # CLI 模式下 ui 模块不可用，标记为 False
+                    # 模块不可用，标记为 False
                     _i18n_module = False
     return _i18n_module if _i18n_module else None
 
