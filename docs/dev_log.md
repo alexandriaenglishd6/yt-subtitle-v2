@@ -105,6 +105,66 @@
 
 ## 2025-12
 
+### 2025-12-20
+
+- **阶段 / 里程碑**：DoD 验证与工程质量补齐
+- **参与 AI / 工具**：Cursor IDE、Gemini
+- **完成的任务编号**：
+  - ✅ CI 门禁升级：从 draft 改为正式阻断检查
+  - ✅ tn() 复数接口测试：10/10 通过
+  - ✅ 断点恢复端到端测试：6/6 通过
+  - ✅ manifest 并发写入压测：4/4 通过
+  - ✅ 修复 Windows 并发写入冲突问题
+  - ✅ GitHub Required Status Check 配置
+- **主要修改点总结**：
+  - **CI 门禁升级**（`.github/workflows/i18n-check.yml`）：
+    - 移除 draft 标记，启用硬编码中文检测
+    - 添加 branches 触发器（main, develop）
+    - 完善输出格式和 Summary 步骤
+  - **tn() 复数测试**（`tests/test_plural_i18n.py`）：
+    - 新增 10 个测试用例
+    - 覆盖英文单复数、中文不报错、占位符替换、边界情况
+  - **断点恢复测试**（`scripts/test_checkpoint_resume.py`）：
+    - 测试 Manifest 状态机推进
+    - 测试 kill 后持久化恢复
+    - 测试 ChunkTracker 分块恢复
+    - 测试原子写入无遗留 tmp 文件
+    - 测试可恢复状态检测
+  - **并发压测**（`scripts/test_manifest_concurrent.py`）：
+    - 10/20 workers 并发更新 50/100 视频
+    - 并发 chunk 更新测试
+    - 状态回退保护测试
+  - **Windows 并发写入修复**（`core/state/manifest.py`, `core/state/chunk_tracker.py`）：
+    - `_atomic_write()` 添加重试机制（5 次）
+    - 使用唯一 tmp 文件名（UUID 前缀）避免冲突
+    - 指数退避（0.01s → 0.32s）
+    - 同时检查 `winerror` (5, 32) 和 `errno` (13)
+    - `load_batch()` 添加读取重试机制
+- **新增/更新的文档**：
+  - `scripts/test_checkpoint_resume.py`（断点恢复端到端测试）
+  - `scripts/test_manifest_concurrent.py`（并发压测脚本）
+  - `tests/test_plural_i18n.py`（tn() 复数测试）
+- **测试结果**：
+  - **全部通过**：85 passed, 20 warnings, 1 error (预存配置问题)
+  - 新增 10 个测试（test_plural_i18n.py）
+- **遇到的问题 / 风险**：
+  - **已解决**：Windows 并发写入 `WinError 32` 和 `PermissionError [Errno 13]`
+  - **已解决**：`os.replace` 在文件被占用时失败，通过重试机制解决
+  - **已解决**：多 manager 实例并发读写时的状态覆盖问题
+- **Git 提交记录**：
+  - `feat: 完成 i18n 架构统一 (core/i18n 模块)`
+  - `feat: 添加断点续传状态机，修复 Windows 并发写入问题`
+  - `feat: 添加 Pipeline 阶段拆分和 ETA 时间预估`
+  - `feat: 添加字幕智能合并和 YouTube 章节输出`
+  - `refactor: 提取 LanguageConfigPanel UI 组件`
+  - `feat: 添加 CI 门禁和 DoD 验证测试脚本`
+  - `chore: 更新文档和修复预存测试`
+- **下一步计划**：
+  - 将新模块集成到实际处理流程
+  - 迁移现有页面使用 LanguageConfigPanel
+
+---
+
 ### 2025-12-19
 
 - **阶段 / 里程碑**：v3.2 功能增强与重构 - **全部完成**
