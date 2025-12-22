@@ -7,7 +7,7 @@ import customtkinter as ctk
 from tkinter import filedialog
 from typing import Callable, Optional
 from pathlib import Path
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import title_font, body_font
 
 
@@ -265,7 +265,7 @@ class RunParamsPage(ctk.CTkFrame):
 
     def _update_concurrency_warning(self, concurrency: int):
         """更新并发数警告提示"""
-        from ui.i18n_manager import t
+        from core.i18n import t
 
         if concurrency > 30:
             self.concurrency_warning.configure(

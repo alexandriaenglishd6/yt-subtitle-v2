@@ -9,6 +9,7 @@ from core.logger import get_logger, set_log_context, clear_log_context, translat
 from core.exceptions import ErrorType, AppException, TaskCancelledError
 from core.cancel_token import CancelToken
 from core.detector import SubtitleDetector
+from core.i18n import t
 from ..data_types import StageData
 
 logger = get_logger()
@@ -88,8 +89,6 @@ class DetectProcessor:
             if not self.force and self.archive_path:
                 if self.incremental_manager.is_processed(vid, self.archive_path):
                     data.is_processed = True
-                    from ui.i18n_manager import t
-
                     data.skip_reason = t(
                         "log.video_already_processed_skip", video_id=vid
                     )

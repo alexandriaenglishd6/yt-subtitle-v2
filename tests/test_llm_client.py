@@ -3,6 +3,7 @@ LLM 客户端测试示例
 演示如何使用符合 ai_design.md 规范的 LLM 调用
 """
 import sys
+import pytest
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
@@ -77,8 +78,8 @@ This is a test
         print("翻译结果：")
         print(result.text)
         print()
-        
-        return True
+        # 验证结果
+        assert result.text, "翻译结果不应为空"
         
     except LLMException as e:
         print(f"✗ LLM 调用失败: {e}")
@@ -89,12 +90,10 @@ This is a test
             print("提示: 请检查网络连接")
         elif e.error_type == LLMErrorType.RATE_LIMIT:
             print("提示: 遇到频率限制，请稍后重试")
-        return False
+        pytest.skip(f"LLM 调用失败: {e}")
     except Exception as e:
         print(f"✗ 未知错误: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        pytest.fail(f"未知错误: {e}")
 
 
 def test_llm_summary():
@@ -149,18 +148,16 @@ def test_llm_summary():
         print("摘要结果：")
         print(result.text)
         print()
-        
-        return True
+        # 验证结果
+        assert result.text, "摘要结果不应为空"
         
     except LLMException as e:
         print(f"✗ LLM 调用失败: {e}")
         print(f"错误类型: {e.error_type}")
-        return False
+        pytest.skip(f"LLM 调用失败: {e}")
     except Exception as e:
         print(f"✗ 未知错误: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        pytest.fail(f"未知错误: {e}")
 
 
 if __name__ == "__main__":

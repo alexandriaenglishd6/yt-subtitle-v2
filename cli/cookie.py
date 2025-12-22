@@ -16,7 +16,7 @@ def test_cookie_command(args):
         退出码（0 表示成功）
     """
     logger = get_logger()
-    from ui.i18n_manager import t
+    from core.i18n import t
 
     try:
         from config.manager import ConfigManager

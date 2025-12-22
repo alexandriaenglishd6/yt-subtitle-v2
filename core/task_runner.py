@@ -28,19 +28,19 @@ class TaskRunner:
         """
         # 验证并发数
         if concurrency <= 0:
-            logger.warning(f"并发数无效（{concurrency}），重置为 1")
+            logger.warning_i18n("task_runner_concurrency_invalid", value=concurrency)
             concurrency = 1
 
         self.concurrency = concurrency
 
         # 对过高并发数做警告（但不阻止）
         if concurrency > 10:
-            logger.warning(
-                f"并发数设置较高（{concurrency}），可能导致 IP 封锁或 429 错误，请谨慎使用"
+            logger.warning_i18n(
+                "task_runner_concurrency_high", value=concurrency
             )
         elif concurrency > 5:
-            logger.info(
-                f"并发数设置为 {concurrency}，建议监控网络请求频率，避免触发限流"
+            logger.info_i18n(
+                "task_runner_concurrency_monitor", value=concurrency
             )
 
         self._executor: Optional[ThreadPoolExecutor] = None
@@ -76,7 +76,7 @@ class TaskRunner:
             }
         """
         if not tasks:
-            logger.warning("任务列表为空")
+            logger.warning_i18n("task_runner_empty_list")
             return {"total": 0, "success": 0, "failed": 0, "results": [], "errors": []}
 
         self._total_count = len(tasks)
@@ -87,15 +87,15 @@ class TaskRunner:
 
         # 如果没有提供任务名称，使用索引
         if task_names is None:
-            task_names = [f"任务-{i + 1}" for i in range(len(tasks))]
+            task_names = [f"Task-{i + 1}" for i in range(len(tasks))]
         elif len(task_names) != len(tasks):
-            logger.warning(
-                f"任务名称数量（{len(task_names)}）与任务数量（{len(tasks)}）不匹配，使用默认名称"
+            logger.warning_i18n(
+                "task_runner_name_count_mismatch", name_count=len(task_names), task_count=len(tasks)
             )
-            task_names = [f"任务-{i + 1}" for i in range(len(tasks))]
+            task_names = [f"Task-{i + 1}" for i in range(len(tasks))]
 
-        logger.info(
-            f"开始并发执行 {self._total_count} 个任务，并发数: {self.concurrency}"
+        logger.info_i18n(
+            "task_runner_start", total=self._total_count, concurrency=self.concurrency
         )
 
         # 创建线程池
@@ -133,7 +133,7 @@ class TaskRunner:
                                     running_list,
                                 )
                             except Exception as e:
-                                logger.warning(f"进度回调执行失败: {e}")
+                                logger.warning_i18n("task_runner_progress_callback_error", error=str(e))
                 except Exception as e:
                     # 提取错误类型（如果是 AppException）
                     error_type = "unknown"
@@ -163,9 +163,9 @@ class TaskRunner:
                                     running_list,
                                 )
                             except Exception as e:
-                                logger.warning(f"进度回调执行失败: {e}")
+                                logger.warning_i18n("task_runner_progress_callback_error", error=str(e))
 
-                    logger.error(f"任务执行失败 [{task_name}]: {e}")
+                    logger.error_i18n("task_runner_task_failed", task_name=task_name, error=str(e))
                     import traceback
 
                     logger.debug(traceback.format_exc())
@@ -176,8 +176,8 @@ class TaskRunner:
             1 for r in self._results if r is not True
         )
 
-        logger.info(
-            f"任务执行完成: 总计 {self._total_count}, 成功 {success_count}, 失败 {failed_count}"
+        logger.info_i18n(
+            "task_runner_complete", total=self._total_count, success=success_count, failed=failed_count
         )
 
         return {
@@ -203,13 +203,13 @@ class TaskRunner:
         """
         try:
             logger.debug(
-                f"开始执行任务 [{task_name}] ({task_index + 1}/{self._total_count})"
+                f"Executing task [{task_name}] ({task_index + 1}/{self._total_count})"
             )
             result = task()
-            logger.debug(f"任务完成 [{task_name}]")
+            logger.debug(f"Task completed [{task_name}]")
             return result
         except Exception as e:
-            logger.error(f"任务执行异常 [{task_name}]: {e}")
+            logger.error_i18n("task_runner_task_exception", task_name=task_name, error=str(e))
             raise
 
     def get_progress(self) -> Dict[str, Any]:

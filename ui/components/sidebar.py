@@ -5,7 +5,7 @@
 
 import customtkinter as ctk
 from typing import Callable, Optional
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import heading_font, body_font
 
 
@@ -32,22 +32,10 @@ class Sidebar(ctk.CTkFrame):
         )
         self.task_label.pack(pady=(8, 4), anchor="w")
 
-        self.channel_mode_btn = ctk.CTkButton(
+        # 开始任务按钮（支持频道、视频、播放列表混合输入）
+        self.start_task_btn = ctk.CTkButton(
             sidebar_content,
-            text=t("channel_mode"),
-            command=lambda: self._switch_page("channel"),
-            anchor="w",
-            fg_color="transparent",
-            text_color=("gray10", "gray90"),
-            hover_color=("gray70", "gray30"),
-            font=heading_font(),  # 加大到 18px
-        )
-        self.channel_mode_btn.pack(fill="x", pady=2)
-
-        # URL 列表模式
-        self.url_list_mode_btn = ctk.CTkButton(
-            sidebar_content,
-            text=t("url_list_mode"),
+            text=t("start_task"),
             command=lambda: self._switch_page("url_list"),
             anchor="w",
             fg_color="transparent",
@@ -55,7 +43,7 @@ class Sidebar(ctk.CTkFrame):
             hover_color=("gray70", "gray30"),
             font=heading_font(),  # 加大到 18px
         )
-        self.url_list_mode_btn.pack(fill="x", pady=2)
+        self.start_task_btn.pack(fill="x", pady=2)
 
         # 运行设置分组（18px）
         self.settings_label = ctk.CTkLabel(
@@ -118,10 +106,8 @@ class Sidebar(ctk.CTkFrame):
         # 外观与语言和系统工具已暂时删除
 
         # 刷新按钮文本
-        if hasattr(self, "channel_mode_btn"):
-            self.channel_mode_btn.configure(text=t("channel_mode"))
-        if hasattr(self, "url_list_mode_btn"):
-            self.url_list_mode_btn.configure(text=t("url_list_mode"))
+        if hasattr(self, "start_task_btn"):
+            self.start_task_btn.configure(text=t("start_task"))
         if hasattr(self, "run_params_btn"):
             self.run_params_btn.configure(text=t("run_params"))
         if hasattr(self, "network_settings_btn"):

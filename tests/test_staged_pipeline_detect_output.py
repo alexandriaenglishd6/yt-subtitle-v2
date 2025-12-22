@@ -308,21 +308,8 @@ def test_detect_and_output():
                             print("\n⚠️  注意：测试失败是因为需要 Cookie 认证，但架构本身工作正常")
                             print("   建议：配置 Cookie 后重新运行测试，或使用不需要 Cookie 的测试视频")
         
-        return {
-            "success": success or auth_error,  # 如果是因为认证错误，也算架构正确
-            "stats": stats,
-            "output_dir": str(video_output_dir) if video_output_dir.exists() else None,
-            "auth_error": auth_error  # 标记是否为认证错误
-        }
-        
-    except Exception as e:
-        print(f"\n❌ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        # 断言测试结果
+        assert success or auth_error, f"测试失败: stats={stats}"
     
     finally:
         # 清理临时目录
@@ -381,19 +368,8 @@ def test_detect_only():
         else:
             print("⚠️  无字幕情况可能未正确处理")
         
-        return {
-            "success": True,  # 即使失败也是预期的
-            "stats": stats
-        }
-        
-    except Exception as e:
-        print(f"\n❌ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        # 断言测试结果
+        assert True, "无字幕情况已正确处理"
     
     finally:
         # 清理临时目录
@@ -495,28 +471,8 @@ def test_full_pipeline():
                             print("\n⚠️  注意：测试失败是因为需要 Cookie 认证，但架构本身工作正常")
                             print("   建议：配置 Cookie 后重新运行测试，或使用不需要 Cookie 的测试视频")
         
-        return {
-            "success": success or auth_error,
-            "stats": stats,
-            "output_dir": str(video_output_dir) if video_output_dir.exists() else None,
-            "auth_error": auth_error,
-            "stage_stats": {
-                "detect": detect_stats,
-                "download": download_stats,
-                "translate": translate_stats,
-                "summarize": summarize_stats,
-                "output": output_stats
-            }
-        }
-        
-    except Exception as e:
-        print(f"\n❌ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        # 断言测试结果
+        assert success or auth_error, f"测试失败: stats={stats}"
     
     finally:
         # 清理临时目录

@@ -8,7 +8,7 @@ from typing import Optional, Dict, List, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from core.logger import get_logger
-from ui.i18n_manager import t
+from core.i18n import t
 from core.exceptions import ErrorType, AppException, TaskCancelledError
 from core.cancel_token import CancelToken
 from core.failure_logger import FailureLogger
@@ -33,6 +33,7 @@ class StageQueue:
         failure_logger: Optional[FailureLogger] = None,  # 失败记录器
         cancel_token: Optional[CancelToken] = None,  # 取消令牌
         on_error: Optional[Callable[[StageData], None]] = None,  # 错误回调
+        on_complete: Optional[Callable[[StageData], None]] = None,  # 完成回调（用于最后阶段）
     ):
         """初始化阶段队列
 
@@ -45,6 +46,7 @@ class StageQueue:
             failure_logger: 失败记录器
             cancel_token: 取消令牌
             on_error: 错误回调
+            on_complete: 完成回调（最后阶段成功时调用）
         """
         self.stage_name = stage_name
         self.executor = executor
@@ -53,6 +55,7 @@ class StageQueue:
         self.failure_logger = failure_logger
         self.cancel_token = cancel_token
         self.on_error = on_error
+        self.on_complete = on_complete
         self.input_queue = queue.Queue(maxsize=max_queue_size)  # 限制队列大小
         self.running = False
         self.workers: List[threading.Thread] = []
@@ -112,7 +115,7 @@ class StageQueue:
         if not self.running:
             return
 
-        logger.info_i18n("stage_stop", stage=self.stage_name)
+        logger.debug(f"Stopping stage {self.stage_name}...")
         self.running = False
 
         # 向队列中放入停止信号
@@ -132,7 +135,7 @@ class StageQueue:
                 )
 
         self.workers.clear()
-        logger.info_i18n("stage_stopped", stage=self.stage_name)
+        logger.debug(f"Stage {self.stage_name} stopped")
 
     def _worker_loop(self):
         """Worker 线程主循环"""
@@ -140,9 +143,8 @@ class StageQueue:
             try:
                 # 检查取消状态
                 if self.cancel_token and self.cancel_token.is_cancelled():
-                    logger.info_i18n(
-                        "log.stage_worker_cancelled", stage=self.stage_name
-                    )
+                    # 使用 debug 级别避免日志过多
+                    logger.debug(f"Stage {self.stage_name} worker detected cancellation")
                     break
 
                 # 从队列中获取数据（带超时，以便定期检查取消状态）
@@ -172,6 +174,18 @@ class StageQueue:
                         and self.next_stage_queue
                     ):
                         self.next_stage_queue.enqueue(result)
+                    
+                    # 如果是最后阶段且成功完成，调用 on_complete 回调
+                    if (
+                        not result.error
+                        and not result.skip_reason
+                        and self.next_stage_queue is None
+                        and self.on_complete
+                    ):
+                        try:
+                            self.on_complete(result)
+                        except Exception as callback_error:
+                            logger.warning(f"on_complete callback failed: {callback_error}")
 
                     # 更新统计
                     with self._lock:

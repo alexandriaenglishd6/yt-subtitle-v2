@@ -3,8 +3,8 @@
 数据模型定义
 """
 
-from dataclasses import dataclass
-from typing import Optional, List
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any
 
 
 @dataclass
@@ -39,6 +39,7 @@ class DetectionResult:
     has_subtitles: bool  # 是否有字幕
     manual_languages: List[str]  # 人工字幕语言列表（如 ["en", "zh-CN"]）
     auto_languages: List[str]  # 自动字幕语言列表（如 ["en", "ja"]）
+    chapters: List[Dict[str, Any]] = field(default_factory=list)  # 视频章节列表
 
     def __str__(self) -> str:
         """字符串表示"""

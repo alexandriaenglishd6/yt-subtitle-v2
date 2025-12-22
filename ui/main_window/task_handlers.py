@@ -5,7 +5,7 @@
 
 from typing import Optional, TYPE_CHECKING
 
-from ui.i18n_manager import t
+from core.i18n import t
 from core.logger import get_logger
 
 if TYPE_CHECKING:
@@ -199,6 +199,63 @@ class TaskHandlersMixin:
         self.video_processor.stop_processing()
         self.log_panel.append_log("INFO", t("task_cancelling"))
 
+    def _on_resume_processing_urls(self):
+        """恢复任务按钮点击（URL 列表模式）
+        
+        读取最近的 BatchManifest，获取未完成的视频并继续处理
+        """
+        from pathlib import Path
+        from core.state.manifest import ManifestManager, VideoStage
+        
+        try:
+            # 获取 manifest 目录
+            output_dir = Path(self.app_config.output_dir or "out")
+            manifest_dir = output_dir / ".state"
+            
+            if not manifest_dir.exists():
+                self.log_panel.append_log("WARN", "没有可恢复的任务（.state 目录不存在）")
+                return
+            
+            # 初始化 ManifestManager 并获取最近的批次
+            manifest_manager = ManifestManager(manifest_dir)
+            batch_ids = manifest_manager.list_batches()
+            
+            if not batch_ids:
+                self.log_panel.append_log("WARN", "没有可恢复的任务")
+                return
+            
+            # 获取最近的批次（按时间排序）
+            latest_batch_id = sorted(batch_ids, reverse=True)[0]
+            batch_manifest = manifest_manager.load_batch(latest_batch_id)
+            
+            if not batch_manifest:
+                self.log_panel.append_log("ERROR", f"无法加载批次: {latest_batch_id}")
+                return
+            
+            # 获取可恢复的视频
+            resumable_videos = batch_manifest.get_resumable_videos()
+            
+            if not resumable_videos:
+                self.log_panel.append_log("INFO", t("all_videos_completed"))
+                return
+            
+            # 构建 URL 列表
+            urls = [v.url for v in resumable_videos]
+            urls_text = "\n".join(urls)
+            
+            self.log_panel.append_log(
+                "INFO", 
+                t("resume_task_found", count=len(resumable_videos), batch_id=latest_batch_id)
+            )
+            
+            # 使用现有的处理逻辑
+            self._on_start_processing_urls(urls_text, force=False)
+            
+        except Exception as e:
+            self.log_panel.append_log("ERROR", t("resume_task_failed", error=str(e)))
+            import traceback
+            traceback.print_exc()
+
     def _update_processing_buttons(self, is_processing: bool):
         """更新处理按钮状态
 
@@ -229,3 +286,51 @@ class TaskHandlersMixin:
                     btn.update_idletasks()
                 except Exception:
                     pass
+
+    def _check_resumable_tasks(self):
+        """检测可恢复任务并更新恢复按钮状态"""
+        from pathlib import Path
+        from ui.pages.url_list_page import UrlListPage
+        
+        try:
+            # 只在 UrlListPage 页面检测
+            if not isinstance(self.current_page, UrlListPage):
+                return
+            
+            # 获取 manifest 目录
+            output_dir = Path(self.app_config.output_dir or "out")
+            manifest_dir = output_dir / ".state"
+            
+            if not manifest_dir.exists():
+                self.current_page.set_resumable_state(False, 0)
+                return
+            
+            # 初始化 ManifestManager 并获取最近的批次
+            from core.state.manifest import ManifestManager
+            manifest_manager = ManifestManager(manifest_dir)
+            batch_ids = manifest_manager.list_batches()
+            
+            if not batch_ids:
+                self.current_page.set_resumable_state(False, 0)
+                return
+            
+            # 获取最近的批次
+            latest_batch_id = sorted(batch_ids, reverse=True)[0]
+            batch_manifest = manifest_manager.load_batch(latest_batch_id)
+            
+            if not batch_manifest:
+                self.current_page.set_resumable_state(False, 0)
+                return
+            
+            # 获取可恢复的视频数量
+            resumable_videos = batch_manifest.get_resumable_videos()
+            resumable_count = len(resumable_videos)
+            
+            # 更新按钮状态
+            self.current_page.set_resumable_state(resumable_count > 0, resumable_count)
+            
+        except Exception as e:
+            # 出错时禁用按钮
+            if hasattr(self, "current_page") and self.current_page:
+                if hasattr(self.current_page, "set_resumable_state"):
+                    self.current_page.set_resumable_state(False, 0)

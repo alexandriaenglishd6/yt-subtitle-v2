@@ -6,7 +6,7 @@
 import customtkinter as ctk
 from datetime import datetime
 from typing import Optional, List, Tuple
-from ui.i18n_manager import t
+from core.i18n import t, get_language
 from ui.fonts import body_font
 
 
@@ -28,6 +28,7 @@ class LogPanel(ctk.CTkFrame):
         self.stats = {"total": 0, "success": 0, "failed": 0}
         self.running_status = ""
         self.cookie_status = ""  # Cookie 状态（已翻译的文本）
+        self.proxy_manager = None  # 代理管理器引用（用于实时获取代理状态）
         # Cookie 状态的原始信息（用于语言切换时重新翻译）
         self._cookie_info = {"cookie": None, "region": None, "test_result": None}
         self._build_ui()
@@ -60,14 +61,23 @@ class LogPanel(ctk.CTkFrame):
         )
         self.stats_label.pack(side="left", padx=(8, 0))
 
-        # 增加独立 Cookie 状态标签以便变色
+        # 增加独立 Cookie 状态标签以便变色（只包含 Cookie 状态，红色不会影响后面的内容）
         self.cookie_status_label = ctk.CTkLabel(
             stats_frame,
             text="",
             font=body_font(),
             text_color=("gray50", "gray50"),
         )
-        self.cookie_status_label.pack(side="left", padx=(0, 8))
+        self.cookie_status_label.pack(side="left", padx=(0, 0))
+
+        # 独立的代理和预计时间标签（不受 Cookie 状态颜色影响）
+        self.proxy_eta_label = ctk.CTkLabel(
+            stats_frame,
+            text="",
+            font=body_font(),
+            text_color=("gray50", "gray50"),
+        )
+        self.proxy_eta_label.pack(side="left", padx=(0, 8))
 
         # 右侧：过滤控件
         filter_frame = ctk.CTkFrame(log_header, fg_color="transparent")
@@ -105,6 +115,17 @@ class LogPanel(ctk.CTkFrame):
         )
         self.auto_scroll_checkbox.select()  # 默认选中（启用自动滚动）
         self.auto_scroll_checkbox.pack(side="left", padx=8)
+
+        # 清空日志按钮
+        self.clear_log_btn = ctk.CTkButton(
+            filter_frame,
+            text=t("log_clear"),
+            width=60,
+            height=24,
+            command=self.clear,
+            font=body_font(),
+        )
+        self.clear_log_btn.pack(side="left", padx=4)
 
         # 日志文本框（只读）
         self.log_text = ctk.CTkTextbox(
@@ -162,27 +183,16 @@ class LogPanel(ctk.CTkFrame):
         if self.filter_level == "ALL":
             return True
 
-        level_upper = level.upper()
+        level_upper = level.upper().strip()
 
-        # 日志级别优先级：ERROR > WARN > INFO > DEBUG
+        # 只显示指定级别的日志
         if self.filter_level == "DEBUG":
-            # DEBUG级别显示所有日志
-            return level_upper in (
-                "DEBUG",
-                "INFO",
-                "WARN",
-                "WARNING",
-                "ERROR",
-                "CRITICAL",
-            )
+            return level_upper == "DEBUG"
         elif self.filter_level == "INFO":
-            # INFO级别显示INFO及以上
-            return level_upper in ("INFO", "WARN", "WARNING", "ERROR", "CRITICAL")
+            return level_upper == "INFO"
         elif self.filter_level == "WARN":
-            # WARN级别显示WARN及以上
-            return level_upper in ("WARN", "WARNING", "ERROR", "CRITICAL")
+            return level_upper in ("WARN", "WARNING")
         elif self.filter_level == "ERROR":
-            # ERROR级别只显示ERROR
             return level_upper in ("ERROR", "CRITICAL")
 
         return True
@@ -249,14 +259,38 @@ class LogPanel(ctk.CTkFrame):
         if status:
             self.running_status = status
         
-        stats_text, cookie_text, is_error = self._format_stats_v2()
-        if hasattr(self, "stats_label"):
-            self.stats_label.configure(text=stats_text)
-        if hasattr(self, "cookie_status_label"):
-            self.cookie_status_label.configure(
-                text=cookie_text,
-                text_color="red" if is_error else ("gray50", "gray50")
-            )
+        # 使用 after() 确保在主线程中更新 UI
+        # 注意：使用闭包捕获当前的 stats 值
+        captured_stats = dict(stats)  # 复制一份避免被后续调用覆盖
+        
+        def _do_update():
+            # 确保使用捕获的 stats 值（避免被后续调用覆盖）
+            self.stats = captured_stats
+            stats_text, cookie_text, proxy_eta_text, is_error = self._format_stats_v2()
+            if hasattr(self, "stats_label"):
+                self.stats_label.configure(text=stats_text)
+            if hasattr(self, "cookie_status_label"):
+                self.cookie_status_label.configure(
+                    text=cookie_text,
+                    text_color="red" if is_error else ("gray50", "gray50")
+                )
+            if hasattr(self, "proxy_eta_label"):
+                self.proxy_eta_label.configure(text=proxy_eta_text)
+            # 强制刷新 UI
+            try:
+                self.update_idletasks()
+            except Exception:
+                pass
+        
+        try:
+            self.after(0, _do_update)
+        except Exception:
+            # 如果 after() 失败（例如窗口已关闭），直接调用
+            _do_update()
+
+    def refresh_status_bar(self):
+        """刷新状态栏显示（用于代理测试后等需要刷新的场景）"""
+        self.update_stats(self.stats, self.running_status)
 
     def update_cookie_status(
         self,
@@ -282,7 +316,7 @@ class LogPanel(ctk.CTkFrame):
         if test_result is not None:
             self._cookie_info["test_result"] = test_result
             
-        stats_text, cookie_text, is_error = self._format_stats_v2()
+        stats_text, cookie_text, proxy_eta_text, is_error = self._format_stats_v2()
         if hasattr(self, "stats_label"):
             self.stats_label.configure(text=stats_text)
         if hasattr(self, "cookie_status_label"):
@@ -290,12 +324,14 @@ class LogPanel(ctk.CTkFrame):
                 text=cookie_text,
                 text_color="red" if is_error else ("gray50", "gray50")
             )
+        if hasattr(self, "proxy_eta_label"):
+            self.proxy_eta_label.configure(text=proxy_eta_text)
 
-    def _format_stats_v2(self) -> Tuple[str, str, bool]:
+    def _format_stats_v2(self) -> Tuple[str, str, str, bool]:
         """格式化统计信息文本 (V2)
         
         Returns:
-            Tuple[统计信息文本, Cookie状态文本, 是否为错误状态]
+            Tuple[统计信息文本, Cookie状态文本, 代理和预计时间文本, 是否为错误状态]
         """
         total = self.stats.get("total", 0)
         success = self.stats.get("success", 0)
@@ -306,24 +342,36 @@ class LogPanel(ctk.CTkFrame):
             if self.running_status.startswith("status_"):
                 status_display = t(self.running_status)
             else:
-                from ui.i18n_manager import get_language, load_translations
-                current_lang = get_language()
-                translations = load_translations(current_lang)
-                status_key = None
-                for key, value in translations.items():
-                    if key.startswith("status_") and value == self.running_status:
-                        status_key = key
-                        break
-                if status_key:
-                    status_display = t(status_key)
-                    self.running_status = status_key
-                else:
-                    status_display = self.running_status
+                # Status might be already translated or a key; just use it as is
+                status_display = self.running_status
         else:
             status_display = t("status_idle")
 
-        # 统计部分文本
-        stats_text = f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{t('stats_success')} {success} / {t('stats_failed')} {failed}   ••   {t('stats_status')}：{status_display}   ••   "
+        # ETA（预计时间）- 始终显示占位符
+        eta_seconds = self.stats.get("eta_seconds")
+        if eta_seconds is not None and eta_seconds > 0:
+            eta_minutes = int(eta_seconds / 60)
+            eta_secs = int(eta_seconds % 60)
+            eta_display = f"{eta_minutes}:{eta_secs:02d}"
+        else:
+            eta_display = "--:--"
+
+        # 代理状态（优先从 proxy_manager 直接获取，确保实时更新）
+        proxy_healthy = 0
+        proxy_unhealthy = 0
+        if self.proxy_manager and hasattr(self.proxy_manager, 'get_healthy_count'):
+            proxy_healthy = self.proxy_manager.get_healthy_count()
+            proxy_unhealthy = self.proxy_manager.get_unhealthy_count()
+        else:
+            # 回退到 stats 中的值
+            proxy_healthy = self.stats.get("proxy_healthy", 0)
+            proxy_unhealthy = self.stats.get("proxy_unhealthy", 0)
+        
+        proxy_total = proxy_healthy + proxy_unhealthy
+        if proxy_total > 0:
+            proxy_display = t("proxy_stats", healthy=proxy_healthy, unhealthy=proxy_unhealthy)
+        else:
+            proxy_display = t("proxy_not_configured")
 
         # Cookie 部分文本
         is_error = False
@@ -355,8 +403,16 @@ class LogPanel(ctk.CTkFrame):
             if t("cookie_status_test_failed") in cookie_display or t("cookie_status_expired") in cookie_display:
                 is_error = True
 
+        # 统计部分文本（新格式：计划 - 已处理 - 状态）
+        stats_text = f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{t('stats_success')} {success} / {t('stats_failed')} {failed}   ••   {t('stats_status')}：{status_display}   ••   "
+
+        # Cookie 状态（可能变红）
         cookie_text = f"{t('stats_cookie')}：{cookie_display}"
-        return stats_text, cookie_text, is_error
+        
+        # 代理和预计时间（不受 Cookie 颜色影响）
+        proxy_eta_text = f"   ••   {t('stats_proxy')}：{proxy_display}   ••   {t('stats_eta')}：{eta_display}"
+        
+        return stats_text, cookie_text, proxy_eta_text, is_error
 
     def refresh_language(self):
         """刷新语言相关文本"""
@@ -364,7 +420,7 @@ class LogPanel(ctk.CTkFrame):
             self.log_title.configure(text=t("log_output"))
         
         # 刷新状态栏
-        stats_text, cookie_text, is_error = self._format_stats_v2()
+        stats_text, cookie_text, proxy_eta_text, is_error = self._format_stats_v2()
         if hasattr(self, "stats_label"):
             self.stats_label.configure(text=stats_text)
         if hasattr(self, "cookie_status_label"):
@@ -372,6 +428,8 @@ class LogPanel(ctk.CTkFrame):
                 text=cookie_text,
                 text_color="red" if is_error else ("gray50", "gray50")
             )
+        if hasattr(self, "proxy_eta_label"):
+            self.proxy_eta_label.configure(text=proxy_eta_text)
         # 刷新过滤控件
         if hasattr(self, "filter_combo"):
             filter_values = [
@@ -403,6 +461,6 @@ class LogPanel(ctk.CTkFrame):
         # 刷新过滤标签
         if hasattr(self, "filter_label"):
             self.filter_label.configure(text=t("log_filter_label"))
-        # 重新添加初始日志消息（使用新语言）
-        self.clear()
-        self.append_log("INFO", t("gui_started"))
+        # 刷新清空按钮
+        if hasattr(self, "clear_log_btn"):
+            self.clear_log_btn.configure(text=t("log_clear"))

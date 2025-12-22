@@ -8,10 +8,9 @@ from pathlib import Path
 import subprocess
 import platform
 
-from ui.i18n_manager import t, set_language, get_language, load_translations
+from core.i18n import t, set_language, get_language, load_translations
 from ui.themes import get_theme, apply_theme_to_window
 from ui.app_events import EventType
-from ui.pages.channel_page import ChannelPage
 from ui.pages.url_list_page import UrlListPage
 from core.logger import get_logger
 from ui.business_logic import VideoProcessor
@@ -47,9 +46,22 @@ class EventHandlersMixin:
             update_fn(self.app_config)
             self.config_manager.save(self.app_config)
             if reinit_processor:
+                # 保留旧的 cancel_token（如果有正在运行的任务）
+                old_cancel_token = None
+                if hasattr(self, 'video_processor') and hasattr(self.video_processor, 'cancel_token'):
+                    old_cancel_token = self.video_processor.cancel_token
+                
                 self.video_processor = VideoProcessor(
                     self.config_manager, self.app_config, event_bus=self.event_bus, quiet=True
                 )
+                
+                # 恢复旧的 cancel_token（如果存在）
+                if old_cancel_token is not None:
+                    self.video_processor.cancel_token = old_cancel_token
+                
+                # 更新 log_panel 的 proxy_manager 引用
+                if hasattr(self, 'log_panel') and hasattr(self.video_processor, 'proxy_manager'):
+                    self.log_panel.proxy_manager = self.video_processor.proxy_manager
             self.log_panel.append_log("INFO", success_msg)
         except Exception as e:
             logger = get_logger()
@@ -388,14 +400,14 @@ class EventHandlersMixin:
         if self.current_page_name:
             # 保存当前页面的状态（如果有）
             saved_stats = None
-            if isinstance(self.current_page, (ChannelPage, UrlListPage)):
+            if isinstance(self.current_page, UrlListPage):
                 saved_stats = self.current_page.stats
 
             # 重新切换页面（会重新构建，使用新语言）
             self._switch_page(self.current_page_name)
 
         # 恢复状态（使用翻译键）
-        if isinstance(self.current_page, (ChannelPage, UrlListPage)) and saved_stats:
+        if isinstance(self.current_page, UrlListPage) and saved_stats:
             self.current_page.update_stats(saved_stats, current_status)
         # 更新日志面板的统计信息
         if hasattr(self, "log_panel") and hasattr(self.log_panel, "update_stats"):
@@ -504,7 +516,7 @@ class EventHandlersMixin:
     def _on_stats(self, stats: dict):
         """处理统计信息更新"""
         self.state_manager.set("stats", stats)
-        if isinstance(self.current_page, (ChannelPage, UrlListPage)):
+        if isinstance(self.current_page, UrlListPage):
             self.current_page.update_stats(
                 stats, self.state_manager.get("running_status", "")
             )
@@ -527,15 +539,22 @@ class EventHandlersMixin:
 
     def _on_stats_updated(self, stats: dict):
         """统计信息更新事件处理"""
-        if isinstance(self.current_page, (ChannelPage, UrlListPage)):
-            self.current_page.update_stats(
-                stats, self.state_manager.get("running_status", "")
-            )
-        # 更新日志面板的统计信息
-        if hasattr(self, "log_panel") and hasattr(self.log_panel, "update_stats"):
-            self.log_panel.update_stats(
-                stats, self.state_manager.get("running_status", "")
-            )
+        # 使用 after() 确保在主线程中执行 UI 更新
+        def _do_update():
+            if isinstance(self.current_page, UrlListPage):
+                self.current_page.update_stats(
+                    stats, self.state_manager.get("running_status", "")
+                )
+            # 更新日志面板的统计信息
+            if hasattr(self, "log_panel") and hasattr(self.log_panel, "update_stats"):
+                self.log_panel.update_stats(
+                    stats, self.state_manager.get("running_status", "")
+                )
+        
+        try:
+            self.after(0, _do_update)
+        except Exception:
+            _do_update()
 
     def _on_cookie_status_changed(self, test_result: str):
         """Cookie 状态变化事件处理"""

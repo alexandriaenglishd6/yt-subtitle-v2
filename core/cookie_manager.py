@@ -270,7 +270,7 @@ class CookieManager:
                 test_video_url,
             ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
             if result.returncode != 0:
                 error_msg = result.stderr[:200] if result.stderr else translate_log("unknown_error")

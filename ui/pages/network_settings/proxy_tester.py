@@ -8,7 +8,7 @@ import shutil
 from urllib.parse import urlparse
 from typing import List, Dict, Callable, Optional
 
-from ui.i18n_manager import t
+from core.i18n import t
 from core.logger import get_logger
 
 logger = get_logger()

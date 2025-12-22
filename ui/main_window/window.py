@@ -9,7 +9,7 @@ from typing import Optional
 
 from core.logger import Logger, get_logger
 from ui.themes import ThemeTokens, get_theme, ThemeName, apply_theme_to_window
-from ui.i18n_manager import t, set_language, get_language
+from core.i18n import t, set_language, get_language
 from ui.app_events import get_event_bus, EventType
 from ui.state import get_state_manager
 from ui.components.toolbar import Toolbar
@@ -157,10 +157,11 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         # 4. 底部日志框
         self.log_panel = LogPanel(self, height=450)
         self.log_panel._is_secondary = True  # 标记为次要区域
+        self.log_panel.proxy_manager = self.video_processor.proxy_manager  # 设置代理管理器引用
         self.log_panel.grid(row=2, column=0, columnspan=2, sticky="ew")
 
-        # 5. 默认显示频道页面
-        self._switch_page("channel")
+        # 5. 默认显示任务页面
+        self._switch_page("url_list")
     
     def _subscribe_events(self):
         """订阅事件"""

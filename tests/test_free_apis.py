@@ -4,6 +4,7 @@
 2. 本地模型（Ollama/LM Studio）
 """
 import sys
+import pytest
 from pathlib import Path
 
 # 添加项目根目录到路径
@@ -75,19 +76,14 @@ This is a test
         print(result.text)
         print()
         
-        return True
+        assert result.text, "翻译结果不应为空"
         
     except ImportError as e:
-        print(f"❌ 依赖库未安装: {e}")
-        print("   请运行: pip install deep-translator")
-        return False
+        pytest.skip(f"依赖库未安装: {e}")
     except LLMException as e:
-        print(f"❌ 翻译失败: {e}")
-        print(f"   错误类型: {e.error_type}")
-        return False
+        pytest.skip(f"翻译失败: {e}")
     except Exception as e:
-        print(f"❌ 未知错误: {e}")
-        return False
+        pytest.fail(f"未知错误: {e}")
 
 
 def test_local_model():
@@ -162,13 +158,7 @@ def test_local_model():
             continue
     
     if not success:
-        print("\n⚠️  所有本地模型服务都不可用")
-        print("   要测试本地模型，请：")
-        print("   1. 安装 Ollama: https://ollama.ai/")
-        print("   2. 或安装 LM Studio: https://lmstudio.ai/")
-        print("   3. 启动服务后重新运行此测试")
-    
-    return success
+        pytest.skip("所有本地模型服务都不可用")
 
 
 def main():

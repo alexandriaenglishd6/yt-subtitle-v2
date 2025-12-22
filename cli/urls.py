@@ -19,7 +19,7 @@ def urls_command(args):
         退出码（0 表示成功）
     """
     logger = get_logger()
-    from ui.i18n_manager import t
+    from core.i18n import t
 
     if not args.file:
         logger.error(t("url_list_empty"))
@@ -88,7 +88,7 @@ def run_dry_run_for_urls(file_path: Path, logger, force: bool = False) -> int:
     Returns:
         退出码（0 表示成功）
     """
-    from ui.i18n_manager import t
+    from core.i18n import t
     logger.info("=" * 60)
     logger.info(t("dry_run_start_url_list"))
     if force:
@@ -203,7 +203,7 @@ def run_full_pipeline_for_urls(file_path: Path, logger, force: bool = False) -> 
     Returns:
         退出码（0 表示成功）
     """
-    from ui.i18n_manager import t
+    from core.i18n import t
     logger.info("=" * 60)
     logger.info(t("processing_start_url_list"))
     logger.info("=" * 60)
@@ -265,7 +265,7 @@ def run_full_pipeline_for_urls(file_path: Path, logger, force: bool = False) -> 
 
         # 创建 LLM 客户端（翻译和摘要）
         from cli.utils import create_llm_clients
-        from ui.i18n_manager import t
+        from core.i18n import t
 
         translation_llm, summary_llm = create_llm_clients(config, logger)
 

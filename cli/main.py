@@ -13,7 +13,7 @@ from cli.channel import channel_command
 from cli.urls import urls_command
 from cli.cookie import test_cookie_command
 from cli.ai_smoke_test import ai_smoke_test_command
-from ui.i18n_manager import t
+from core.i18n import t
 
 
 def create_parser() -> argparse.ArgumentParser:

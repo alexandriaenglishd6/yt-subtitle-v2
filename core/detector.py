@@ -84,11 +84,15 @@ class SubtitleDetector:
 
             has_subtitles = len(manual_languages) > 0 or len(auto_languages) > 0
 
+            # 提取章节信息
+            chapters = subtitle_info.get("chapters", [])
+
             result = DetectionResult(
                 video_id=video_info.video_id,
                 has_subtitles=has_subtitles,
                 manual_languages=manual_languages,
                 auto_languages=auto_languages,
+                chapters=chapters,
             )
 
             if has_subtitles:
@@ -173,7 +177,7 @@ class SubtitleDetector:
 
             cmd.append(url)
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
             if result.returncode != 0:
                 # 将 yt-dlp 错误映射为 AppException
@@ -192,10 +196,11 @@ class SubtitleDetector:
             # 解析 JSON
             data = json.loads(result.stdout)
 
-            # 提取字幕信息
+            # 提取字幕信息和章节
             subtitle_info = {
                 "subtitles": data.get("subtitles", {}),
                 "automatic_captions": data.get("automatic_captions", {}),
+                "chapters": data.get("chapters", []),  # 添加章节信息
             }
 
             return subtitle_info

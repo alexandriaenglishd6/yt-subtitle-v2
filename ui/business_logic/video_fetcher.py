@@ -10,7 +10,7 @@ import tempfile
 
 from core.models import VideoInfo
 from core.logger import get_logger
-from ui.i18n_manager import t
+from core.i18n import t
 
 logger = get_logger()
 
@@ -90,6 +90,9 @@ class VideoFetcherMixin:
                 temp_file_path = Path(f.name)
 
             try:
+                # 将 cancel_token 传递给 video_fetcher（用于取消支持）
+                if hasattr(self, 'cancel_token'):
+                    self.video_fetcher.cancel_token = self.cancel_token
                 videos = self.video_fetcher.fetch_from_file(temp_file_path)
             finally:
                 # 清理临时文件

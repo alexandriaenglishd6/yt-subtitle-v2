@@ -6,7 +6,7 @@
 
 import customtkinter as ctk
 from typing import Callable, Optional, Dict, Any
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import body_font
 
 
@@ -89,8 +89,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_source_language_row(self):
         """构建源语言行"""
-        label = ctk.CTkLabel(self, text=t("source_language_label"))
-        label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
+        self._source_language_label = ctk.CTkLabel(self, text=t("source_language_label"))
+        self._source_language_label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
 
         input_frame = ctk.CTkFrame(self, fg_color="transparent")
         input_frame.grid(row=1, column=1, sticky="w", padx=16, pady=8)
@@ -108,13 +108,13 @@ class LanguageConfigPanel(ctk.CTkFrame):
         )
         self.source_language_auto_checkbox.pack(side="left", padx=(0, 12))
 
-        hint = ctk.CTkLabel(
+        self._source_language_hint = ctk.CTkLabel(
             input_frame,
             text=t("source_language_auto_hint"),
             font=body_font(),
             text_color=("gray50", "gray50"),
         )
-        hint.pack(side="left")
+        self._source_language_hint.pack(side="left")
 
         # 设置默认值
         source_language = self.language_config.get("source_language")
@@ -127,8 +127,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_target_language_row(self):
         """构建目标语言行"""
-        label = ctk.CTkLabel(self, text=t("target_language_label"))
-        label.grid(row=2, column=0, sticky="w", padx=16, pady=8)
+        self._target_language_label = ctk.CTkLabel(self, text=t("target_language_label"))
+        self._target_language_label.grid(row=2, column=0, sticky="w", padx=16, pady=8)
 
         input_frame = ctk.CTkFrame(self, fg_color="transparent")
         input_frame.grid(row=2, column=1, sticky="w", padx=16, pady=8)
@@ -138,13 +138,13 @@ class LanguageConfigPanel(ctk.CTkFrame):
         )
         self.subtitle_target_entry.pack(side="left", padx=(0, 12))
 
-        hint = ctk.CTkLabel(
+        self._target_language_hint = ctk.CTkLabel(
             input_frame,
             text=t("target_language_hint"),
             font=body_font(),
             text_color=("gray50", "gray50"),
         )
-        hint.pack(side="left")
+        self._target_language_hint.pack(side="left")
 
         # 设置默认值
         if self.language_config.get("subtitle_target_languages"):
@@ -155,8 +155,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_summary_language_row(self):
         """构建摘要语言行"""
-        label = ctk.CTkLabel(self, text=t("summary_language_label"))
-        label.grid(row=3, column=0, sticky="w", padx=16, pady=8)
+        self._summary_language_label = ctk.CTkLabel(self, text=t("summary_language_label"))
+        self._summary_language_label.grid(row=3, column=0, sticky="w", padx=16, pady=8)
 
         entry_frame = ctk.CTkFrame(self, fg_color="transparent")
         entry_frame.grid(row=3, column=1, sticky="w", padx=16, pady=8)
@@ -164,13 +164,13 @@ class LanguageConfigPanel(ctk.CTkFrame):
         self.summary_language_entry = ctk.CTkEntry(entry_frame, width=200)
         self.summary_language_entry.pack(side="left", padx=(0, 8))
 
-        hint = ctk.CTkLabel(
+        self._summary_language_hint = ctk.CTkLabel(
             entry_frame,
             text=t("summary_language_hint"),
             font=body_font(),
             text_color=("gray50", "gray50"),
         )
-        hint.pack(side="left", padx=(0, 12))
+        self._summary_language_hint.pack(side="left", padx=(0, 12))
 
         self.summary_enabled_checkbox = ctk.CTkCheckBox(
             entry_frame,
@@ -187,8 +187,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_bilingual_mode_row(self):
         """构建双语模式行"""
-        label = ctk.CTkLabel(self, text=t("bilingual_mode_label"))
-        label.grid(row=4, column=0, sticky="w", padx=16, pady=8)
+        self._bilingual_mode_label = ctk.CTkLabel(self, text=t("bilingual_mode_label"))
+        self._bilingual_mode_label.grid(row=4, column=0, sticky="w", padx=16, pady=8)
 
         self.bilingual_mode_combo = ctk.CTkComboBox(
             self,
@@ -205,8 +205,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_translation_strategy_row(self):
         """构建翻译策略行"""
-        label = ctk.CTkLabel(self, text=t("translation_strategy_label"))
-        label.grid(row=5, column=0, sticky="w", padx=16, pady=8)
+        self._translation_strategy_label = ctk.CTkLabel(self, text=t("translation_strategy_label"))
+        self._translation_strategy_label.grid(row=5, column=0, sticky="w", padx=16, pady=8)
 
         strategy_frame = ctk.CTkFrame(self, fg_color="transparent")
         strategy_frame.grid(row=5, column=1, sticky="w", padx=16, pady=8)
@@ -222,13 +222,13 @@ class LanguageConfigPanel(ctk.CTkFrame):
         )
         self.translation_strategy_combo.pack(side="left", padx=(0, 8))
 
-        hint = ctk.CTkLabel(
+        self._translation_strategy_hint = ctk.CTkLabel(
             strategy_frame,
             text=t("translation_strategy_hint"),
             font=body_font(),
             text_color=("gray50", "gray50"),
         )
-        hint.pack(side="left", padx=(0, 12))
+        self._translation_strategy_hint.pack(side="left", padx=(0, 12))
 
         self.translation_enabled_checkbox = ctk.CTkCheckBox(
             strategy_frame,
@@ -251,8 +251,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_subtitle_format_row(self):
         """构建字幕格式行"""
-        label = ctk.CTkLabel(self, text=t("subtitle_format_label"))
-        label.grid(row=6, column=0, sticky="w", padx=16, pady=8)
+        self._subtitle_format_label = ctk.CTkLabel(self, text=t("subtitle_format_label"))
+        self._subtitle_format_label.grid(row=6, column=0, sticky="w", padx=16, pady=8)
 
         self.subtitle_format_combo = ctk.CTkComboBox(
             self,
@@ -370,7 +370,87 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def refresh_language(self):
         """刷新语言相关文本"""
+        # 更新配置标题
         if hasattr(self, "_config_label"):
             self._config_label.configure(text=t("language_config_label"))
+        
+        # 更新保存按钮
         if hasattr(self, "save_btn"):
             self.save_btn.configure(text=t("language_config_save"))
+        
+        # 更新所有行标签
+        if hasattr(self, "_source_language_label"):
+            self._source_language_label.configure(text=t("source_language_label"))
+        if hasattr(self, "_target_language_label"):
+            self._target_language_label.configure(text=t("target_language_label"))
+        if hasattr(self, "_summary_language_label"):
+            self._summary_language_label.configure(text=t("summary_language_label"))
+        if hasattr(self, "_bilingual_mode_label"):
+            self._bilingual_mode_label.configure(text=t("bilingual_mode_label"))
+        if hasattr(self, "_translation_strategy_label"):
+            self._translation_strategy_label.configure(text=t("translation_strategy_label"))
+        if hasattr(self, "_subtitle_format_label"):
+            self._subtitle_format_label.configure(text=t("subtitle_format_label"))
+        
+        # 更新提示文本
+        if hasattr(self, "_source_language_hint"):
+            self._source_language_hint.configure(text=t("source_language_auto_hint"))
+        if hasattr(self, "_target_language_hint"):
+            self._target_language_hint.configure(text=t("target_language_hint"))
+        if hasattr(self, "_summary_language_hint"):
+            self._summary_language_hint.configure(text=t("summary_language_hint"))
+        if hasattr(self, "_translation_strategy_hint"):
+            self._translation_strategy_hint.configure(text=t("translation_strategy_hint"))
+        
+        # 更新复选框文本
+        if hasattr(self, "source_language_auto_checkbox"):
+            self.source_language_auto_checkbox.configure(text=t("auto_select"))
+        if hasattr(self, "summary_enabled_checkbox"):
+            self.summary_enabled_checkbox.configure(text=t("enable_summary"))
+        if hasattr(self, "translation_enabled_checkbox"):
+            self.translation_enabled_checkbox.configure(text=t("enable_translation"))
+        
+        # 更新下拉框值（需要保存当前选择并重新设置）
+        if hasattr(self, "bilingual_mode_combo"):
+            current = self.bilingual_mode_combo.get()
+            self.bilingual_mode_combo.configure(values=[
+                t("bilingual_mode_none"), 
+                t("bilingual_mode_source_target")
+            ])
+            # 保持选择状态
+            if "source" in current.lower() or "target" in current.lower() or "原文" in current:
+                self.bilingual_mode_combo.set(t("bilingual_mode_source_target"))
+            else:
+                self.bilingual_mode_combo.set(t("bilingual_mode_none"))
+        
+        if hasattr(self, "translation_strategy_combo"):
+            current = self.translation_strategy_combo.get()
+            self.translation_strategy_combo.configure(values=[
+                t("translation_strategy_ai_only"),
+                t("translation_strategy_official_auto_then_ai"),
+                t("translation_strategy_official_only"),
+            ])
+            # 保持选择状态
+            if "AI" in current.upper() and "OFFICIAL" not in current.upper():
+                self.translation_strategy_combo.set(t("translation_strategy_ai_only"))
+            elif "OFFICIAL" in current.upper() and "AI" not in current.upper():
+                self.translation_strategy_combo.set(t("translation_strategy_official_only"))
+            else:
+                self.translation_strategy_combo.set(t("translation_strategy_official_auto_then_ai"))
+        
+        if hasattr(self, "subtitle_format_combo"):
+            current = self.subtitle_format_combo.get()
+            self.subtitle_format_combo.configure(values=[
+                t("subtitle_format_srt"),
+                t("subtitle_format_txt"),
+                t("subtitle_format_both"),
+            ])
+            # 保持选择状态
+            if "txt" in current.lower():
+                self.subtitle_format_combo.set(t("subtitle_format_txt"))
+            elif "both" in current.lower() or "两者" in current:
+                self.subtitle_format_combo.set(t("subtitle_format_both"))
+            else:
+                self.subtitle_format_combo.set(t("subtitle_format_srt"))
+
+

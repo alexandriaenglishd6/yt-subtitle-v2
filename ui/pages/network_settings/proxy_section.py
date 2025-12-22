@@ -6,7 +6,7 @@
 import customtkinter as ctk
 import threading
 
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import heading_font
 from core.logger import get_logger
 
@@ -231,6 +231,48 @@ class ProxySectionMixin(ProxyTesterMixin):
                                         error=result["error"],
                                     ),
                                 )
+
+                    # 更新 proxy_manager 的代理状态
+                    top = self.winfo_toplevel()
+                    if hasattr(top, 'video_processor') and hasattr(top.video_processor, 'proxy_manager'):
+                        pm = top.video_processor.proxy_manager
+                        if pm and hasattr(pm, '_proxy_statuses'):
+                            for result in results:
+                                proxy = result["proxy"]
+                                
+                                # 尝试直接匹配或查找包含相同主机的代理
+                                matched_proxy = None
+                                if proxy in pm._proxy_statuses:
+                                    matched_proxy = proxy
+                                else:
+                                    # 尝试通过主机和端口匹配
+                                    from urllib.parse import urlparse
+                                    try:
+                                        parsed_test = urlparse(proxy)
+                                        for pm_proxy in pm._proxy_statuses.keys():
+                                            parsed_pm = urlparse(pm_proxy)
+                                            if parsed_test.hostname == parsed_pm.hostname and parsed_test.port == parsed_pm.port:
+                                                matched_proxy = pm_proxy
+                                                break
+                                    except:
+                                        pass
+                                
+                                if matched_proxy:
+                                    if result["success"]:
+                                        pm._proxy_statuses[matched_proxy].mark_success()
+                                    else:
+                                        pm._proxy_statuses[matched_proxy].mark_failure(
+                                            error=result.get("error"),
+                                            failure_threshold=1
+                                        )
+
+                    # 刷新状态栏的代理状态显示
+                    if hasattr(self, 'master') and hasattr(self.master, 'log_panel'):
+                        self.master.log_panel.refresh_status_bar()
+                    elif hasattr(self, 'winfo_toplevel'):
+                        top = self.winfo_toplevel()
+                        if hasattr(top, 'log_panel'):
+                            top.log_panel.refresh_status_bar()
 
                 self.after(0, update_ui)
 

@@ -19,7 +19,7 @@ def channel_command(args):
         退出码（0 表示成功）
     """
     logger = get_logger()
-    from ui.i18n_manager import t
+    from core.i18n import t
 
     if not args.url:
         logger.error(t("enter_channel_url"))
@@ -51,7 +51,7 @@ def run_dry_run(url: str, logger, force: bool = False) -> int:
     Returns:
         退出码（0 表示成功）
     """
-    from ui.i18n_manager import t
+    from core.i18n import t
     logger.info("=" * 60)
     logger.info(t("dry_run_start"))
     if force:
@@ -166,7 +166,7 @@ def run_full_pipeline(url: str, logger, force: bool = False) -> int:
     Returns:
         退出码（0 表示成功）
     """
-    from ui.i18n_manager import t
+    from core.i18n import t
     logger.info("=" * 60)
     logger.info(t("start_processing"))
     logger.info("=" * 60)

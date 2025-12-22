@@ -11,275 +11,12 @@ from typing import List, Optional
 from core.models import VideoInfo
 from core.logger import get_logger, translate_exception
 from core.exceptions import AppException, ErrorType
+from core.ytdlp_errors import extract_error_message as _extract_error_message
+from core.ytdlp_errors import map_ytdlp_error_to_app_error as _map_ytdlp_error_to_app_error
 
 # 初始化 logger
 logger = get_logger()
 
-
-def _extract_error_message(stderr: str) -> str:
-    """从 yt-dlp 的 stderr 中提取真正的错误消息，过滤掉警告
-
-    Args:
-        stderr: yt-dlp 的错误输出（可能包含 WARNING 和 ERROR）
-
-    Returns:
-        只包含 ERROR 消息的字符串
-    """
-    if not stderr:
-        return ""
-
-    lines = stderr.split("\n")
-    error_lines = []
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        # 跳过 WARNING 消息
-        if line.startswith("WARNING:"):
-            continue
-
-        # 保留 ERROR 消息和其他非警告消息
-        if line.startswith("ERROR:") or not line.startswith("WARNING"):
-            error_lines.append(line)
-
-    # 如果没有找到 ERROR 消息，返回原始 stderr（可能包含其他重要信息）
-    if not error_lines:
-        return stderr
-
-    return "\n".join(error_lines)
-
-
-def _map_ytdlp_error_to_app_error(
-    returncode: int, stderr: str, timeout: bool = False
-) -> AppException:
-    """将 yt-dlp 错误映射为 AppException
-
-    符合 error_handling.md 规范：
-    - 将 yt-dlp 退出码与常见 stderr 文案映射为 NETWORK / RATE_LIMIT / CONTENT / EXTERNAL_SERVICE
-
-    Args:
-        returncode: yt-dlp 退出码
-        stderr: yt-dlp 错误输出（可能包含 WARNING 和 ERROR）
-        timeout: 是否超时
-
-    Returns:
-        AppException 实例
-    """
-    # 提取真正的错误消息（过滤掉警告）
-    error_message = _extract_error_message(stderr)
-    error_lower = (
-        error_message.lower() if error_message else (stderr.lower() if stderr else "")
-    )
-
-    # 超时
-    if timeout:
-        return AppException(
-            message=translate_exception("exception.ytdlp_timeout"),
-            error_type=ErrorType.TIMEOUT,
-        )
-
-    # 网络错误
-    # 包括直接的网络连接错误，以及因网络问题导致的下载失败
-    network_keywords = [
-        "network",
-        "connection",
-        "dns",
-        "timeout",
-        "unreachable",
-        "refused",
-        "reset",
-        "failed to connect",
-        "connection error",
-        "connection refused",
-        "connection timeout",
-        "connection reset",
-        "unable to connect",
-        "cannot connect",
-        "connect failed",
-        # 下载失败相关（可能是网络问题导致）
-        "failed to download",
-        "unable to download",
-        "download failed",
-        "download error",
-        "cannot download",
-        "unable to fetch",
-        # 网页下载失败导致的认证检查失败（通常是网络问题）
-        "without a successful webpage download",
-        "webpage download failed",
-        "unable to download webpage",
-        "failed to download webpage",
-    ]
-    if any(keyword in error_lower for keyword in network_keywords):
-        # 使用提取的错误消息，如果没有则使用原始 stderr
-        msg = (
-            error_message[:200]
-            if error_message
-            else (
-                stderr[:200]
-                if stderr
-                else translate_exception("exception.unknown_network_error")
-            )
-        )
-        return AppException(
-            message=translate_exception("exception.network_error_prefix", msg=msg),
-            error_type=ErrorType.NETWORK,
-        )
-
-    # 认证检查失败，但可能是由网络问题导致的（需要检查是否涉及网页下载失败）
-    # 如果错误信息包含 "authentication" 且涉及 "webpage download" 失败，归类为网络错误
-    if "authentication" in error_lower and any(
-        keyword in error_lower
-        for keyword in [
-            "webpage download",
-            "download webpage",
-            "webpage",
-            "without a successful",
-        ]
-    ):
-        # 使用提取的错误消息，如果没有则使用原始 stderr
-        msg = (
-            error_message[:200]
-            if error_message
-            else (
-                stderr[:200]
-                if stderr
-                else translate_exception("exception.unknown_network_error")
-            )
-        )
-        return AppException(
-            message=translate_exception("exception.auth_check_failed_network", msg=msg),
-            error_type=ErrorType.NETWORK,
-        )
-
-    # 限流（429）
-    if (
-        "429" in stderr
-        or "rate limit" in error_lower
-        or "too many requests" in error_lower
-    ):
-        msg = (
-            error_message[:200]
-            if error_message
-            else (stderr[:200] if stderr else "429 Too Many Requests")
-        )
-        return AppException(
-            message=translate_exception("exception.rate_limit_prefix", msg=msg),
-            error_type=ErrorType.RATE_LIMIT,
-        )
-
-    # 认证错误（403, 401）
-    # 包括 Cookie 认证失败（YouTube 要求登录）
-    # 细分：Cookie 已失效/过期
-    cookie_expired_keywords = [
-        "sign in to confirm",
-        "you're not a bot",
-        "not a bot",
-        "use --cookies",
-        "cookies for the authentication",
-        "login required",
-    ]
-    if any(keyword in error_lower for keyword in cookie_expired_keywords):
-        msg = (
-            error_message[:200]
-            if error_message
-            else (
-                stderr[:200]
-                if stderr
-                else translate_exception("exception.auth_failed_cookie_required")
-            )
-        )
-        return AppException(
-            message=translate_exception("exception.cookie_expired", msg=msg),
-            error_type=ErrorType.COOKIE_EXPIRED,
-        )
-
-    auth_keywords = [
-        "403",
-        "401",
-        "unauthorized",
-        "authentication required",
-    ]
-    if any(keyword in error_lower for keyword in auth_keywords):
-        msg = (
-            error_message[:200]
-            if error_message
-            else (
-                stderr[:200]
-                if stderr
-                else translate_exception("exception.auth_failed")
-            )
-        )
-        return AppException(
-            message=translate_exception("exception.auth_failed_cookie_required", msg=msg),
-            error_type=ErrorType.AUTH,
-        )
-
-    # 内容限制（404, 视频不可用等）
-    if any(
-        keyword in error_lower
-        for keyword in [
-            "404",
-            "not found",
-            "unavailable",
-            "private",
-            "deleted",
-            "removed",
-            "blocked",
-            "region",
-            "copyright",
-        ]
-    ):
-        msg = (
-            error_message[:200]
-            if error_message
-            else (
-                stderr[:200]
-                if stderr
-                else translate_exception("exception.content_unavailable")
-            )
-        )
-        return AppException(
-            message=translate_exception("exception.content_unavailable_prefix", msg=msg),
-            error_type=ErrorType.CONTENT,
-        )
-
-    # Cookie 文件格式错误（归类为认证错误）
-    if (
-        "does not look like a netscape format" in error_lower
-        or "cookie" in error_lower
-        and "format" in error_lower
-    ):
-        msg = (
-            error_message[:200]
-            if error_message
-            else (
-                stderr[:200]
-                if stderr
-                else translate_exception("exception.cookie_format_error")
-            )
-        )
-        return AppException(
-            message=translate_exception("exception.cookie_format_error_prefix", msg=msg),
-            error_type=ErrorType.AUTH,
-        )
-
-    # 其他 yt-dlp 错误（视为外部服务错误）
-    msg = (
-        error_message[:200]
-        if error_message
-        else (
-            stderr[:200]
-            if stderr
-            else translate_exception("exception.unknown_error_prefix", msg="")
-        )
-    )
-    # 使用翻译键格式，日志系统会自动翻译
-    translated_msg = translate_exception(
-        "exception.ytdlp_execution_failed", returncode=returncode, error=msg
-    )
-    return AppException(message=translated_msg, error_type=ErrorType.EXTERNAL_SERVICE)
 
 
 class VideoFetcher:
@@ -504,15 +241,18 @@ class VideoFetcher:
             )
             return []
 
-    def fetch_from_file(self, file_path: Path) -> List[VideoInfo]:
-        """从文件读取 URL 列表并获取视频信息
+    def fetch_from_file(self, file_path: Path, fetch_concurrency: int = 5) -> List[VideoInfo]:
+        """从文件读取 URL 列表并获取视频信息（并发）
 
         Args:
             file_path: 包含 URL 列表的文件路径（每行一个 URL）
+            fetch_concurrency: 获取视频信息的并发数（默认 5）
 
         Returns:
             VideoInfo 列表
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 urls = [line.strip() for line in f if line.strip()]
@@ -520,9 +260,28 @@ class VideoFetcher:
             logger.info_i18n("urls_read_from_file", count=len(urls))
 
             all_videos = []
-            for url in urls:
-                videos = self.fetch_from_url(url)
-                all_videos.extend(videos)
+            
+            # 使用线程池并发获取视频信息
+            with ThreadPoolExecutor(max_workers=fetch_concurrency, thread_name_prefix="fetch") as executor:
+                # 提交所有任务
+                future_to_url = {executor.submit(self.fetch_from_url, url): url for url in urls}
+                
+                # 收集结果（按完成顺序）
+                for future in as_completed(future_to_url):
+                    # 检查取消状态
+                    if hasattr(self, 'cancel_token') and self.cancel_token and self.cancel_token.is_cancelled():
+                        logger.info_i18n("log.cancel_signal_detected")
+                        # 取消所有未完成的任务
+                        for f in future_to_url:
+                            f.cancel()
+                        break
+                    
+                    url = future_to_url[future]
+                    try:
+                        videos = future.result()
+                        all_videos.extend(videos)
+                    except Exception as e:
+                        logger.warning(f"获取 URL 失败: {url} - {e}")
 
             logger.info_i18n("total_videos_fetched", count=len(all_videos))
             return all_videos
@@ -573,13 +332,12 @@ class VideoFetcher:
                 # 尝试获取下一个代理（自动跳过已标记为不健康的代理）
                 proxy = self.proxy_manager.get_next_proxy(allow_direct=True)
 
-                # 如果已经尝试过这个代理，跳过（避免重复尝试同一个不健康的代理）
-                if proxy and proxy in tried_proxies:
-                    # 如果所有代理都尝试过了，尝试直连
-                    proxy = None
-                    logger.info_i18n("all_proxies_tried_direct")
-
+                # 注意：不再检查 tried_proxies，允许同一个代理重试多次
+                # 只有当 get_next_proxy 返回 None（所有代理都不健康）时才使用直连
                 if proxy:
+                    if proxy in tried_proxies:
+                        # 同一个代理重试，记录日志
+                        logger.debug(f"重试代理: {proxy} (尝试 {attempt + 1}/{max_retries})")
                     tried_proxies.add(proxy)
 
             try:
@@ -593,9 +351,12 @@ class VideoFetcher:
                 # 如果配置了代理，添加代理参数
                 if proxy:
                     cmd.extend(["--proxy", proxy])
-                    logger.debug_i18n("using_proxy", proxy=proxy)
+                    # 只在第一次使用时记录 INFO 日志，避免重复输出
+                    if attempt == 0:
+                        logger.info_i18n("using_proxy", proxy=proxy)
                 else:
-                    logger.debug_i18n("using_direct_connection")
+                    if attempt == 0:
+                        logger.info_i18n("using_direct_connection")
 
                 # 如果配置了 Cookie，添加 Cookie 参数
                 if self.cookie_manager:
@@ -612,7 +373,7 @@ class VideoFetcher:
 
                 cmd.append(url)
 
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
                 if result.returncode != 0:
                     error_msg = result.stderr
@@ -622,10 +383,28 @@ class VideoFetcher:
                         result.returncode, error_msg
                     )
 
-                    # 如果使用了代理，标记代理失败
+                    # 只在真正的代理/网络错误时标记代理失败
+                    # Cookie 过期、视频不可用等不是代理问题，不应影响代理健康度
                     if proxy and self.proxy_manager:
-                        self.proxy_manager.mark_failure(proxy, error_msg[:200])
-                        logger.warning_i18n("proxy_failed_try_next", proxy=proxy)
+                        error_lower = error_msg.lower() if error_msg else ""
+                        is_proxy_error = any(keyword in error_lower for keyword in [
+                            "unable to connect",
+                            "connection refused",
+                            "connection timeout",
+                            "network is unreachable",
+                            "proxy",
+                            "socks",
+                            "timed out",
+                            "connect failed",
+                        ])
+                        if is_proxy_error:
+                            self.proxy_manager.mark_failure(proxy, error_msg[:200])
+                            logger.warning_i18n("proxy_failed_try_next", proxy=proxy)
+                            # 添加详细错误信息
+                            logger.debug(f"代理失败详情: {error_msg[:500]}")
+                        else:
+                            # 非代理错误，记录详情但不标记代理失败
+                            logger.debug(f"yt-dlp 错误（非代理问题）: {error_msg[:200]}")
 
                     last_error = app_error
                     # 如果不是最后一次尝试，继续重试

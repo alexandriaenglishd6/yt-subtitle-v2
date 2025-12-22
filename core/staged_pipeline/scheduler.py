@@ -13,7 +13,7 @@ from core.logger import get_logger
 from core.exceptions import ErrorType
 from core.cancel_token import CancelToken
 from core.failure_logger import FailureLogger
-from ui.i18n_manager import t
+from core.i18n import t
 
 from .data_types import StageData
 from .queue import StageQueue
@@ -49,6 +49,7 @@ class StagedPipeline:
         run_id: Optional[str] = None,
         on_log: Optional[Callable[[str, str, Optional[str]], None]] = None,
         on_error: Optional[Callable[[StageData], None]] = None,
+        on_video_complete: Optional[Callable[[StageData], None]] = None,  # 视频完成回调
         # 阶段并发配置
         detect_concurrency: int = 10,
         download_concurrency: int = 10,
@@ -97,6 +98,7 @@ class StagedPipeline:
         self.cookie_manager = cookie_manager
         self.run_id = run_id
         self.on_log = on_log
+        self.on_video_complete = on_video_complete
         self.translation_llm_init_error_type = translation_llm_init_error_type
         self.translation_llm_init_error = translation_llm_init_error
 
@@ -177,6 +179,7 @@ class StagedPipeline:
             failure_logger=failure_logger,
             cancel_token=cancel_token,
             on_error=on_error,
+            on_complete=self.on_video_complete,  # 视频完成回调
         )
 
         # SUMMARIZE 阶段
@@ -229,6 +232,26 @@ class StagedPipeline:
         self._success_count = 0
         self._failed_count = 0
 
+    def _stop_all_queues(self, timeout: float = 5.0):
+        """停止所有阶段的队列
+        
+        Args:
+            timeout: 每个队列的超时时间（秒）
+        """
+        logger.debug("Stopping all stage queues...")
+        # 按反向顺序停止队列（从输出到检测）
+        for queue in [
+            self.output_queue,
+            self.summarize_queue,
+            self.translate_queue,
+            self.download_queue,
+            self.detect_queue,
+        ]:
+            try:
+                queue.stop(timeout=timeout)
+            except Exception as e:
+                logger.warning(f"Error stopping queue {queue.stage_name}: {e}")
+
     def process_videos(self, videos: List[VideoInfo]) -> Dict[str, int]:
         """处理视频列表
 
@@ -271,6 +294,8 @@ class StagedPipeline:
             while True:
                 if self.cancel_token and self.cancel_token.is_cancelled():
                     logger.info_i18n("log.cancel_signal_detected")
+                    # 立即停止所有阶段的 worker 线程
+                    self._stop_all_queues()
                     break
 
                 # 检查所有阶段是否完成

@@ -47,6 +47,8 @@ def process_video_list(
     translation_llm_init_error_type: Optional[ErrorType] = None,
     translation_llm_init_error: Optional[str] = None,
     use_staged_pipeline: bool = True,
+    initial_url_count: int = 0,  # 初始 URL 数量（用于保持 total 不变）
+    fetch_failed_count: int = 0,  # URL 获取阶段失败的数量
 ) -> Dict[str, int]:
     """处理视频列表（支持并发）
 
@@ -112,6 +114,8 @@ def process_video_list(
             on_log=on_log,
             translation_llm_init_error_type=translation_llm_init_error_type,
             translation_llm_init_error=translation_llm_init_error,
+            initial_url_count=initial_url_count,
+            fetch_failed_count=fetch_failed_count,
         )
 
     # 否则使用旧的实现（TaskRunner 方式）
@@ -295,6 +299,8 @@ def _process_video_list_staged(
     on_error: Optional[Callable[[ErrorType, str], None]] = None,
     translation_llm_init_error_type: Optional[ErrorType] = None,
     translation_llm_init_error: Optional[str] = None,
+    initial_url_count: int = 0,  # 初始 URL 数量
+    fetch_failed_count: int = 0,  # URL 获取阶段失败的数量
 ) -> Dict[str, int]:
     """使用分阶段队列化 Pipeline 处理视频列表
 
@@ -307,7 +313,9 @@ def _process_video_list_staged(
     from core.staged_pipeline import StagedPipeline
     from core.staged_pipeline.data_types import StageData
 
-    total = len(videos)
+    # 使用初始 URL 数量作为 total（如果没有传入则使用视频数量）
+    total = initial_url_count if initial_url_count > 0 else len(videos)
+    videos_count = len(videos)  # 实际要处理的视频数量
 
     # 根据总并发数配置各阶段的并发数
     detect_concurrency = max(1, concurrency)
@@ -327,6 +335,42 @@ def _process_video_list_staged(
         run_id=run_id,
     )
 
+    # 创建 ManifestManager 用于断点续传状态管理
+    from core.state.manifest import ManifestManager, VideoStage
+    
+    manifest_dir = output_writer.base_output_dir / ".state"
+    manifest_manager = ManifestManager(manifest_dir)
+    batch_manifest = manifest_manager.create_batch(
+        batch_id=run_id,
+        source=f"batch_{total}_videos",
+    )
+    
+    # 添加所有视频到 BatchManifest
+    for video in videos:
+        batch_manifest.add_video(
+            video_id=video.video_id,
+            url=video.url,
+            title=video.title,
+        )
+    
+    # 保存初始 manifest
+    manifest_manager.save_batch(batch_manifest)
+    logger.debug(f"Created batch manifest: {run_id}", run_id=run_id)
+
+    # 创建视频完成回调，更新 manifest 状态
+    def on_video_complete(data):
+        """视频处理完成时更新 manifest"""
+        try:
+            video_id = data.video_info.video_id if data.video_info else None
+            if video_id:
+                video_manifest = batch_manifest.get_video(video_id)
+                if video_manifest:
+                    video_manifest.update_stage(VideoStage.DONE)
+                    manifest_manager.save_batch(batch_manifest)
+                    logger.debug(f"Updated manifest: {video_id} -> DONE")
+        except Exception as e:
+            logger.warning(f"Failed to update manifest for video: {e}")
+
     # 创建分阶段 Pipeline
     pipeline = StagedPipeline(
         language_config=language_config,
@@ -344,6 +388,7 @@ def _process_video_list_staged(
         run_id=run_id,
         on_log=on_log,
         on_error=lambda data: on_error(data.error_type, str(data.error)) if on_error and data.error_type else None,
+        on_video_complete=on_video_complete,  # 视频完成回调
         detect_concurrency=detect_concurrency,
         download_concurrency=download_concurrency,
         translate_concurrency=translate_concurrency,
@@ -364,6 +409,28 @@ def _process_video_list_staged(
 
             def stats_updater():
                 """定期更新统计信息"""
+                from core.progress.eta import ProgressTracker
+                
+                progress_tracker = ProgressTracker(total=total, task_name="video_processing")
+                last_completed = 0
+                last_update_time = time.time()
+                
+                # 发送初始 stats 确保 total 正确显示
+                try:
+                    initial_stats = {
+                        "total": total,
+                        "success": 0,
+                        "failed": 0,
+                        "current": 0,
+                        "running": [],
+                        "eta_seconds": None,
+                        "eta_message": "",
+                    }
+                    logger.info(f"stats_updater sending initial stats: total={total}")
+                    on_stats(initial_stats)
+                except Exception as e:
+                    logger.warning(f"stats_updater initial on_stats failed: {e}")
+                
                 while not stop_stats_update.is_set():
                     try:
                         # 获取各阶段统计
@@ -382,14 +449,47 @@ def _process_video_list_staged(
                             + summarize_stats["failed"]
                             + output_stats["failed"]
                         )
+                        
+                        current_completed = success_count + failed_count
+                        
+                        # 记录新完成的视频到 ProgressTracker
+                        if current_completed > last_completed:
+                            current_time = time.time()
+                            # 计算每个新完成视频的平均耗时
+                            num_new = current_completed - last_completed
+                            elapsed = current_time - last_update_time
+                            avg_duration = elapsed / num_new if num_new > 0 else 0
+                            
+                            for i in range(num_new):
+                                progress_tracker.record_completed(
+                                    item_id=f"video_{last_completed + i + 1}",
+                                    duration=avg_duration,
+                                )
+                            
+                            last_completed = current_completed
+                            last_update_time = current_time
+                        
+                        # 获取 ETA
+                        progress_info = progress_tracker.eta_calculator.get_progress()
+                        eta_seconds = progress_info.get("eta_seconds")
+
+                        # 获取代理状态
+                        proxy_healthy = 0
+                        proxy_unhealthy = 0
+                        if proxy_manager and hasattr(proxy_manager, 'get_healthy_count'):
+                            proxy_healthy = proxy_manager.get_healthy_count()
+                            proxy_unhealthy = proxy_manager.get_unhealthy_count()
 
                         stats = {
                             "total": total,
                             "success": success_count,
                             "failed": failed_count,
-                            "current": success_count + failed_count,
+                            "current": current_completed,
                             "running": [],
-                            "eta_seconds": None,
+                            "eta_seconds": eta_seconds,
+                            "eta_message": progress_tracker.get_eta_message(),
+                            "proxy_healthy": proxy_healthy,
+                            "proxy_unhealthy": proxy_unhealthy,
                         }
 
                         try:
@@ -417,12 +517,32 @@ def _process_video_list_staged(
             stop_stats_update.set()
             stats_update_thread.join(timeout=1.0)
 
+        # 更新 BatchManifest 的最终状态
+        success_count = stats.get("success", 0)
+        failed_count = stats.get("failed", 0)
+        
+        # 根据结果更新视频状态（简化：仅标记完成数量，不跟踪具体哪些视频）
+        batch_manifest.updated_at = datetime.now().isoformat() if 'datetime' in dir() else None
+        try:
+            from datetime import datetime as dt
+            batch_manifest.updated_at = dt.now().isoformat()
+        except Exception:
+            pass
+        
+        # 保存最终 manifest
+        manifest_manager.save_batch(batch_manifest)
+        logger.debug(
+            f"Batch complete: {success_count}/{total} success, {failed_count} failed",
+            run_id=run_id,
+        )
+
         # 返回统计信息
         return {
             "total": stats.get("total", total),
-            "success": stats.get("success", 0),
-            "failed": stats.get("failed", 0),
+            "success": success_count,
+            "failed": failed_count,
             "errors": [],
+            "manifest_path": str(manifest_manager._get_manifest_path(run_id)),
         }
 
     except Exception as e:

@@ -6,7 +6,7 @@ Cookie 配置模块
 import customtkinter as ctk
 import threading
 
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import heading_font, body_font
 from core.cookie_manager import CookieManager
 from core.logger import get_logger

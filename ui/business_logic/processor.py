@@ -17,7 +17,7 @@ from core.ai_providers import create_llm_client
 from core.llm_client import LLMException
 from core.cancel_token import CancelToken
 from config.manager import ConfigManager
-from ui.i18n_manager import t
+from core.i18n import t
 
 # 导入 mixin 模块
 from .video_fetcher import VideoFetcherMixin

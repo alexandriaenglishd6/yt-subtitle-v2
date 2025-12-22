@@ -6,9 +6,8 @@
 import customtkinter as ctk
 from typing import TYPE_CHECKING
 
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import heading_font
-from ui.pages.channel_page import ChannelPage
 from ui.pages.url_list_page import UrlListPage
 from ui.pages.run_params_page import RunParamsPage
 from ui.pages.appearance_page import AppearancePage
@@ -37,23 +36,19 @@ class PageManagerMixin:
         # 在销毁页面之前，保存当前页面的输入内容
         if hasattr(self, "current_page") and self.current_page is not None:
             try:
-                if isinstance(self.current_page, ChannelPage):
-                    # 保存频道URL（即使为空也要保存，以便区分空值和未设置）
-                    try:
-                        channel_url = self.current_page.channel_url_entry.get().strip()
-                        self.state_manager.set("channel_url", channel_url)
-                    except (AttributeError, Exception):
-                        # 如果获取失败，忽略（可能是控件已被销毁）
-                        pass
-                elif isinstance(self.current_page, UrlListPage):
+                if isinstance(self.current_page, UrlListPage):
                     # 保存URL列表（即使为空或占位符也要保存，以便区分）
                     try:
                         url_text = self.current_page.url_list_textbox.get(
                             "1.0", "end-1c"
                         ).strip()
-                        placeholder = t("url_list_placeholder")
+                        # 检查是否是占位符文本（通过检查第一行是否包含占位符特征）
+                        first_line = url_text.split('\n')[0].strip() if url_text else ""
+                        is_zh_placeholder = "支持输入" in first_line or "视频链接" in first_line
+                        is_en_placeholder = "Supports:" in first_line or "Video URL" in first_line
+                        
                         # 如果文本是占位符，保存空字符串；否则保存实际内容
-                        if url_text == placeholder:
+                        if is_zh_placeholder or is_en_placeholder or not url_text:
                             self.state_manager.set("url_list_text", "")
                         else:
                             self.state_manager.set("url_list_text", url_text)
@@ -68,54 +63,11 @@ class PageManagerMixin:
         for widget in self.page_container.winfo_children():
             widget.destroy()
 
+
         self.current_page_name = page_name
 
         # 创建并显示目标页面
-        if page_name == "channel":
-            # 恢复保存的频道URL
-            saved_channel_url = self.state_manager.get("channel_url", "")
-            # 调试日志（可移除）
-            if saved_channel_url:
-                logger = get_logger()
-                logger.debug_i18n("channel_url_restored", url=saved_channel_url[:50])
-            page = ChannelPage(
-                self.page_container,
-                on_check_new=self._on_check_new_videos,
-                on_start_processing=self._on_start_processing,
-                on_cancel_processing=self._on_cancel_task,
-                stats=self.state_manager.get(
-                    "stats", {"total": 0, "success": 0, "failed": 0, "current": 0}
-                ),
-                running_status=self.state_manager.get(
-                    "running_status", t("status_idle")
-                ),
-                language_config=self.app_config.language.to_dict()
-                if self.app_config.language
-                else {},
-                on_save_language_config=self._on_save_language_config,
-                translation_ai_config=self.app_config.translation_ai.to_dict(),
-                summary_ai_config=self.app_config.summary_ai.to_dict(),
-                on_save_translation_ai=self._on_save_translation_ai,
-                on_save_summary_ai=self._on_save_summary_ai,
-                initial_channel_url=saved_channel_url,
-                initial_force_rerun=self.app_config.force_rerun,
-                on_save_force_rerun=self._on_save_force_rerun,
-            )
-            page.pack(fill="both", expand=True)
-            self.current_page = page
-
-            # 应用主题颜色到新页面
-            if hasattr(self, "theme_tokens") and self.theme_tokens:
-                _apply_custom_colors(self.current_page, self.theme_tokens)
-
-            self.toolbar.update_title(t("channel_mode"))
-            self.state_manager.set("current_mode", t("channel_mode"))
-            # 立即更新按钮状态，确保正确渲染
-            self.after(10, lambda: self._update_processing_buttons(self.is_processing))
-            # 强制重新配置取消按钮的颜色，确保对比度正确
-            self.after(50, self._fix_cancel_button_contrast)
-
-        elif page_name == "url_list":
+        if page_name == "url_list":
             # 恢复保存的URL列表
             saved_url_list_text = self.state_manager.get("url_list_text", "")
             # 调试日志（可移除）
@@ -127,6 +79,7 @@ class PageManagerMixin:
                 on_check_new=self._on_check_new_urls,
                 on_start_processing=self._on_start_processing_urls,
                 on_cancel_processing=self._on_cancel_task,
+                on_resume_processing=self._on_resume_processing_urls,  # 恢复任务回调
                 stats=self.state_manager.get(
                     "stats", {"total": 0, "success": 0, "failed": 0, "current": 0}
                 ),
@@ -152,12 +105,15 @@ class PageManagerMixin:
             if hasattr(self, "theme_tokens") and self.theme_tokens:
                 _apply_custom_colors(self.current_page, self.theme_tokens)
 
-            self.toolbar.update_title(t("url_list_mode"))
-            self.state_manager.set("current_mode", t("url_list_mode"))
+
+            self.toolbar.update_title(t("start_task"))
+            self.state_manager.set("current_mode", t("start_task"))
             # 立即更新按钮状态，确保正确渲染
             self.after(10, lambda: self._update_processing_buttons(self.is_processing))
             # 强制重新配置取消按钮的颜色，确保对比度正确
             self.after(50, self._fix_cancel_button_contrast)
+            # 检测可恢复任务并更新恢复按钮状态
+            self.after(100, self._check_resumable_tasks)
 
         elif page_name == "run_params":
             page = RunParamsPage(

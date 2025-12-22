@@ -11,7 +11,7 @@ from core.models import VideoInfo
 from core.detector import SubtitleDetector
 from core.logger import get_logger
 from core.failure_logger import _append_line_safe
-from ui.i18n_manager import t
+from core.i18n import t
 
 logger = get_logger()
 
@@ -61,6 +61,11 @@ class SubtitleDetectorMixin:
             logger.error(f"on_log callback failed: {log_err}")
 
         for i, video in enumerate(videos, 1):
+            # 检查取消状态
+            if hasattr(self, 'cancel_token') and self.cancel_token and self.cancel_token.is_cancelled():
+                on_log("INFO", t("log.cancel_signal_detected"))
+                break
+            
             try:
                 result = detector.detect(video)
                 progress_prefix = f"[{i}/{len(videos)}]"

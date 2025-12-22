@@ -8,7 +8,7 @@ from typing import Optional, List
 from urllib.parse import urlparse, parse_qs
 
 from core.models import VideoInfo
-from ui.i18n_manager import t
+from core.i18n import t
 
 
 def get_archive_path(

@@ -557,8 +557,28 @@ class SubtitleTranslator:
                 )
                 raise TaskCancelledError(reason)
 
-            # 调用 AI API
-            translated_text = self._call_ai_api(prompt, cancel_token)
+            # 判断是否需要分块翻译（长字幕使用 ChunkTracker）
+            # 阈值：>100 条字幕或 >8000 字符
+            use_chunks = len(subtitle_text) > 8000 or subtitle_text.count('\n\n') > 100
+
+            if use_chunks and video_id:
+                # 使用 ChunkTracker 分块翻译
+                translated_text = self._translate_with_chunks(
+                    subtitle_text=subtitle_text,
+                    source_language=source_language,
+                    target_language=target_language,
+                    video_id=video_id,
+                    work_dir=output_path.parent,
+                    cancel_token=cancel_token,
+                )
+                # 如果分块翻译失败，回退到直接翻译
+                if not translated_text:
+                    logger.warning_i18n("log.chunk_fallback_direct", video_id=video_id)
+                    translated_text = self._call_ai_api(prompt, cancel_token)
+            else:
+                # 短字幕直接翻译
+                translated_text = self._call_ai_api(prompt, cancel_token)
+
             if not translated_text:
                 logger.error_i18n("log.ai_api_call_failed")
                 return None
@@ -635,6 +655,127 @@ class SubtitleTranslator:
         if match:
             return match.group(1)
         return None
+
+    def _translate_with_chunks(
+        self,
+        subtitle_text: str,
+        source_language: str,
+        target_language: str,
+        video_id: str,
+        work_dir: Path,
+        cancel_token=None,
+    ) -> Optional[str]:
+        """使用 ChunkTracker 分块翻译长字幕
+
+        支持中断后恢复：如果之前翻译中途失败，会从上次中断的位置继续。
+
+        Args:
+            subtitle_text: SRT 格式的字幕内容
+            source_language: 源语言代码
+            target_language: 目标语言代码
+            video_id: 视频 ID
+            work_dir: 工作目录
+            cancel_token: 取消令牌
+
+        Returns:
+            翻译后的 SRT 内容，失败返回 None
+        """
+        from core.state.chunk_tracker import ChunkTracker
+        from core.prompts import get_translation_prompt
+
+        try:
+            # 初始化 ChunkTracker
+            tracker = ChunkTracker(
+                video_id=video_id,
+                target_language=target_language,
+                work_dir=work_dir,
+            )
+
+            # 拆分字幕为 chunks
+            chunks = tracker.split_subtitle(subtitle_text)
+            if not chunks:
+                logger.warning_i18n("log.chunk_split_failed", video_id=video_id)
+                return None
+
+            total_chunks = len(chunks)
+            status = tracker.get_status()
+            completed = status.get("completed", 0)
+
+            logger.info_i18n(
+                "log.chunk_translation_start",
+                video_id=video_id,
+                total=total_chunks,
+                completed=completed,
+            )
+
+            # 获取待翻译的 chunks
+            pending_chunks = tracker.get_pending_chunks()
+
+            for chunk in pending_chunks:
+                # 检查取消状态
+                if cancel_token and cancel_token.is_cancelled():
+                    reason = cancel_token.get_reason() or translate_log("log.user_cancelled")
+                    logger.info_i18n(
+                        "log.translation_cancelled", reason=reason, video_id=video_id
+                    )
+                    raise TaskCancelledError(reason)
+
+                # 生成该 chunk 的翻译 prompt
+                chunk_prompt = get_translation_prompt(
+                    source_language, target_language, chunk.content
+                )
+
+                logger.debug(
+                    f"Translating chunk {chunk.index + 1}/{total_chunks}",
+                    video_id=video_id,
+                )
+
+                # 调用 AI 翻译
+                translated = self._call_ai_api(chunk_prompt, cancel_token)
+
+                if translated:
+                    tracker.mark_chunk_completed(chunk.index, translated)
+                else:
+                    tracker.mark_chunk_failed(chunk.index, "AI API call failed")
+                    logger.warning_i18n(
+                        "log.chunk_translation_failed",
+                        video_id=video_id,
+                        chunk_index=chunk.index,
+                    )
+                    # 继续翻译其他 chunks，不中断
+
+            # 合并翻译结果
+            merged = tracker.merge_translated_chunks()
+
+            if merged:
+                logger.info_i18n(
+                    "log.chunk_translation_complete",
+                    video_id=video_id,
+                    total=total_chunks,
+                )
+                # 清理临时文件
+                tracker.cleanup()
+                return merged
+            else:
+                # 有 chunk 未完成
+                failed_status = tracker.get_status()
+                logger.warning_i18n(
+                    "log.chunk_translation_incomplete",
+                    video_id=video_id,
+                    completed=failed_status.get("completed", 0),
+                    total=failed_status.get("total", total_chunks),
+                )
+                return None
+
+        except TaskCancelledError:
+            raise
+        except Exception as e:
+            logger.error_i18n(
+                "log.chunk_translation_error",
+                video_id=video_id,
+                error=str(e),
+            )
+            return None
 
     def _determine_source_language(
         self, detection_result: DetectionResult

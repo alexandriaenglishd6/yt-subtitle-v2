@@ -14,7 +14,7 @@ from core.logger import get_logger, set_log_context, clear_log_context
 from core.models import VideoInfo
 from core.language import LanguageConfig
 from core.summarizer import Summarizer
-from ui.i18n_manager import set_language, get_language
+from core.i18n import set_language, get_language
 from core.llm_client import LLMClient
 
 # 创建一个模拟的 LLM 客户端

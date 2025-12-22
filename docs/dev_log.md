@@ -39,6 +39,7 @@
 | 2025-12-09 | Milestone-3 P0-25| GUI 完整实现 + 配置绑定 + 双语字幕输出           | `ide_任务表.md` P0-21~P0-25, P1-1, `docs/cookie_setup_guide.md` |
 | 2025-12-17 | Task 4 完成      | 日志国际化基础设施 + 核心日志迁移完成            | `docs/docsrefactoring-task-list.md` Task 4, `test_summary_i18n.py` |
 | 2025-12-18 | v3.1 重构完成    | 完成 P0-P2 所有重构任务，最终清理 legacy 文件      | `docs/docsrefactoring-task-list.md`, `tests/` |
+| 2025-12-22 | 代码精简与模块提取 | i18n 迁移、模块提取、文档整理                     | `core/sanitizer.py`, `core/ytdlp_errors.py`, `ui/ai_provider_config.py` |
 
 ---
 
@@ -105,63 +106,103 @@
 
 ## 2025-12
 
+### 2025-12-22
+
+- **阶段 / 里程碑**：代码精简与模块提取
+- **参与 AI / 工具**：Cursor IDE、Gemini
+- **完成的任务**：
+  1. **Phase 1: 清理与 i18n 迁移**：
+     - 删除 191 个临时文件（`AI discussion/`、`ai_analysis2025-12-18/`、backup 文件）
+     - 迁移 38 处 `ui.i18n_manager` 导入到 `core.i18n`（35 个生产文件 + 3 个测试文件）
+     - 删除废弃的 `ui/i18n_manager.py` 模块
+     - 删除重复的 `ui/i18n/` 目录（翻译文件已在 `core/i18n/locales/`）
+  2. **Phase 2: 模块提取（单一责任）**：
+     - 提取 `core/sanitizer.py`（约 195 行）从 `logger.py`：日志消息脱敏函数
+     - 提取 `core/ytdlp_errors.py`（约 265 行）从 `fetcher.py`：yt-dlp 错误映射逻辑
+     - 提取 `ui/ai_provider_config.py`（约 260 行）从 `translation_summary_page.py`：AI 供应商配置
+  3. **Phase 3: 文档整理**：
+     - 删除 7 个过时文档（会话交接资料、编码修复记录）
+     - 创建 `docs/archive/` 归档结构（p0_reports、error_logging、ui_refactor、refactoring）
+     - 移动 22 份已完成报告到归档目录
+     - 保留 30 份核心规范和设计文档
+  4. **修复语言切换问题**：
+     - 添加 `load_translations()` 函数到 `core/i18n/__init__.py`
+     - 修复 `event_handlers.py` 中的 NameError
+     - 完善 `LanguageConfigPanel.refresh_language()` 更新所有标签/提示/复选框/下拉框
+     - 修复 `url_list_page.py` 刷新缺失的按钮
+- **主要修改点总结**：
+  - **新增模块**：`core/sanitizer.py`、`core/ytdlp_errors.py`、`ui/ai_provider_config.py`
+  - **删除模块**：`ui/i18n_manager.py`、`ui/i18n/` 目录
+  - **修改导入**：38 个文件从 `ui.i18n_manager` 迁移到 `core.i18n`
+  - **文档归档**：22 份报告移至 `docs/archive/`，删除 7 份过时文档
+- **测试结果**：
+  - **85 个测试全部通过**
+  - ✅ 警告从 19 个减少到 0 个（清理了 5 个测试文件的 return 语句）
+  - 语言切换功能正常
+- **遇到的问题 / 风险**：
+  - **已解决**：删除 `ui/i18n_manager.py` 后 `load_translations` 函数缺失导致语言切换报错
+  - **已解决**：`LanguageConfigPanel.refresh_language()` 不完整导致英文模式下仍显示中文
+  - **已解决**：测试文件 return 语句导致 PytestReturnNotNoneWarning 警告
+- **下一步计划**：
+  - 可选：进一步代码优化（如代码复用、性能优化）
+  - 可选：功能增强（如更多 AI 提供商支持、批量导出等）
+
+---
+
+### 2025-12-21
+
+- **阶段 / 里程碑**：休息日
+- **备注**：无工作安排
+
+---
+
 ### 2025-12-20
 
-- **阶段 / 里程碑**：DoD 验证与工程质量补齐
+- **阶段 / 里程碑**：DoD 验证 + UI 国际化
 - **参与 AI / 工具**：Cursor IDE、Gemini
-- **完成的任务编号**：
+- **完成的任务**：
+  
+  **上午 - DoD 验证与工程质量补齐**：
   - ✅ CI 门禁升级：从 draft 改为正式阻断检查
   - ✅ tn() 复数接口测试：10/10 通过
   - ✅ 断点恢复端到端测试：6/6 通过
   - ✅ manifest 并发写入压测：4/4 通过
   - ✅ 修复 Windows 并发写入冲突问题
   - ✅ GitHub Required Status Check 配置
+  
+  **下午 - UI 国际化与代码清理**：
+  - ✅ 合并频道模式和 URL 模式为统一的"开始任务"页面
+  - ✅ 删除 `ChannelPage` 及其遗留引用
+  - ✅ 修复状态栏、task_handlers.py、task_runner.py 中的硬编码中文
+  - ✅ `url_list_page.py` 迁移到 `LanguageConfigPanel`（-290 行）
+  - ✅ 添加"清空日志"按钮，修改语言切换不再清空日志
+
 - **主要修改点总结**：
-  - **CI 门禁升级**（`.github/workflows/i18n-check.yml`）：
-    - 移除 draft 标记，启用硬编码中文检测
-    - 添加 branches 触发器（main, develop）
-    - 完善输出格式和 Summary 步骤
-  - **tn() 复数测试**（`tests/test_plural_i18n.py`）：
-    - 新增 10 个测试用例
-    - 覆盖英文单复数、中文不报错、占位符替换、边界情况
-  - **断点恢复测试**（`scripts/test_checkpoint_resume.py`）：
-    - 测试 Manifest 状态机推进
-    - 测试 kill 后持久化恢复
-    - 测试 ChunkTracker 分块恢复
-    - 测试原子写入无遗留 tmp 文件
-    - 测试可恢复状态检测
-  - **并发压测**（`scripts/test_manifest_concurrent.py`）：
-    - 10/20 workers 并发更新 50/100 视频
-    - 并发 chunk 更新测试
-    - 状态回退保护测试
-  - **Windows 并发写入修复**（`core/state/manifest.py`, `core/state/chunk_tracker.py`）：
-    - `_atomic_write()` 添加重试机制（5 次）
-    - 使用唯一 tmp 文件名（UUID 前缀）避免冲突
-    - 指数退避（0.01s → 0.32s）
-    - 同时检查 `winerror` (5, 32) 和 `errno` (13)
-    - `load_batch()` 添加读取重试机制
-- **新增/更新的文档**：
-  - `scripts/test_checkpoint_resume.py`（断点恢复端到端测试）
-  - `scripts/test_manifest_concurrent.py`（并发压测脚本）
-  - `tests/test_plural_i18n.py`（tn() 复数测试）
-- **测试结果**：
-  - **全部通过**：85 passed, 20 warnings, 1 error (预存配置问题)
-  - 新增 10 个测试（test_plural_i18n.py）
+  - **CI 门禁升级**（`.github/workflows/i18n-check.yml`）：启用硬编码中文检测
+  - **tn() 复数测试**（`tests/test_plural_i18n.py`）：新增 10 个测试用例
+  - **断点恢复测试**（`scripts/test_checkpoint_resume.py`）
+  - **并发压测**（`scripts/test_manifest_concurrent.py`）
+  - **Windows 并发写入修复**（`core/state/manifest.py`, `core/state/chunk_tracker.py`）：添加重试机制
+  - **频道/URL 模式合并**：删除 `channel_page.py`，修改 event_handlers、page_manager、processing_pipeline
+  - **翻译问题修复**：task_handlers.py（12处）、task_runner.py（12处）
+  - **LanguageConfigPanel 迁移**：url_list_page.py 从 880 行减少到 590 行
+
+- **测试结果**：85 passed, 20 warnings
+
 - **遇到的问题 / 风险**：
   - **已解决**：Windows 并发写入 `WinError 32` 和 `PermissionError [Errno 13]`
-  - **已解决**：`os.replace` 在文件被占用时失败，通过重试机制解决
-  - **已解决**：多 manager 实例并发读写时的状态覆盖问题
+  - **已解决**：删除 ChannelPage 后遗留引用导致 NameError
+  - **待处理**：翻译文件存在重复键警告（历史遗留，不影响功能）
+
 - **Git 提交记录**：
   - `feat: 完成 i18n 架构统一 (core/i18n 模块)`
   - `feat: 添加断点续传状态机，修复 Windows 并发写入问题`
-  - `feat: 添加 Pipeline 阶段拆分和 ETA 时间预估`
-  - `feat: 添加字幕智能合并和 YouTube 章节输出`
   - `refactor: 提取 LanguageConfigPanel UI 组件`
   - `feat: 添加 CI 门禁和 DoD 验证测试脚本`
-  - `chore: 更新文档和修复预存测试`
+
 - **下一步计划**：
-  - 将新模块集成到实际处理流程
-  - 迁移现有页面使用 LanguageConfigPanel
+  - ✅ 将新模块集成到实际处理流程
+  - 清理翻译文件重复键
 
 ---
 

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from core.logger import get_logger
-from ui.i18n_manager import t
+from core.i18n import t
 from config.manager import ConfigManager, AIConfig
 from core.ai_providers import create_llm_client
 from core.ai_profile_manager import get_profile_manager
@@ -321,7 +321,7 @@ def ai_smoke_test_command(args) -> int:
         退出码（0 表示所有配置健康，1 表示有配置不健康）
     """
     logger = get_logger()
-    from ui.i18n_manager import t
+    from core.i18n import t
 
     try:
         logger.info(t("ai_testing"))

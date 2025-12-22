@@ -4,7 +4,7 @@
 """
 
 import customtkinter as ctk
-from ui.i18n_manager import t
+from core.i18n import t
 from ui.fonts import title_font, heading_font
 
 

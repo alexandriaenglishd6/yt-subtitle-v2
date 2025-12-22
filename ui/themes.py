@@ -145,7 +145,7 @@ def get_theme_display_name(name: ThemeName, language: str = "zh-CN") -> str:
     """
     # 尝试从 i18n 获取（如果可用）
     try:
-        from ui.i18n_manager import t
+        from core.i18n import t
 
         if language == "zh-CN":
             key_map = {

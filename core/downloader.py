@@ -215,14 +215,7 @@ class SubtitleDownloader:
                 # 基于检测结果，优先下载常见语言的字幕作为 AI 翻译的源语言
                 common_subtitle_downloaded = False
 
-                # 辅助函数：检查语言代码是否匹配（处理 en vs en-US 的情况）
-                def lang_matches(lang1: str, lang2: str) -> bool:
-                    """检查两个语言代码是否匹配（考虑主语言代码）"""
-                    if lang1 == lang2:
-                        return True
-                    main1 = lang1.split("-")[0].split("_")[0].lower()
-                    main2 = lang2.split("-")[0].split("_")[0].lower()
-                    return main1 == main2
+                # 使用从 core.language_utils 导入的 lang_matches() 函数
 
                 for common_lang in COMMON_LANGUAGES:
                     # 在检测结果中查找匹配的语言（支持 en vs en-US 的匹配）

@@ -5,7 +5,7 @@
 
 import customtkinter as ctk
 from typing import Callable, Optional
-from ui.i18n_manager import t, get_language
+from core.i18n import t, get_language
 from ui.themes import ThemeName, get_theme
 from ui.fonts import title_font
 

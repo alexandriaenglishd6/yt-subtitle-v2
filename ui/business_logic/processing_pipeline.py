@@ -10,7 +10,7 @@ from core.pipeline import process_video_list
 from core.cancel_token import CancelToken
 from core.models import VideoInfo
 from core.exceptions import ErrorType
-from ui.i18n_manager import t
+from core.i18n import t
 
 logger = get_logger()
 
@@ -100,6 +100,8 @@ class ProcessingPipelineMixin:
         on_log: Callable[[str, str, Optional[str]], None],
         on_stats: Callable[[dict], None],
         force: bool = False,
+        initial_url_count: int = 0,  # 初始 URL 数量
+        fetch_failed_count: int = 0,  # URL 获取阶段失败的数量
     ):
         """执行完整处理流程（URL 列表模式，使用批次 archive）
 
@@ -107,15 +109,19 @@ class ProcessingPipelineMixin:
             videos: 视频列表
             on_log: 日志回调
             on_stats: 统计回调
+            initial_url_count: 初始 URL 数量（用于保持 total 不变）
+            fetch_failed_count: URL 获取阶段失败的数量
         """
-        # 重置取消令牌（开始新的处理任务）
-        self.cancel_token = CancelToken()
+        # cancel_token 已经在主线程的 process_url_list 中创建，这里不再重复创建
 
         # URL 列表模式使用批次 archive（不区分频道）
         archive_path = self.incremental_manager.get_batch_archive_path()
 
-        # 初始化统计信息
-        stats = {"total": len(videos), "success": 0, "failed": 0, "current": 0}
+        # 使用初始 URL 数量作为 total（如果没有传入则使用视频数量）
+        total_count = initial_url_count if initial_url_count > 0 else len(videos)
+        
+        # 初始化统计信息（保持 total 为初始 URL 数量，failed 包含获取失败的）
+        stats = {"total": total_count, "success": 0, "failed": fetch_failed_count, "current": fetch_failed_count}
         on_stats(stats)
 
         on_log("INFO", t("videos_found", count=len(videos)))
@@ -149,14 +155,20 @@ class ProcessingPipelineMixin:
             on_stats=on_stats,
             on_log=on_log,
             on_error=self._handle_pipeline_error,
-            translation_llm_init_error_type=self.translation_llm_init_error_type,  # 传递初始化失败的错误类型
-            translation_llm_init_error=self.translation_llm_init_error,  # 传递初始化失败的错误信息
+            translation_llm_init_error_type=self.translation_llm_init_error_type,
+            translation_llm_init_error=self.translation_llm_init_error,
+            initial_url_count=initial_url_count,
+            fetch_failed_count=fetch_failed_count,
         )
 
         # 更新最终统计信息（包含错误分类）
+        # 处理阶段的 failed + 获取阶段的 failed
+        process_failed = result.get("failed", 0)
+        total_failed = fetch_failed_count + process_failed
+        
         stats["success"] = result.get("success", 0)
-        stats["failed"] = result.get("failed", 0)
-        stats["current"] = stats["total"]
+        stats["failed"] = total_failed
+        stats["current"] = total_count
         stats["error_counts"] = result.get("error_counts", {})  # 错误分类统计
         on_stats(stats)
 
@@ -166,7 +178,7 @@ class ProcessingPipelineMixin:
     def _on_stats(self, stats: dict):
         """处理统计信息更新"""
         self.state_manager.set("stats", stats)
-        if isinstance(self.current_page, (ChannelPage, UrlListPage)):
+        if isinstance(self.current_page, UrlListPage):
             self.current_page.update_stats(
                 stats, self.state_manager.get("running_status", "")
             )

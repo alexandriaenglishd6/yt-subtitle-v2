@@ -130,6 +130,38 @@ class OutputProcessor:
                     summary_llm=self.summary_llm,
                 )
 
+                # 写入章节文件（如果有章节）
+                if data.detection_result.chapters:
+                    from core.output.formats.chapter import (
+                        extract_chapters_from_ytdlp,
+                        write_chapters_markdown,
+                    )
+                    # 构建简化的 info_dict 用于提取章节
+                    info_dict = {
+                        "id": data.video_info.video_id,
+                        "title": data.video_info.title,
+                        "chapters": data.detection_result.chapters,
+                    }
+                    chapter_list = extract_chapters_from_ytdlp(info_dict)
+                    if chapter_list.has_chapters:
+                        # 获取输出目录
+                        output_dir = self.output_writer.get_video_output_dir(
+                            data.video_info,
+                            channel_name=data.video_info.channel_name,
+                            channel_id=data.video_info.channel_id,
+                        )
+                        chapters_path = write_chapters_markdown(
+                            chapter_list,
+                            output_dir,
+                            filename=f"{data.video_info.video_id}_chapters.md",
+                        )
+                        if chapters_path:
+                            logger.info_i18n(
+                                "chapters_written",
+                                video_id=vid,
+                                count=chapter_list.chapter_count,
+                            )
+
                 logger.info_i18n("output_file_complete", video_id=vid)
             else:
                 logger.debug(f"[Dry Run] 跳过写入输出文件: {vid}", video_id=vid)

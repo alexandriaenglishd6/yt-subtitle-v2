@@ -151,6 +151,28 @@ def reload_translations() -> None:
         _provider.reload()
 
 
+def load_translations(lang_code: str) -> dict:
+    """加载指定语言的翻译字典（用于反向查找等场景）
+    
+    Args:
+        lang_code: 语言代码（如 "zh-CN", "en-US"）
+        
+    Returns:
+        翻译字典，包含所有翻译键值对
+    """
+    import json
+    locale_dir = _get_locale_dir()
+    filename = lang_code.replace("-", "_") + ".json"
+    filepath = locale_dir / filename
+    
+    if filepath.exists():
+        try:
+            return json.loads(filepath.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+
 # 便于导入的别名
 __all__ = [
     "t",
@@ -158,6 +180,8 @@ __all__ = [
     "set_language",
     "get_language",
     "reload_translations",
+    "load_translations",
     "SUPPORTED_LANGUAGES",
     "DEFAULT_LANGUAGE",
 ]
+

@@ -7,7 +7,7 @@ import threading
 from typing import Optional, Callable
 
 from core.logger import get_logger
-from ui.i18n_manager import t
+from core.i18n import t
 
 logger = get_logger()
 
@@ -259,18 +259,46 @@ class TaskRunnerMixin:
             on_complete: 完成回调
         """
 
+        # 在主线程中创建 cancel_token（确保 MainWindow.video_processor 持有正确的引用）
+        from core.cancel_token import CancelToken
+        self.cancel_token = CancelToken()
+
         def task():
             try:
                 logger.info_i18n("gui_url_list_thread_started")
                 on_status(t("status_processing"))
                 on_log("INFO", t("processing_start_url_list"))
 
-                # 获取视频列表
+                # 先解析 URL 列表，立即更新状态栏的计划数量
+                urls = [line.strip() for line in urls_text.split("\n") if line.strip()]
+                if urls:
+                    # 立即显示 URL 数量，让用户知道有多少个视频要处理
+                    initial_stats = {"total": len(urls), "success": 0, "failed": 0, "current": 0}
+                    on_stats(initial_stats)
+                    on_log("INFO", t("url_count_parsed", count=len(urls)) if hasattr(t, '__call__') else f"已解析 {len(urls)} 个 URL")
+
+                # 获取视频列表（这里会逐个获取视频信息，可能比较慢）
                 videos = self._fetch_videos_from_url_list(urls_text, on_log, on_status)
+                
+                # 计算获取失败的 URL 数量（初始 URL 数量 - 成功获取的视频数量）
+                initial_url_count = len(urls) if urls else 0
+                fetch_failed_count = initial_url_count - len(videos) if videos else initial_url_count
+                
                 if not videos:
+                    # 所有 URL 获取失败
+                    final_stats = {"total": initial_url_count, "success": 0, "failed": initial_url_count, "current": initial_url_count}
+                    on_stats(final_stats)
+                    on_log("WARN", t("no_videos_found"))
                     return
 
                 logger.info_i18n("gui_videos_fetched", count=len(videos))
+
+                # 更新状态：保持 total 为初始 URL 数量，获取失败的计入 failed
+                if fetch_failed_count > 0:
+                    on_log("WARN", t("url_fetch_failed_count", count=fetch_failed_count))
+                    # 更新 failed 计数（获取失败的 URL）
+                    stats_with_fetch_failed = {"total": initial_url_count, "success": 0, "failed": fetch_failed_count, "current": fetch_failed_count}
+                    on_stats(stats_with_fetch_failed)
 
                 # 保存视频列表到文件
                 self._save_video_list(videos, t("url_list_source"), None, None, on_log)
@@ -300,7 +328,11 @@ class TaskRunnerMixin:
 
                 # 执行完整处理流程（URL 列表模式使用批次 archive）
                 on_log("INFO", t("processing_starting"))
-                self._run_full_processing_url_list(videos, on_log, on_stats, force)
+                self._run_full_processing_url_list(
+                    videos, on_log, on_stats, force,
+                    initial_url_count=initial_url_count,
+                    fetch_failed_count=fetch_failed_count
+                )
             except Exception as e:
                 import traceback
 
