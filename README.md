@@ -144,7 +144,7 @@ python cli.py channel --url "https://www.youtube.com/@channel" --run
 
 ## 更新日志 / Changelog
 
-### v1.0.0 (2025-12-24)
+### v1.0.0 (2025-12-24) - 重构稳定版 / Refactored Stable Release
 - ✨ **双语字幕优化**：选择双语模式自动启用翻译
 - ✨ **分块翻译进度**：每 25% 输出进度汇总，日志更清晰
 - ✨ **便携版打包**：支持 PyInstaller 打包为便携版
