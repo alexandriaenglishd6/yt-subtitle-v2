@@ -1,8 +1,8 @@
 {
-  "app_name": "YouTube Subtitle Tool v2",
+  "app_name": "YouTube Tools v1.0.0",
   "translation_summary_page_title": "Translation & Summary",
-  "github_link_text": "GitHub",
-  "version_text": "v1.0.0",
+  "github_link_text": "GitHub Repository",
+  "version_text": "Version: v1.0.0",
   "update_available_title": "Update Available",
   "update_available_message": "Current: v{current}\nLatest: v{latest}\n\nOpen download page?",
   "status": "Status",

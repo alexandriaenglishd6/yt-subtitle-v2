@@ -186,6 +186,8 @@ class Toolbar(ctk.CTkFrame):
             self.open_output_btn.configure(text=t("open_output_folder"))
         if hasattr(self, "open_failed_links_btn"):
             self.open_failed_links_btn.configure(text=t("open_failed_links"))
+        if hasattr(self, "github_btn"):
+            self.github_btn.configure(text=f"{t('github_link_text')} | {t('version_text')}")
 
         # 更新标题
         if hasattr(self, "title_label"):
