@@ -93,6 +93,8 @@ class SubtitleDetector:
                 manual_languages=manual_languages,
                 auto_languages=auto_languages,
                 chapters=chapters,
+                subtitle_urls=subtitles,  # 保存原始字幕 URL 信息
+                auto_subtitle_urls=automatic_captions,  # 保存原始自动字幕 URL 信息
             )
 
             if has_subtitles:

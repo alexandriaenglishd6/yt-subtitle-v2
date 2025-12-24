@@ -40,9 +40,13 @@ class DetectionResult:
     manual_languages: List[str]  # 人工字幕语言列表（如 ["en", "zh-CN"]）
     auto_languages: List[str]  # 自动字幕语言列表（如 ["en", "ja"]）
     chapters: List[Dict[str, Any]] = field(default_factory=list)  # 视频章节列表
+    # 原始字幕 URL 信息，格式：{lang_code: [{"ext": "vtt", "url": "..."}, ...]}
+    subtitle_urls: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    auto_subtitle_urls: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
 
     def __str__(self) -> str:
         """字符串表示"""
         manual = ", ".join(self.manual_languages) if self.manual_languages else "无"
         auto = ", ".join(self.auto_languages) if self.auto_languages else "无"
         return f"视频 {self.video_id}: 人工字幕={manual}, 自动字幕={auto}"
+

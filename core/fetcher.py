@@ -13,6 +13,11 @@ from core.logger import get_logger, translate_exception
 from core.exceptions import AppException, ErrorType
 from core.ytdlp_errors import extract_error_message as _extract_error_message
 from core.ytdlp_errors import map_ytdlp_error_to_app_error as _map_ytdlp_error_to_app_error
+from core.url_parser import (
+    identify_url_type as _identify_url_type,
+    extract_video_id as _extract_video_id,
+    YOUTUBE_PATTERNS,
+)
 
 # 初始化 logger
 logger = get_logger()
@@ -24,15 +29,6 @@ class VideoFetcher:
 
     负责从各种 URL 类型（频道、播放列表、单视频、URL 列表）中提取视频信息
     """
-
-    # YouTube URL 模式
-    YOUTUBE_PATTERNS = {
-        "video": re.compile(
-            r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})"
-        ),
-        "channel": re.compile(r"youtube\.com/(?:c/|user/|channel/|@)([^/?]+)"),
-        "playlist": re.compile(r"youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)"),
-    }
 
     def __init__(
         self, yt_dlp_path: Optional[str] = None, proxy_manager=None, cookie_manager=None, quiet: bool = False
@@ -77,38 +73,12 @@ class VideoFetcher:
                 logger.warning_i18n("ytdlp_check_error", error=str(e))
 
     def identify_url_type(self, url: str) -> str:
-        """识别 URL 类型
-
-        Args:
-            url: YouTube URL
-
-        Returns:
-            URL 类型：'video', 'channel', 'playlist', 'unknown'
-        """
-        url_lower = url.lower()
-
-        if "watch?v=" in url_lower or "youtu.be/" in url_lower:
-            return "video"
-        elif "playlist?list=" in url_lower:
-            return "playlist"
-        elif any(x in url_lower for x in ["/c/", "/user/", "/channel/", "/@"]):
-            return "channel"
-        else:
-            return "unknown"
+        """识别 URL 类型（委托给 url_parser 模块）"""
+        return _identify_url_type(url)
 
     def extract_video_id(self, url: str) -> Optional[str]:
-        """从 URL 中提取视频 ID
-
-        Args:
-            url: YouTube 视频 URL
-
-        Returns:
-            视频 ID，如果无法提取则返回 None
-        """
-        match = self.YOUTUBE_PATTERNS["video"].search(url)
-        if match:
-            return match.group(1)
-        return None
+        """从 URL 中提取视频 ID（委托给 url_parser 模块）"""
+        return _extract_video_id(url)
 
     def fetch_from_url(self, url: str) -> List[VideoInfo]:
         """从单个 URL 获取视频信息

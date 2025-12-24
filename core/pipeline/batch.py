@@ -442,13 +442,19 @@ def _process_video_list_staged(
 
                         # 计算成功数和失败数
                         success_count = output_stats["processed"]
-                        failed_count = (
-                            detect_stats["failed"]
-                            + download_stats["failed"]
-                            + translate_stats["failed"]
-                            + summarize_stats["failed"]
-                            + output_stats["failed"]
+                        # 失败数 = 总数 - 成功数 - 仍在队列中的数量
+                        # 注意：不能简单用 total - success，因为可能还有视频在处理中
+                        # 但为了避免重复计数，使用 (已完成数 - 成功数) 来计算失败数
+                        # 已完成数 = 总入队数 - 各阶段仍在队列中的数
+                        in_queue_count = (
+                            detect_stats["pending"] + detect_stats["processing"]
+                            + download_stats["pending"] + download_stats["processing"]
+                            + translate_stats["pending"] + translate_stats["processing"]
+                            + summarize_stats["pending"] + summarize_stats["processing"]
+                            + output_stats["pending"] + output_stats["processing"]
                         )
+                        completed_count = len(videos) - in_queue_count
+                        failed_count = completed_count - success_count if completed_count > success_count else 0
                         
                         current_completed = success_count + failed_count
                         

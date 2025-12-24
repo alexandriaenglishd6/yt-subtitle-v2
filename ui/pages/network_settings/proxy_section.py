@@ -7,7 +7,7 @@ import customtkinter as ctk
 import threading
 
 from core.i18n import t
-from ui.fonts import heading_font
+from ui.fonts import heading_font, body_font
 from core.logger import get_logger
 
 # 导入代理测试模块
@@ -41,7 +41,7 @@ class ProxySectionMixin(ProxyTesterMixin):
         )
 
         # 代理输入框（多行文本框）
-        self.proxy_textbox = ctk.CTkTextbox(proxy_frame, height=100, wrap="word")
+        self.proxy_textbox = ctk.CTkTextbox(proxy_frame, height=100, wrap="word", font=body_font())
         self.proxy_textbox.grid(
             row=1, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 8)
         )
@@ -70,6 +70,7 @@ class ProxySectionMixin(ProxyTesterMixin):
             text=t("proxy_clear"),
             command=self._on_clear_proxies,
             width=120,
+            font=body_font(),
         )
         self.proxy_clear_btn.pack(side="left", padx=(0, 8))
 
@@ -78,6 +79,7 @@ class ProxySectionMixin(ProxyTesterMixin):
             text=t("proxy_save"),
             command=self._on_save_proxies,
             width=120,
+            font=body_font(),
         )
         self.proxy_save_btn.pack(side="left", padx=(0, 8))
 
@@ -86,6 +88,7 @@ class ProxySectionMixin(ProxyTesterMixin):
             text=t("proxy_test_connection"),
             command=self._on_test_proxies,
             width=120,
+            font=body_font(),
             fg_color="gray50",
             hover_color="gray40",
         )

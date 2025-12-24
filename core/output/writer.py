@@ -371,6 +371,16 @@ class OutputWriter:
 
         # 写入双语字幕（如果启用）
         if language_config.bilingual_mode == "source+target":
+            # 检查是否有翻译结果
+            has_translations = any(
+                p and p.exists() for p in translation_result.values()
+            )
+            if not has_translations:
+                logger.warning_i18n(
+                    "log.bilingual_requires_translation",
+                    video_id=video_info.video_id,
+                )
+            
             # 使用输出目录中的原始字幕路径
             if output_original_path and output_original_path.exists():
                 # 确定源语言（优先使用配置的源语言，否则从文件名或检测结果获取）

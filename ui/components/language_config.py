@@ -75,11 +75,11 @@ class LanguageConfigPanel(ctk.CTkFrame):
         # 摘要语言
         self._build_summary_language_row()
         
+        # 翻译策略（在双语模式之前构建，确保复选框存在）
+        self._build_translation_strategy_row()
+        
         # 双语模式
         self._build_bilingual_mode_row()
-        
-        # 翻译策略
-        self._build_translation_strategy_row()
         
         # 字幕格式
         self._build_subtitle_format_row()
@@ -89,14 +89,14 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_source_language_row(self):
         """构建源语言行"""
-        self._source_language_label = ctk.CTkLabel(self, text=t("source_language_label"))
+        self._source_language_label = ctk.CTkLabel(self, text=t("source_language_label"), font=body_font())
         self._source_language_label.grid(row=1, column=0, sticky="w", padx=16, pady=8)
 
         input_frame = ctk.CTkFrame(self, fg_color="transparent")
         input_frame.grid(row=1, column=1, sticky="w", padx=16, pady=8)
 
         self.source_language_entry = ctk.CTkEntry(
-            input_frame, width=120, placeholder_text=t("source_language_placeholder")
+            input_frame, width=120, placeholder_text=t("source_language_placeholder"), font=body_font()
         )
         self.source_language_entry.pack(side="left", padx=(0, 12))
 
@@ -127,14 +127,14 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_target_language_row(self):
         """构建目标语言行"""
-        self._target_language_label = ctk.CTkLabel(self, text=t("target_language_label"))
+        self._target_language_label = ctk.CTkLabel(self, text=t("target_language_label"), font=body_font())
         self._target_language_label.grid(row=2, column=0, sticky="w", padx=16, pady=8)
 
         input_frame = ctk.CTkFrame(self, fg_color="transparent")
         input_frame.grid(row=2, column=1, sticky="w", padx=16, pady=8)
 
         self.subtitle_target_entry = ctk.CTkEntry(
-            input_frame, width=120, placeholder_text=t("target_language_placeholder")
+            input_frame, width=120, placeholder_text=t("target_language_placeholder"), font=body_font()
         )
         self.subtitle_target_entry.pack(side="left", padx=(0, 12))
 
@@ -155,13 +155,13 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_summary_language_row(self):
         """构建摘要语言行"""
-        self._summary_language_label = ctk.CTkLabel(self, text=t("summary_language_label"))
+        self._summary_language_label = ctk.CTkLabel(self, text=t("summary_language_label"), font=body_font())
         self._summary_language_label.grid(row=3, column=0, sticky="w", padx=16, pady=8)
 
         entry_frame = ctk.CTkFrame(self, fg_color="transparent")
         entry_frame.grid(row=3, column=1, sticky="w", padx=16, pady=8)
 
-        self.summary_language_entry = ctk.CTkEntry(entry_frame, width=200)
+        self.summary_language_entry = ctk.CTkEntry(entry_frame, width=200, font=body_font())
         self.summary_language_entry.pack(side="left", padx=(0, 8))
 
         self._summary_language_hint = ctk.CTkLabel(
@@ -187,15 +187,30 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_bilingual_mode_row(self):
         """构建双语模式行"""
-        self._bilingual_mode_label = ctk.CTkLabel(self, text=t("bilingual_mode_label"))
-        self._bilingual_mode_label.grid(row=4, column=0, sticky="w", padx=16, pady=8)
+        self._bilingual_mode_label = ctk.CTkLabel(self, text=t("bilingual_mode_label"), font=body_font())
+        self._bilingual_mode_label.grid(row=5, column=0, sticky="w", padx=16, pady=8)
+
+        bilingual_frame = ctk.CTkFrame(self, fg_color="transparent")
+        bilingual_frame.grid(row=5, column=1, sticky="w", padx=16, pady=8)
 
         self.bilingual_mode_combo = ctk.CTkComboBox(
-            self,
+            bilingual_frame,
             values=[t("bilingual_mode_none"), t("bilingual_mode_source_target")],
             width=200,
+            font=body_font(),
+            dropdown_font=body_font(),
+            command=self._on_bilingual_mode_changed,
         )
-        self.bilingual_mode_combo.grid(row=4, column=1, sticky="w", padx=16, pady=8)
+        self.bilingual_mode_combo.pack(side="left")
+
+        # 静态提示（始终显示）
+        self._bilingual_hint_label = ctk.CTkLabel(
+            bilingual_frame,
+            text=t("bilingual_requires_translation_hint"),
+            font=body_font(),
+            text_color=("gray50", "gray50"),
+        )
+        self._bilingual_hint_label.pack(side="left", padx=10)
 
         bilingual_mode = self.language_config.get("bilingual_mode", "none")
         if bilingual_mode == "none":
@@ -203,13 +218,25 @@ class LanguageConfigPanel(ctk.CTkFrame):
         else:
             self.bilingual_mode_combo.set(t("bilingual_mode_source_target"))
 
+    def _on_bilingual_mode_changed(self, value):
+        """双语模式变更回调：选择双语模式时自动勾选翻译"""
+        is_bilingual = value == t("bilingual_mode_source_target")
+        
+        if is_bilingual and hasattr(self, 'translation_enabled_checkbox'):
+            # 自动勾选翻译
+            if self.translation_enabled_checkbox.get() != 1:
+                self.translation_enabled_checkbox.select()
+                # 触发翻译启用回调
+                if self.on_translation_enabled_changed:
+                    self.on_translation_enabled_changed(True)
+
     def _build_translation_strategy_row(self):
         """构建翻译策略行"""
-        self._translation_strategy_label = ctk.CTkLabel(self, text=t("translation_strategy_label"))
-        self._translation_strategy_label.grid(row=5, column=0, sticky="w", padx=16, pady=8)
+        self._translation_strategy_label = ctk.CTkLabel(self, text=t("translation_strategy_label"), font=body_font())
+        self._translation_strategy_label.grid(row=4, column=0, sticky="w", padx=16, pady=8)
 
         strategy_frame = ctk.CTkFrame(self, fg_color="transparent")
-        strategy_frame.grid(row=5, column=1, sticky="w", padx=16, pady=8)
+        strategy_frame.grid(row=4, column=1, sticky="w", padx=16, pady=8)
 
         self.translation_strategy_combo = ctk.CTkComboBox(
             strategy_frame,
@@ -219,6 +246,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
                 t("translation_strategy_official_only"),
             ],
             width=200,
+            font=body_font(),
+            dropdown_font=body_font(),
         )
         self.translation_strategy_combo.pack(side="left", padx=(0, 8))
 
@@ -251,7 +280,7 @@ class LanguageConfigPanel(ctk.CTkFrame):
 
     def _build_subtitle_format_row(self):
         """构建字幕格式行"""
-        self._subtitle_format_label = ctk.CTkLabel(self, text=t("subtitle_format_label"))
+        self._subtitle_format_label = ctk.CTkLabel(self, text=t("subtitle_format_label"), font=body_font())
         self._subtitle_format_label.grid(row=6, column=0, sticky="w", padx=16, pady=8)
 
         self.subtitle_format_combo = ctk.CTkComboBox(
@@ -262,6 +291,8 @@ class LanguageConfigPanel(ctk.CTkFrame):
                 t("subtitle_format_both"),
             ],
             width=200,
+            font=body_font(),
+            dropdown_font=body_font(),
         )
         self.subtitle_format_combo.grid(row=6, column=1, sticky="w", padx=16, pady=8)
 
@@ -283,6 +314,7 @@ class LanguageConfigPanel(ctk.CTkFrame):
             text=t("language_config_save"),
             command=self._on_save,
             width=120,
+            font=body_font(),
         )
         self.save_btn.pack(side="left", padx=(0, 8))
 

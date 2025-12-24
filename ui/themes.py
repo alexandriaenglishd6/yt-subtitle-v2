@@ -263,11 +263,15 @@ def _apply_custom_colors(parent, tokens: ThemeTokens):
                     pass
             elif isinstance(widget, ctk.CTkButton):
                 try:
-                    widget.configure(
-                        fg_color=(tokens.accent, tokens.accent),
-                        hover_color=(tokens.accent_hover, tokens.accent_hover),
-                        text_color=(tokens.text_primary, tokens.text_primary),
-                    )
+                    # 跳过标记为保留自定义颜色的按钮
+                    if hasattr(widget, "_preserve_colors") and widget._preserve_colors:
+                        pass  # 不修改颜色
+                    else:
+                        widget.configure(
+                            fg_color=(tokens.accent, tokens.accent),
+                            hover_color=(tokens.accent_hover, tokens.accent_hover),
+                            text_color=(tokens.text_primary, tokens.text_primary),
+                        )
                 except Exception:
                     pass
             elif isinstance(widget, ctk.CTkEntry):

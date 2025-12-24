@@ -430,12 +430,13 @@ class GoogleTranslateClient:
                     translated_lines.append("")
                     current_block = []
                     
-                    # 进度汇总日志
+                    # 进度汇总日志（DEBUG 级别，避免并发时日志混乱）
                     processed_blocks += 1
                     if total_blocks > 0:
                         percent = (processed_blocks * 100) // total_blocks
-                        if percent >= last_log_percent + 20 or processed_blocks == total_blocks:
-                            logger.info(
+                        # 只在 100% 时输出（DEBUG），主要进度在 translator 层
+                        if processed_blocks == total_blocks:
+                            logger.debug(
                                 translate_log(
                                     "log.translation_progress",
                                     target_lang=target_lang,
@@ -554,12 +555,13 @@ class GoogleTranslateClient:
                     translated_lines.append("")
                     current_block = []
                     
-                    # 进度汇总日志
+                    # 进度汇总日志（DEBUG 级别，避免并发时日志混乱）
                     processed_blocks += 1
                     if total_blocks > 0:
                         percent = (processed_blocks * 100) // total_blocks
-                        if percent >= last_log_percent + 20 or processed_blocks == total_blocks:
-                            logger.info(
+                        # 只在 100% 时输出（DEBUG），主要进度在 translator 层
+                        if processed_blocks == total_blocks:
+                            logger.debug(
                                 translate_log(
                                     "log.translation_progress",
                                     target_lang=target_lang,

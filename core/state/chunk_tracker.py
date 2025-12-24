@@ -260,24 +260,75 @@ class ChunkTracker:
         return chunks
 
     def _parse_srt(self, content: str) -> List[Dict]:
-        """解析 SRT 内容为条目列表"""
+        """解析 SRT/VTT 内容为条目列表
+        
+        同时支持：
+        - SRT 格式（有序号）
+        - VTT 格式（无序号，以 WEBVTT 开头）
+        """
         import re
 
         entries = []
-        pattern = re.compile(
-            r"(\d+)\s*\n"
-            r"(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*\n"
-            r"((?:(?!\n\n|\n\d+\n\d{2}:\d{2}:\d{2}).)*)",
-            re.DOTALL,
-        )
+        
+        # 检测是否是 VTT 格式
+        is_vtt = content.strip().startswith('WEBVTT')
+        
+        if is_vtt:
+            # VTT 格式：没有序号
+            # 跳过 WEBVTT 头部
+            lines = content.split('\n')
+            content_lines = []
+            in_header = True
+            for line in lines:
+                if in_header:
+                    if line.strip() == '' and content_lines:
+                        in_header = False
+                    elif '-->' in line:
+                        in_header = False
+                        content_lines.append(line)
+                else:
+                    content_lines.append(line)
+            
+            content = '\n'.join(content_lines)
+            
+            # VTT 时间轴格式：00:00:00.000 --> 00:00:01.520
+            pattern = re.compile(
+                r"(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*\n"
+                r"((?:(?!\n\n|\n\d{2}:\d{2}:\d{2}).)*)",
+                re.DOTALL,
+            )
+            
+            index = 1
+            for match in pattern.finditer(content):
+                text = match.group(3).strip()
+                # 清理 VTT 特有的标签和 HTML 实体
+                text = re.sub(r'<[^>]+>', '', text)  # 移除 HTML 标签
+                text = text.replace('&gt;', '>').replace('&lt;', '<')
+                text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
+                
+                entries.append({
+                    "index": index,
+                    "start": match.group(1),
+                    "end": match.group(2),
+                    "text": text,
+                })
+                index += 1
+        else:
+            # SRT 格式：有序号
+            pattern = re.compile(
+                r"(\d+)\s*\n"
+                r"(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*\n"
+                r"((?:(?!\n\n|\n\d+\n\d{2}:\d{2}:\d{2}).)*)",
+                re.DOTALL,
+            )
 
-        for match in pattern.finditer(content):
-            entries.append({
-                "index": int(match.group(1)),
-                "start": match.group(2),
-                "end": match.group(3),
-                "text": match.group(4).strip(),
-            })
+            for match in pattern.finditer(content):
+                entries.append({
+                    "index": int(match.group(1)),
+                    "start": match.group(2),
+                    "end": match.group(3),
+                    "text": match.group(4).strip(),
+                })
 
         return entries
 
@@ -385,7 +436,136 @@ class ChunkTracker:
                     logger.error(f"Missing translated chunk {i}")
                     return None
 
-        return "\n".join(merged_parts)
+        # 合并内容
+        merged_content = "\n\n".join(merged_parts)
+        
+        # 重新编号 SRT 序号，确保连续
+        renumbered = self._renumber_srt(merged_content)
+        
+        # 格式验证
+        if not self._validate_srt_format(renumbered):
+            logger.warning(f"SRT format validation failed for video {self.video_id}")
+        
+        # 时间轴校验
+        timeline_warnings = self._validate_timeline(renumbered)
+        if timeline_warnings:
+            for warning in timeline_warnings[:3]:  # 只显示前 3 个警告
+                logger.warning(warning)
+        
+        return renumbered
+    
+    def _validate_srt_format(self, srt_content: str) -> bool:
+        """验证 SRT 格式是否正确
+        
+        Args:
+            srt_content: SRT 格式内容
+            
+        Returns:
+            是否格式正确
+        """
+        if not srt_content or not srt_content.strip():
+            return False
+        
+        # 检查是否包含时间轴
+        if '-->' not in srt_content:
+            return False
+        
+        # 检查条目数量（至少有一个完整条目）
+        import re
+        entries = re.findall(r'\d+\n\d{2}:\d{2}:\d{2}', srt_content)
+        return len(entries) > 0
+    
+    def _validate_timeline(self, srt_content: str) -> List[str]:
+        """检查时间轴是否有问题
+        
+        Args:
+            srt_content: SRT 格式内容
+            
+        Returns:
+            警告列表
+        """
+        import re
+        
+        warnings = []
+        
+        # 提取所有时间轴
+        pattern = r'(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})'
+        matches = re.findall(pattern, srt_content)
+        
+        if not matches:
+            return warnings
+        
+        def time_to_ms(time_str: str) -> int:
+            """将时间字符串转换为毫秒"""
+            time_str = time_str.replace(',', '.').replace('.', ':')
+            parts = time_str.split(':')
+            if len(parts) == 4:
+                h, m, s, ms = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+                return h * 3600000 + m * 60000 + s * 1000 + ms
+            return 0
+        
+        prev_end = 0
+        for i, (start, end) in enumerate(matches):
+            start_ms = time_to_ms(start)
+            end_ms = time_to_ms(end)
+            
+            # 检查开始时间是否小于结束时间
+            if start_ms >= end_ms:
+                warnings.append(f"Entry {i+1}: Invalid timeline (start >= end)")
+            
+            # 检查是否与前一条重叠
+            if start_ms < prev_end and prev_end > 0:
+                warnings.append(f"Entry {i+1}: Timeline overlaps with previous entry")
+            
+            prev_end = end_ms
+        
+        return warnings
+    
+    def _renumber_srt(self, srt_content: str) -> str:
+        """重新编号 SRT 字幕序号，确保连续
+        
+        Args:
+            srt_content: SRT 格式内容
+            
+        Returns:
+            重新编号后的 SRT 内容
+        """
+        import re
+        
+        # 按字幕块拆分
+        blocks = re.split(r'\n\n+', srt_content.strip())
+        
+        renumbered_blocks = []
+        new_index = 1
+        
+        for block in blocks:
+            block = block.strip()
+            if not block:
+                continue
+            
+            # 匹配 SRT 块：序号 + 时间轴 + 文本
+            # 序号可能在第一行
+            lines = block.split('\n')
+            if len(lines) < 2:
+                continue
+            
+            # 检查第一行是否是纯数字（序号）
+            first_line = lines[0].strip()
+            if first_line.isdigit():
+                # 替换序号
+                lines[0] = str(new_index)
+                new_index += 1
+                renumbered_blocks.append('\n'.join(lines))
+            elif ' --> ' in first_line:
+                # 没有序号行，只有时间轴，添加序号
+                new_block = f"{new_index}\n" + '\n'.join(lines)
+                new_index += 1
+                renumbered_blocks.append(new_block)
+            else:
+                # 无法识别的格式，保持原样
+                renumbered_blocks.append(block)
+        
+        return '\n\n'.join(renumbered_blocks)
 
     def cleanup(self) -> None:
         """清理临时文件"""

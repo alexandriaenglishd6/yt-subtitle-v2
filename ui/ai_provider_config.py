@@ -90,6 +90,31 @@ AI_PROVIDER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "base_url": "https://api.moonshot.cn/v1",
         "models": ["kimi-k2-0905-preview", "kimi-k2-thinking", "kimi-k2-turbo-preview"],
     },
+    "qwen": {
+        "model": "qwen-plus",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": [
+            "qwen3-max",
+            "qwen-plus",
+            "qwen-flash",
+            "qwen-turbo",
+            "qwq-plus",
+            "qwen-long",
+            "qwen-deep-research",
+            "qwen2.5-14b",
+        ],
+    },
+    "doubao": {
+        "model": "Doubao-Seed-1.6",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "models": [
+            "Doubao-Seed-1.6",
+            "Doubao-Seed-1.6-flash",
+            "Doubao-Seed-1.6-lite",
+            "Doubao-Seed-Character",
+            "Doubao-Seed-Translation",
+        ],
+    },
     "glm": {
         "model": "GLM-4.6",
         "base_url": "https://open.bigmodel.cn/api/paas/v4/",

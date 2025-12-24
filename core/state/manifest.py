@@ -9,17 +9,19 @@ Manifest State Machine - 断点续传状态机
 - 单写者：同一时间只有一个进程写入 manifest
 - 原子写入：使用 tmp 文件 + os.replace 保证写入完整
 - chunk 级恢复：翻译阶段支持 chunk 级别的恢复（通过 completed_chunks）
+- P0-3: 脏标记 + 5秒定时保存，减少磁盘 IO
 """
 
 import os
 import json
 import time
+import atexit
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Any
 from datetime import datetime
-from threading import Lock
+from threading import Lock, Thread, Event
 import logging
 
 logger = logging.getLogger(__name__)
@@ -229,17 +231,102 @@ class ManifestManager:
     负责 manifest 的读写操作，保证：
     1. 原子写入：使用 tmp + os.replace
     2. 单写者：使用文件锁避免并发写入冲突
+    3. P0-3: 脏标记 + 5秒定时保存，减少磁盘 IO
     """
+    
+    # P0-3: 定时保存间隔（秒）
+    SAVE_INTERVAL_SECONDS = 5
 
-    def __init__(self, manifest_dir: Path):
+    def __init__(self, manifest_dir: Path, auto_save: bool = True):
         """初始化管理器
 
         Args:
             manifest_dir: manifest 文件存储目录
+            auto_save: 是否启用自动保存（默认 True）
         """
         self.manifest_dir = Path(manifest_dir)
         self.manifest_dir.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
+        
+        # P0-3: 脏标记和当前 manifest 引用
+        self._dirty = False
+        self._current_manifest: Optional[BatchManifest] = None
+        
+        # P0-3: 定时保存线程
+        self._auto_save = auto_save
+        self._stop_event = Event()
+        self._save_thread: Optional[Thread] = None
+        
+        if auto_save:
+            self._start_auto_save()
+            # 注册 atexit 补充（异常退出时不会执行，但正常退出会）
+            atexit.register(self.shutdown)
+    
+    def _start_auto_save(self) -> None:
+        """启动定时保存线程"""
+        self._save_thread = Thread(
+            target=self._auto_save_loop,
+            name="ManifestAutoSave",
+            daemon=True
+        )
+        self._save_thread.start()
+        logger.debug("Manifest auto-save thread started")
+    
+    def _auto_save_loop(self) -> None:
+        """定时保存循环"""
+        while not self._stop_event.wait(self.SAVE_INTERVAL_SECONDS):
+            self.flush()
+    
+    def mark_dirty(self, manifest: Optional[BatchManifest] = None) -> None:
+        """标记当前 manifest 为脏（有未保存的更改）
+        
+        Args:
+            manifest: 要标记的 manifest，如果为 None 则使用当前 manifest
+        """
+        with self._lock:
+            self._dirty = True
+            if manifest is not None:
+                self._current_manifest = manifest
+    
+    def flush(self) -> bool:
+        """立即保存脏 manifest
+        
+        Returns:
+            是否保存成功（如果没有脏数据，返回 True）
+        """
+        with self._lock:
+            if not self._dirty or self._current_manifest is None:
+                return True
+            
+            manifest = self._current_manifest
+            self._dirty = False
+        
+        # 在锁外执行 IO 操作避免阻塞
+        result = self._save_batch_internal(manifest)
+        if result:
+            logger.debug(f"Auto-saved manifest: {manifest.batch_id}")
+        return result
+    
+    def shutdown(self) -> None:
+        """关闭管理器，停止定时保存线程并保存最后的脏数据
+        
+        应在窗口关闭时调用
+        """
+        # 停止定时保存线程
+        self._stop_event.set()
+        if self._save_thread and self._save_thread.is_alive():
+            self._save_thread.join(timeout=2.0)
+        
+        # 保存最后的脏数据
+        self.flush()
+        
+        # 注销 atexit
+        try:
+            atexit.unregister(self.shutdown)
+        except Exception:
+            pass
+        
+        logger.debug("Manifest manager shutdown complete")
 
     def _get_manifest_path(self, batch_id: str) -> Path:
         """获取 manifest 文件路径"""
@@ -363,21 +450,39 @@ class ManifestManager:
         logger.error(f"Failed to load manifest after {max_retries} retries: {path}")
         return None
 
-    def save_batch(self, manifest: BatchManifest) -> bool:
-        """保存批次 manifest
-
-        使用锁确保单写者
-
+    def _save_batch_internal(self, manifest: BatchManifest) -> bool:
+        """内部保存方法（不使用脏标记）
+        
         Args:
             manifest: BatchManifest 实例
-
+            
         Returns:
             是否保存成功
         """
-        with self._lock:
-            manifest.updated_at = datetime.now().isoformat()
-            path = self._get_manifest_path(manifest.batch_id)
-            return self._atomic_write(path, manifest.to_dict())
+        manifest.updated_at = datetime.now().isoformat()
+        path = self._get_manifest_path(manifest.batch_id)
+        return self._atomic_write(path, manifest.to_dict())
+
+    def save_batch(self, manifest: BatchManifest, immediate: bool = True) -> bool:
+        """保存批次 manifest
+
+        P0-3: 默认立即保存，immediate=False 时使用脏标记延迟保存
+
+        Args:
+            manifest: BatchManifest 实例
+            immediate: 是否立即保存（默认 True），设为 False 使用脏标记延迟保存
+
+        Returns:
+            是否保存成功（延迟保存时始终返回 True）
+        """
+        if immediate or not self._auto_save:
+            # 立即保存
+            with self._lock:
+                return self._save_batch_internal(manifest)
+        else:
+            # 延迟保存：标记为脏
+            self.mark_dirty(manifest)
+            return True
 
     def update_video_stage(
         self,

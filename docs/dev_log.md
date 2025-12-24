@@ -106,6 +106,51 @@
 
 ## 2025-12
 
+### 2025-12-23
+
+- **阶段 / 里程碑**：UI 字体统一与按钮状态优化
+- **参与 AI / 工具**：Cursor IDE（Antigravity）
+- **完成的任务**：
+  1. **Phase 2 & 3 代码重构完成**：
+     - 完成 `core/translator/source_selector.py` 模块提取（语言选择逻辑）
+     - 完成 `core/url_parser.py` 模块提取（YouTube URL 解析逻辑）
+     - 删除旧的 `core/translator.py`，更新为模块目录结构
+     - 更新 `README.md` 版本号为 v3.1.1，添加更新日志
+  2. **UI 字体大小统一**：
+     - 修改 `ui/fonts.py`：22px → 24px, 18px → 20px, 14px → 16px
+     - 全面排查并修复 50+ 个 UI 组件的字体设置：
+       - 为所有 `CTkButton` 添加 `font=body_font()`
+       - 为所有 `CTkEntry` 添加 `font=body_font()`
+       - 为所有 `CTkComboBox` 添加 `font=body_font()` 和 `dropdown_font=body_font()`
+       - 为所有 `CTkTextbox` 添加 `font=body_font()`
+       - 修复文件：`language_config.py`、`url_list_page.py`、`toolbar.py`、`run_params_page.py`、`log_panel.py`、`ai_config_panel.py`、`translation_summary_page.py`、`proxy_section.py`、`cookie_section.py`
+  3. **窗口尺寸调整**：
+     - 默认尺寸：1600x1000 → 1700x1050
+     - 最小尺寸：1000x700 → 1100x750
+  4. **语言提示优先级修正**：
+     - 更新 `source_language_auto_hint` 和 `target_language_hint`
+     - 与 `COMMON_LANGUAGES` 代码保持一致：`en > zh-CN > zh-TW > es > de > ja > fr > pt > ru > ko`
+  5. **取消/恢复任务按钮优化**：
+     - 修复禁用状态文字模糊问题（使用 `text_color_disabled` 参数）
+     - 添加 `_preserve_colors` 标记防止主题覆盖自定义颜色
+     - 适配亮色/暗色主题的禁用文字颜色
+  6. **Bug 修复**：
+     - 修复 `_show_prefill_menu` 中 `AI_PREFILL_EXAMPLES` 迭代错误（字典使用 `.values()`）
+- **主要修改点总结**：
+  - **新增模块**：`core/translator/source_selector.py`、`core/url_parser.py`
+  - **修改模块**：`core/translator/` 目录结构、`ui/themes.py`（添加 `_preserve_colors` 跳过）
+  - **UI 优化**：10+ 个 UI 文件添加统一字体设置
+- **测试结果**：
+  - 所有主题切换正常
+  - 禁用按钮在亮色/暗色主题下文字清晰可见
+  - 字体大小统一，下拉列表字体正确
+- **遇到的问题 / 风险**：
+  - **已解决**：CTkComboBox 下拉列表需要单独设置 `dropdown_font` 参数
+  - **已解决**：主题切换会覆盖按钮自定义颜色，通过 `_preserve_colors` 标记解决
+  - **已解决**：禁用状态文字在深色主题下模糊，调整 `text_color_disabled` 颜色值
+
+---
+
 ### 2025-12-22
 
 - **阶段 / 里程碑**：代码精简与模块提取
@@ -144,8 +189,39 @@
   - **已解决**：`LanguageConfigPanel.refresh_language()` 不完整导致英文模式下仍显示中文
   - **已解决**：测试文件 return 语句导致 PytestReturnNotNoneWarning 警告
 - **下一步计划**：
-  - 可选：进一步代码优化（如代码复用、性能优化）
-  - 可选：功能增强（如更多 AI 提供商支持、批量导出等）
+  - 执行 P0 阶段性能优化任务（详见 `docs/performance_optimization_task.md`）
+
+---
+
+### 2025-12-22（晚间）
+
+- **阶段 / 里程碑**：性能优化多轮评审
+- **参与 AI / 工具**：Claude、Gemini、GPT、Grok、Cursor IDE（Antigravity）
+- **完成的任务**：
+  1. **项目分析包准备**：
+     - 创建 `temp/ai_analysis_package/` 包含 20 个核心文件
+     - 生成 `PROJECT_SUMMARY.md` 项目摘要文档
+  2. **多 AI 评审（7 轮迭代）**：
+     - 第 1 轮：各 AI 独立分析，发现代码重复、性能瓶颈、日志问题
+     - 第 2 轮：整合共识，形成 P0/P1/P2 优先级
+     - 第 3 轮：识别分歧（LogPanel 线程安全、cancel_token 优先级）
+     - 第 4 轮：用户决策（Queue 模式、取消 P0、断点修补）
+     - 第 5 轮：执行顺序优化（GPT/Grok 建议合并）
+     - 第 6 轮：补充细节（队列限长、里程碑 flush）
+     - 第 7 轮：最终修正（Logger 回调安全、P1-3 改名）
+  3. **形成最终任务表**：`docs/performance_optimization_task.md`
+- **主要发现**：
+  - **P0-1**：LogPanel 无上限 + 频繁刷新导致 UI 卡死（5/5 AI 共识）
+  - **P0-2**：cancel_token 竞态条件（4/5 AI 共识）
+  - **P0-3**：Manifest 频繁写磁盘（4/5 AI 共识）
+- **用户决策**：
+  | 分歧项 | 选择 | 说明 |
+  |--------|------|------|
+  | 日志显示方式 | B | Queue 邮箱模式 |
+  | 取消按钮优先级 | A | 提升到 P0 |
+  | 断点续传处理 | B | 修补完善，不大改 |
+- **产出文档**：`docs/performance_optimization_task.md`
+- **预计工作量**：P0 阶段 2 天，P1 阶段 1-2 周
 
 ---
 

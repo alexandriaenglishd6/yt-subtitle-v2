@@ -6,7 +6,7 @@
 
 import re
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from core.models import VideoInfo, DetectionResult
 from core.language import LanguageConfig
@@ -19,7 +19,7 @@ from core.exceptions import (
     map_llm_error_to_app_error,
     TaskCancelledError,
 )
-from core.language_utils import lang_matches
+from .source_selector import select_source_subtitle
 
 logger = get_logger()
 
@@ -187,7 +187,7 @@ class SubtitleTranslator:
                 target_lang=target_lang,
                 video_id=video_info.video_id,
             )
-            source_subtitle_path = self._select_source_subtitle(
+            source_subtitle_path = select_source_subtitle(
                 download_result, detection_result, target_language=target_lang
             )
 
@@ -286,146 +286,8 @@ class SubtitleTranslator:
                 self._last_translation_errors[target_lang] = app_error
                 result[target_lang] = None
 
+
         return result
-
-    def _select_source_subtitle(
-        self,
-        download_result: Dict[str, Optional[Path]],
-        detection_result: DetectionResult,
-        target_language: Optional[str] = None,
-    ) -> Optional[Path]:
-        """选择源字幕文件（用于 AI 翻译）
-
-        基于检测结果选择源语言，优先级顺序：
-        1. 在检测结果中，优先选择常见语言（en, de, ja 等）- 翻译质量更好
-        2. 使用原始字幕（人工字幕）
-        3. 检测结果中的其他人工字幕
-        4. 检测结果中的自动字幕
-
-        Args:
-            download_result: 下载结果
-            detection_result: 检测结果
-            target_language: 目标语言（用于日志）
-
-        Returns:
-            源字幕文件路径，如果不存在则返回 None
-        """
-        # 定义常见语言列表（按优先级排序，用于在检测结果中优先选择）
-        # 优先级考虑：翻译质量 + 世界使用人数
-        COMMON_LANGUAGES = [
-            "en",       # 英语 - 使用最广泛，翻译资源最丰富
-            "en-US",
-            "zh-CN",    # 简体中文 - 使用人数第二
-            "zh-TW",    # 繁体中文 - 港澳台用户
-            "es",       # 西班牙语 - 世界第三大语言
-            "es-ES",
-            "de",       # 德语 - 技术内容丰富
-            "de-DE",
-            "ja",       # 日语
-            "ja-JP",
-            "fr",       # 法语
-            "fr-FR",
-            "pt",       # 葡萄牙语
-            "pt-PT",
-            "ru",       # 俄语
-            "ru-RU",
-            "ko",       # 韩语
-            "ko-KR",
-        ]
-
-        official_translations = download_result.get("official_translations", {})
-        video_id = (
-            detection_result.video_id if hasattr(detection_result, "video_id") else None
-        )
-
-
-        # lang_matches() 已从 core.language_utils 导入
-        # 辅助函数：在检测结果中查找匹配的语言
-        def find_matching_lang_in_detection(common_lang: str) -> Optional[str]:
-            """在检测结果中查找与常见语言匹配的语言代码"""
-            # 先检查人工字幕
-            if detection_result.manual_languages:
-                for lang in detection_result.manual_languages:
-                    if lang_matches(lang, common_lang):
-                        return lang
-            # 再检查自动字幕
-            if detection_result.auto_languages:
-                for lang in detection_result.auto_languages:
-                    if lang_matches(lang, common_lang):
-                        return lang
-            return None
-
-        # 优先级1：基于检测结果，优先选择常见语言的官方字幕
-        # 遍历常见语言列表，在检测结果中查找匹配的语言，然后检查是否已下载
-        for common_lang in COMMON_LANGUAGES:
-            matched_lang = find_matching_lang_in_detection(common_lang)
-            if matched_lang:
-                # 检查是否已下载（key 可能是 matched_lang 或 common_lang）
-                official_path = official_translations.get(
-                    matched_lang
-                ) or official_translations.get(common_lang)
-                if official_path and official_path.exists():
-                    logger.info_i18n(
-                        "log.selecting_common_official_as_source",
-                        lang=matched_lang,
-                        common_lang=common_lang,
-                        target_lang=target_language,
-                        video_id=video_id,
-                    )
-                    return official_path
-
-        # 优先级2：使用原始字幕（通常是检测到的第一个人工字幕或自动字幕）
-        original_path = download_result.get("original")
-        if original_path and original_path.exists():
-            logger.info_i18n(
-                "selecting_original_as_source",
-                target_language=target_language,
-                video_id=video_id,
-            )
-            return original_path
-
-        # 优先级3：使用检测结果中的其他人工字幕（非常见语言）
-        if detection_result.manual_languages:
-            for lang in detection_result.manual_languages:
-                # 检查是否是常见语言（已检查过）
-                is_common = any(
-                    lang_matches(lang, common_lang) for common_lang in COMMON_LANGUAGES
-                )
-                if not is_common:
-                    official_path = official_translations.get(lang)
-                    if official_path and official_path.exists():
-                        logger.info_i18n(
-                            "log.selecting_manual_as_source",
-                            lang=lang,
-                            target_lang=target_language,
-                            video_id=video_id,
-                        )
-                        return official_path
-
-        # 优先级4：使用检测结果中的自动字幕（非常见语言）
-        if detection_result.auto_languages:
-            for lang in detection_result.auto_languages:
-                # 检查是否是常见语言（已检查过）
-                is_common = any(
-                    lang_matches(lang, common_lang) for common_lang in COMMON_LANGUAGES
-                )
-                if not is_common:
-                    official_path = official_translations.get(lang)
-                    if official_path and official_path.exists():
-                        logger.info_i18n(
-                            "log.selecting_auto_as_source",
-                            lang=lang,
-                            target_lang=target_language,
-                            video_id=video_id,
-                        )
-                        return official_path
-
-        logger.warning_i18n(
-            "log.no_source_subtitle_for_translation",
-            target_lang=target_language,
-            video_id=video_id,
-        )
-        return None
 
     def _copy_to_translated(self, source_path: Path, target_path: Path) -> None:
         """将官方翻译字幕复制到 translated.<lang>.srt
@@ -710,44 +572,144 @@ class SubtitleTranslator:
 
             # 获取待翻译的 chunks
             pending_chunks = tracker.get_pending_chunks()
-
-            for chunk in pending_chunks:
-                # 检查取消状态
-                if cancel_token and cancel_token.is_cancelled():
-                    reason = cancel_token.get_reason() or translate_log("log.user_cancelled")
-                    logger.info_i18n(
-                        "log.translation_cancelled", reason=reason, video_id=video_id
-                    )
-                    raise TaskCancelledError(reason)
-
-                # 生成该 chunk 的翻译 prompt
-                chunk_prompt = get_translation_prompt(
-                    source_language, target_language, chunk.content
-                )
-
-                logger.debug(
-                    f"Translating chunk {chunk.index + 1}/{total_chunks}",
+            
+            # 确定并发数：取 AI 并发数和 3 的较小值
+            ai_concurrency = getattr(self.llm, 'max_concurrency', 5)
+            chunk_workers = min(3, ai_concurrency, len(pending_chunks))
+            
+            if chunk_workers > 1 and len(pending_chunks) > 1:
+                # 多线程并发翻译
+                logger.info_i18n(
+                    "log.chunk_parallel_start",
                     video_id=video_id,
+                    workers=chunk_workers,
+                    pending=len(pending_chunks),
                 )
-
-                # 调用 AI 翻译
-                translated = self._call_ai_api(chunk_prompt, cancel_token)
-
-                if translated:
-                    tracker.mark_chunk_completed(chunk.index, translated)
-                else:
-                    tracker.mark_chunk_failed(chunk.index, "AI API call failed")
-                    logger.warning_i18n(
-                        "log.chunk_translation_failed",
+                
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                import threading
+                
+                # 线程安全的进度计数器
+                completed_count = [0]
+                count_lock = threading.Lock()
+                
+                def translate_single_chunk(chunk):
+                    """翻译单个 chunk 的工作函数"""
+                    # 检查取消状态
+                    if cancel_token and cancel_token.is_cancelled():
+                        return (chunk.index, None, "cancelled")
+                    
+                    translated = self._translate_chunk_with_retry(
+                        chunk_content=chunk.content,
+                        source_language=source_language,
+                        target_language=target_language,
                         video_id=video_id,
-                        chunk_index=chunk.index,
+                        cancel_token=cancel_token,
+                        max_chars=tracker.max_chars,
+                        min_chars=500,
                     )
-                    # 继续翻译其他 chunks，不中断
+                    
+                    return (chunk.index, translated, None)
+                
+                with ThreadPoolExecutor(max_workers=chunk_workers) as executor:
+                    # 提交所有任务
+                    futures = {
+                        executor.submit(translate_single_chunk, chunk): chunk
+                        for chunk in pending_chunks
+                    }
+                    
+                    # 进度汇总变量
+                    last_progress_milestone = 0
+                    
+                    # 处理完成的任务
+                    for future in as_completed(futures):
+                        chunk = futures[future]
+                        
+                        # 检查取消状态
+                        if cancel_token and cancel_token.is_cancelled():
+                            reason = cancel_token.get_reason() or translate_log("log.user_cancelled")
+                            raise TaskCancelledError(reason)
+                        
+                        try:
+                            chunk_index, translated, error = future.result()
+                            
+                            if error == "cancelled":
+                                continue
+                            
+                            with count_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                            
+                            # 汇总进度日志（每 25% 输出一次）
+                            progress = (current * 100) // total_chunks
+                            if progress >= last_progress_milestone + 25:
+                                logger.info_i18n(
+                                    "log.chunk_progress_summary",
+                                    video_id=video_id,
+                                    completed=current,
+                                    total=total_chunks,
+                                    percent=progress,
+                                )
+                                last_progress_milestone = (progress // 25) * 25
+                            
+                            if translated:
+                                tracker.mark_chunk_completed(chunk_index, translated)
+                            else:
+                                tracker.mark_chunk_failed(chunk_index, "translation failed")
+                                logger.warning_i18n(
+                                    "log.chunk_translation_failed",
+                                    video_id=video_id,
+                                    chunk_index=chunk_index,
+                                )
+                        except Exception as e:
+                            logger.error(f"Chunk {chunk.index} translation error: {e}")
+                            tracker.mark_chunk_failed(chunk.index, str(e))
+            else:
+                # 单个 chunk 或串行模式
+                for chunk in pending_chunks:
+                    # 检查取消状态
+                    if cancel_token and cancel_token.is_cancelled():
+                        reason = cancel_token.get_reason() or translate_log("log.user_cancelled")
+                        logger.info_i18n(
+                            "log.translation_cancelled", reason=reason, video_id=video_id
+                        )
+                        raise TaskCancelledError(reason)
+
+                    logger.info_i18n(
+                        "log.chunk_processing",
+                        video_id=video_id,
+                        chunk_index=chunk.index + 1,
+                        total_chunks=total_chunks,
+                    )
+
+                    # 使用递归式重试翻译
+                    translated = self._translate_chunk_with_retry(
+                        chunk_content=chunk.content,
+                        source_language=source_language,
+                        target_language=target_language,
+                        video_id=video_id,
+                        cancel_token=cancel_token,
+                        max_chars=tracker.max_chars,
+                        min_chars=500,
+                    )
+
+                    if translated:
+                        tracker.mark_chunk_completed(chunk.index, translated)
+                    else:
+                        tracker.mark_chunk_failed(chunk.index, "recursive retry failed")
+                        logger.warning_i18n(
+                            "log.chunk_translation_failed",
+                            video_id=video_id,
+                            chunk_index=chunk.index,
+                        )
 
             # 合并翻译结果
             merged = tracker.merge_translated_chunks()
 
             if merged:
+                # 翻译完整性检查
+                self._check_translation_completeness(subtitle_text, merged, video_id)
+                
                 logger.info_i18n(
                     "log.chunk_translation_complete",
                     video_id=video_id,
@@ -776,6 +738,178 @@ class SubtitleTranslator:
                 error=str(e),
             )
             return None
+
+    def _translate_chunk_with_retry(
+        self,
+        chunk_content: str,
+        source_language: str,
+        target_language: str,
+        video_id: str,
+        cancel_token=None,
+        max_chars: int = 8000,
+        min_chars: int = 500,
+        depth: int = 0,
+    ) -> Optional[str]:
+        """递归式翻译 chunk，失败时减小大小重试
+        
+        Args:
+            chunk_content: chunk 内容（SRT 格式）
+            source_language: 源语言
+            target_language: 目标语言
+            video_id: 视频 ID
+            cancel_token: 取消令牌
+            max_chars: 当前最大字符数
+            min_chars: 最小字符数（不再拆分的阈值）
+            depth: 递归深度（用于日志）
+            
+        Returns:
+            翻译后的内容，失败返回 None
+        """
+        from core.prompts import get_translation_prompt
+        
+        # 检查取消状态
+        if cancel_token and cancel_token.is_cancelled():
+            return None
+        
+        # 生成翻译 prompt
+        chunk_prompt = get_translation_prompt(
+            source_language, target_language, chunk_content
+        )
+        
+        # 尝试翻译
+        translated = self._call_ai_api(chunk_prompt, cancel_token)
+        
+        if translated:
+            return translated
+        
+        # 翻译失败，检查是否可以继续拆分
+        content_len = len(chunk_content)
+        if content_len <= min_chars:
+            # 已经是最小大小，无法继续拆分
+            logger.warning(
+                f"Chunk 翻译失败且无法继续拆分 (size={content_len}, min={min_chars})",
+                extra={"video_id": video_id},
+            )
+            return None
+        
+        # 拆分成两个子块
+        logger.info_i18n(
+            "log.chunk_retry_split",
+            video_id=video_id,
+            original_size=content_len,
+            depth=depth + 1,
+        )
+        
+        sub_chunks = self._split_chunk_in_half(chunk_content)
+        
+        if len(sub_chunks) < 2:
+            # 无法拆分
+            logger.warning(
+                f"Chunk 无法拆分 (只有 {len(sub_chunks)} 个子块)",
+                extra={"video_id": video_id},
+            )
+            return None
+        
+        # 递归翻译子块
+        translated_parts = []
+        new_max_chars = max_chars // 2
+        
+        for i, sub_chunk in enumerate(sub_chunks):
+            logger.debug(
+                f"翻译子块 {i + 1}/{len(sub_chunks)} (depth={depth + 1}, size={len(sub_chunk)})",
+                extra={"video_id": video_id},
+            )
+            
+            sub_translated = self._translate_chunk_with_retry(
+                chunk_content=sub_chunk,
+                source_language=source_language,
+                target_language=target_language,
+                video_id=video_id,
+                cancel_token=cancel_token,
+                max_chars=new_max_chars,
+                min_chars=min_chars,
+                depth=depth + 1,
+            )
+            
+            if sub_translated:
+                translated_parts.append(sub_translated)
+            else:
+                # 子块翻译失败，整个 chunk 失败
+                logger.warning(
+                    f"子块 {i + 1} 翻译失败",
+                    extra={"video_id": video_id},
+                )
+                return None
+        
+        # 合并子块翻译结果
+        return "\n".join(translated_parts)
+    
+    def _split_chunk_in_half(self, srt_content: str) -> List[str]:
+        """将 SRT 内容在句子边界处拆分成两半
+        
+        优先在句子结束标点（句号、问号、感叹号）附近的字幕条目边界处拆分，
+        其次在逗号、分号等次要标点处拆分，最后才在中点分割。
+        
+        Args:
+            srt_content: SRT 格式内容
+            
+        Returns:
+            两个子块的列表
+        """
+        import re
+        
+        # 按字幕条目拆分
+        entries = re.split(r'\n\n+', srt_content.strip())
+        entries = [e.strip() for e in entries if e.strip()]
+        
+        if len(entries) < 2:
+            return [srt_content]
+        
+        # 计算中点范围（允许在中点 ±25% 范围内寻找最佳分割点）
+        total = len(entries)
+        mid = total // 2
+        min_idx = max(1, int(total * 0.25))  # 至少保留 25% 在第一部分
+        max_idx = min(total - 1, int(total * 0.75))  # 至少保留 25% 在第二部分
+        
+        # 句子结束标点（高优先级）
+        sentence_end_pattern = re.compile(r'[.!?。！？][\s"\'）\]\}]*$')
+        # 次要标点（低优先级）
+        clause_end_pattern = re.compile(r'[,;:，；：、][\s"\'）\]\}]*$')
+        
+        # 在中点附近寻找最佳分割点
+        best_idx = mid
+        best_score = 0
+        
+        for i in range(min_idx, max_idx + 1):
+            # 获取当前条目的文本内容（最后几行是字幕文本）
+            entry = entries[i - 1]
+            lines = entry.split('\n')
+            text = lines[-1] if lines else ""
+            
+            # 计算分数：距离中点越近且有句子结束标点的得分越高
+            distance_score = 1.0 - abs(i - mid) / (max_idx - min_idx + 1)
+            
+            if sentence_end_pattern.search(text):
+                # 句子结束标点：高分
+                punctuation_score = 2.0
+            elif clause_end_pattern.search(text):
+                # 次要标点：中分
+                punctuation_score = 1.0
+            else:
+                # 无标点：低分
+                punctuation_score = 0.0
+            
+            score = distance_score + punctuation_score
+            
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        
+        first_half = "\n\n".join(entries[:best_idx])
+        second_half = "\n\n".join(entries[best_idx:])
+        
+        return [first_half, second_half]
+
 
     def _determine_source_language(
         self, detection_result: DetectionResult
@@ -889,3 +1023,28 @@ class SubtitleTranslator:
                 translate_log("log.ai_api_call_failed_detail", error=str(e)),
                 LLMErrorType.UNKNOWN,
             )
+
+    def _check_translation_completeness(
+        self, original: str, translated: str, video_id: str
+    ) -> bool:
+        """检查翻译前后条目数是否一致
+        
+        Args:
+            original: 原始字幕内容
+            translated: 翻译后字幕内容
+            video_id: 视频 ID
+            
+        Returns:
+            是否完整
+        """
+        original_count = original.count('-->')
+        translated_count = translated.count('-->')
+        
+        if original_count != translated_count:
+            logger.warning(
+                f"Translation count mismatch for {video_id}: "
+                f"{original_count} -> {translated_count} entries"
+            )
+            return False
+        
+        return True

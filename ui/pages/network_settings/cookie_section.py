@@ -39,7 +39,7 @@ class CookieSectionMixin:
         )
 
         # Cookie 输入框（多行文本框）
-        self.cookie_textbox = ctk.CTkTextbox(cookie_frame, height=120, wrap="word")
+        self.cookie_textbox = ctk.CTkTextbox(cookie_frame, height=120, wrap="word", font=body_font())
         self.cookie_textbox.grid(
             row=1, column=0, columnspan=3, sticky="ew", padx=16, pady=(0, 8)
         )
@@ -68,6 +68,7 @@ class CookieSectionMixin:
             text=t("cookie_paste"),
             command=self._on_paste_cookie,
             width=120,
+            font=body_font(),
         )
         self.cookie_paste_btn.pack(side="left", padx=(0, 8))
 
@@ -76,6 +77,7 @@ class CookieSectionMixin:
             text=t("cookie_clear"),
             command=self._on_clear_cookie,
             width=120,
+            font=body_font(),
         )
         self.cookie_clear_btn.pack(side="left", padx=(0, 8))
 
@@ -84,6 +86,7 @@ class CookieSectionMixin:
             text=t("cookie_test"),
             command=self._on_test_cookie,
             width=120,
+            font=body_font(),
         )
         self.cookie_test_btn.pack(side="left", padx=(0, 8))
 
@@ -92,6 +95,7 @@ class CookieSectionMixin:
             text=t("cookie_save"),
             command=self._on_save_cookie,
             width=120,
+            font=body_font(),
         )
         self.cookie_save_btn.pack(side="left", padx=(0, 8))
 

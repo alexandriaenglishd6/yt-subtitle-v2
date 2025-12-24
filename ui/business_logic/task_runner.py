@@ -195,6 +195,7 @@ class TaskRunnerMixin:
         on_status: Callable[[str], None],
         on_complete: Optional[Callable[[], None]] = None,
         force: bool = False,
+        on_stats: Optional[Callable[[dict, str], None]] = None,
     ):
         """执行 Dry Run（URL 列表模式）
 
@@ -203,6 +204,7 @@ class TaskRunnerMixin:
             on_log: 日志回调
             on_status: 状态更新回调
             on_complete: 完成回调
+            on_stats: 状态栏更新回调（可选）
         """
 
         def task():
@@ -210,17 +212,38 @@ class TaskRunnerMixin:
                 on_status(t("status_detecting"))
                 on_log("INFO", t("dry_run_start_url_list"))
 
+                # 先解析 URL 列表，立即更新状态栏的计划数量
+                urls = [line.strip() for line in urls_text.split("\n") if line.strip()]
+                if urls and on_stats:
+                    # 立即显示 URL 数量，让用户知道有多少个视频要处理
+                    initial_stats = {"total": len(urls), "success": 0, "failed": 0}
+                    on_stats(initial_stats)
+
                 # 获取视频列表
                 videos = self._fetch_videos_from_url_list(urls_text, on_log, on_status)
+                
+                # 计算获取失败的 URL 数量
+                initial_url_count = len(urls) if urls else 0
+                fetch_failed_count = initial_url_count - len(videos) if videos else initial_url_count
+                
                 if not videos:
+                    # 所有 URL 获取失败
+                    if on_stats:
+                        final_stats = {"total": initial_url_count, "success": 0, "failed": initial_url_count}
+                        on_stats(final_stats)
                     return
+
+                # 更新状态：获取失败的计入 failed
+                if fetch_failed_count > 0 and on_stats:
+                    stats_with_fetch_failed = {"total": initial_url_count, "success": 0, "failed": fetch_failed_count}
+                    on_stats(stats_with_fetch_failed)
 
                 # 保存视频列表到文件
                 self._save_video_list(videos, t("url_list_source"), None, None, on_log)
 
                 on_log("INFO", t("videos_found", count=len(videos)))
 
-                # 执行字幕检测
+                # 执行字幕检测（传递初始计划数量和已失败数量）
                 self._detect_subtitles(
                     videos,
                     on_log,
@@ -228,6 +251,9 @@ class TaskRunnerMixin:
                     channel_name=None,
                     channel_id=None,
                     dry_run=True,
+                    on_stats=on_stats,
+                    initial_total=initial_url_count,
+                    initial_failed=fetch_failed_count,
                 )
             except Exception as e:
                 import traceback

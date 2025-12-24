@@ -319,14 +319,10 @@ class StagedPipeline:
 
             # 成功数：OUTPUT 阶段成功处理的数量
             self._success_count = output_stats["processed"]
-            # 失败数：所有阶段的失败数之和
-            self._failed_count = (
-                detect_stats["failed"]
-                + download_stats["failed"]
-                + translate_stats["failed"]
-                + summarize_stats["failed"]
-                + output_stats["failed"]
-            )
+            # 失败数：总数 - 成功数（避免同一视频在多个阶段失败被重复计数）
+            # 注意：之前的逻辑是累加各阶段的失败数，会导致如：
+            # download 失败 + translate 失败 = 2，但实际只有 1 个视频失败
+            self._failed_count = self._total_count - self._success_count
 
             logger.info(
                 t(

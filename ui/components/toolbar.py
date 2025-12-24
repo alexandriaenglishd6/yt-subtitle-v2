@@ -7,7 +7,7 @@ import customtkinter as ctk
 from typing import Callable, Optional
 from core.i18n import t, get_language
 from ui.themes import ThemeName, get_theme
-from ui.fonts import title_font
+from ui.fonts import title_font, body_font
 
 
 class Toolbar(ctk.CTkFrame):
@@ -58,12 +58,27 @@ class Toolbar(ctk.CTkFrame):
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
         button_frame.grid(row=0, column=1, padx=16, pady=8, sticky="e")
 
+        # GitHub 开源地址 + 版本号（合并为一个按钮）
+        self.github_btn = ctk.CTkButton(
+            button_frame,
+            text=f"{t('github_link_text')} | {t('version_text')}",
+            width=180,
+            font=body_font(),
+            fg_color=("gray85", "gray25"),
+            hover_color=("gray75", "gray35"),
+            text_color=("#0066CC", "#66B3FF"),
+            command=self._on_github_click,
+        )
+        self.github_btn.pack(side="left", padx=4)
+
         # UI 语言切换
         lang_values = [t("language_zh"), t("language_en")]
         self.lang_combo = ctk.CTkComboBox(
             button_frame,
             values=lang_values,
             width=100,
+            font=body_font(),
+            dropdown_font=body_font(),
             command=self._on_language_changed,
         )
         current_lang = get_language()
@@ -81,7 +96,7 @@ class Toolbar(ctk.CTkFrame):
             t("theme_claude_warm"),
         ]
         self.theme_combo = ctk.CTkComboBox(
-            button_frame, values=theme_values, width=120, command=self._on_theme_changed
+            button_frame, values=theme_values, width=120, font=body_font(), dropdown_font=body_font(), command=self._on_theme_changed
         )
         current_theme_display = t(f"theme_{self.current_theme}")
         self.theme_combo.set(current_theme_display)
@@ -92,6 +107,7 @@ class Toolbar(ctk.CTkFrame):
             button_frame,
             text=t("open_output_folder"),
             width=120,
+            font=body_font(),
             command=self._on_open_output_folder,
         )
         self.open_output_btn.pack(side="left", padx=4)
@@ -101,9 +117,15 @@ class Toolbar(ctk.CTkFrame):
             button_frame,
             text=t("open_failed_links"),
             width=120,
+            font=body_font(),
             command=self._on_open_failed_links,
         )
         self.open_failed_links_btn.pack(side="left", padx=4)
+
+    def _on_github_click(self, event=None):
+        """点击 GitHub 链接"""
+        import webbrowser
+        webbrowser.open("https://github.com/alexandriaenglishd6/yt-subtitle-v2")
 
     def _on_language_changed(self, value: str):
         """语言切换回调"""

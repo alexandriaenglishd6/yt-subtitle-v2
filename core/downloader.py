@@ -15,6 +15,7 @@ from core.exceptions import AppException, ErrorType
 from core.fetcher import _map_ytdlp_error_to_app_error
 from core.failure_logger import _atomic_write
 from core.language_utils import lang_matches
+from core.chinese_detector import is_chinese_lang, normalize_chinese_lang_code
 
 logger = get_logger()
 
@@ -98,18 +99,66 @@ class SubtitleDownloader:
                 raise TaskCancelledError(reason)
 
             if source_lang:
-                # 下载原始字幕
+                # 下载原始字幕 - 优先尝试人工字幕，失败后尝试自动字幕
                 original_path = self._download_subtitle(
                     video_info.url,
                     source_lang,
                     output_path,
                     f"original.{source_lang}.srt",
-                    is_auto=False,  # 优先使用人工字幕
+                    is_auto=False,  # 先尝试人工字幕
                     cancel_token=cancel_token,
                 )
+                
+                # 如果人工字幕下载失败，尝试自动字幕
+                if not original_path:
+                    logger.info_i18n(
+                        "log.trying_auto_subtitle",
+                        lang=source_lang,
+                        video_id=video_info.video_id,
+                    )
+                    original_path = self._download_subtitle(
+                        video_info.url,
+                        source_lang,
+                        output_path,
+                        f"original.{source_lang}.srt",
+                        is_auto=True,  # 尝试自动字幕
+                        cancel_token=cancel_token,
+                    )
+                
+                # 如果 yt-dlp 下载完全失败，尝试直接从 URL 下载
+                if not original_path and detection_result:
+                    original_path = self._download_subtitle_from_url(
+                        detection_result,
+                        source_lang,
+                        output_path,
+                        f"original.{source_lang}.srt",
+                    )
+                
                 result["original"] = original_path
 
                 if original_path:
+                    # 如果是中文字幕，检测简繁体并规范化语言代码
+                    if is_chinese_lang(source_lang) and source_lang.lower() == "zh":
+                        try:
+                            content = original_path.read_text(encoding="utf-8", errors="ignore")
+                            normalized_lang = normalize_chinese_lang_code(source_lang, content)
+                            if normalized_lang != source_lang:
+                                # 重命名文件以使用规范化的语言代码
+                                new_filename = f"original.{normalized_lang}.srt"
+                                new_path = output_path / new_filename
+                                original_path.rename(new_path)
+                                result["original"] = new_path
+                                result["original_lang"] = normalized_lang
+                                logger.info_i18n(
+                                    "log.chinese_variant_detected",
+                                    original_lang=source_lang,
+                                    detected_lang=normalized_lang,
+                                    video_id=video_info.video_id,
+                                )
+                                original_path = new_path
+                        except Exception as e:
+                            logger.debug_i18n("log.chinese_detection_failed", error=str(e))
+                    
                     logger.info_i18n(
                         "original_subtitle_downloaded",
                         file_name=original_path.name,
@@ -337,61 +386,64 @@ class SubtitleDownloader:
         # 如果指定了源语言
         if language_config.source_language:
             specified_lang = language_config.source_language
-            # 检查是否存在（先检查人工字幕，再检查自动字幕）
-            if specified_lang in detection_result.manual_languages:
-                logger.info_i18n(
-                    "using_specified_source_lang_manual",
-                    lang=specified_lang,
-                    video_id=detection_result.video_id
-                    if hasattr(detection_result, "video_id")
-                    else None,
-                )
-                return specified_lang
-            elif specified_lang in detection_result.auto_languages:
-                logger.info_i18n(
-                    "using_specified_source_lang_auto",
-                    lang=specified_lang,
-                    video_id=detection_result.video_id
-                    if hasattr(detection_result, "video_id")
-                    else None,
-                )
-                return specified_lang
-            else:
-                # 指定的源语言不存在，回退到自动模式
-                logger.warning_i18n(
-                    "log.specified_source_lang_not_found",
-                    lang=specified_lang,
-                    manual=detection_result.manual_languages,
-                    auto=detection_result.auto_languages,
-                    video_id=detection_result.video_id
-                    if hasattr(detection_result, "video_id")
-                    else None,
-                )
+            # 检查是否存在（先检查人工字幕，再检查自动字幕）- 使用 lang_matches 支持 zh vs zh-CN 匹配
+            for detected_lang in detection_result.manual_languages:
+                if lang_matches(detected_lang, specified_lang):
+                    logger.info_i18n(
+                        "using_specified_source_lang_manual",
+                        lang=detected_lang,
+                        video_id=detection_result.video_id
+                        if hasattr(detection_result, "video_id")
+                        else None,
+                    )
+                    return detected_lang  # 返回实际检测到的语言代码
+            for detected_lang in detection_result.auto_languages:
+                if lang_matches(detected_lang, specified_lang):
+                    logger.info_i18n(
+                        "using_specified_source_lang_auto",
+                        lang=detected_lang,
+                        video_id=detection_result.video_id
+                        if hasattr(detection_result, "video_id")
+                        else None,
+                    )
+                    return detected_lang  # 返回实际检测到的语言代码
+            # 指定的源语言不存在，回退到自动模式
+            logger.warning_i18n(
+                "log.specified_source_lang_not_found",
+                lang=specified_lang,
+                manual=detection_result.manual_languages,
+                auto=detection_result.auto_languages,
+                video_id=detection_result.video_id
+                if hasattr(detection_result, "video_id")
+                else None,
+            )
 
         # 自动模式：按优先级匹配
-        # 先检查人工字幕
+        # 先检查人工字幕（使用 lang_matches 函数支持 zh vs zh-CN 匹配）
         for priority_lang in PRIORITY_LANGUAGES:
-            if priority_lang in detection_result.manual_languages:
-                logger.debug_i18n(
-                    "log.auto_selecting_source_lang_priority_manual",
-                    lang=priority_lang,
-                    video_id=detection_result.video_id
-                    if hasattr(detection_result, "video_id")
-                    else None,
-                )
-                return priority_lang
+            for detected_lang in detection_result.manual_languages:
+                if lang_matches(detected_lang, priority_lang):
+                    logger.debug_i18n(
+                        "log.auto_selecting_source_lang_priority_manual",
+                        lang=detected_lang,
+                        video_id=detection_result.video_id
+                        if hasattr(detection_result, "video_id")
+                        else None,
+                    )
+                    return detected_lang  # 返回实际检测到的语言代码
 
         # 再检查自动字幕
         for priority_lang in PRIORITY_LANGUAGES:
-            if priority_lang in detection_result.auto_languages:
-                logger.debug_i18n(
-                    "log.auto_selecting_source_lang_priority_auto",
-                    lang=priority_lang,
-                    video_id=detection_result.video_id
-                    if hasattr(detection_result, "video_id")
-                    else None,
-                )
-                return priority_lang
+            for detected_lang in detection_result.auto_languages:
+                if lang_matches(detected_lang, priority_lang):
+                    logger.debug_i18n(
+                        "log.auto_selecting_source_lang_priority_auto",
+                        lang=detected_lang,
+                        video_id=detection_result.video_id
+                        if hasattr(detection_result, "video_id")
+                        else None,
+                    )
+                    return detected_lang  # 返回实际检测到的语言代码
 
         # 如果优先级列表中没有，使用原来的逻辑（第一个人工/自动字幕）
         if detection_result.manual_languages:
@@ -414,6 +466,238 @@ class SubtitleDownloader:
             return detection_result.auto_languages[0]
 
         return None
+
+    def _download_subtitle_from_url(
+        self,
+        detection_result: DetectionResult,
+        lang_code: str,
+        output_dir: Path,
+        output_filename: str,
+    ) -> Optional[Path]:
+        """直接从检测结果中的 URL 下载字幕（备用方案）
+        
+        当 yt-dlp 的 --write-subs 无法工作时，直接从字幕 URL 下载。
+        
+        Args:
+            detection_result: 检测结果（包含字幕 URL）
+            lang_code: 语言代码
+            output_dir: 输出目录
+            output_filename: 输出文件名
+            
+        Returns:
+            下载的字幕文件路径，如果失败则返回 None
+        """
+        import requests
+        from core.language_utils import lang_matches
+        
+        try:
+            output_path = output_dir / output_filename
+            subtitle_url = None
+            subtitle_ext = None
+            
+            # 先查找人工字幕 URL
+            for sub_lang, sub_list in detection_result.subtitle_urls.items():
+                if lang_matches(sub_lang, lang_code) and sub_list:
+                    # 优先选择 srt 或 vtt 格式
+                    for sub_info in sub_list:
+                        ext = sub_info.get("ext", "")
+                        if ext in ["srt", "vtt", "srv3", "json3"]:
+                            subtitle_url = sub_info.get("url")
+                            subtitle_ext = ext
+                            break
+                    if not subtitle_url and sub_list:
+                        # 使用第一个可用的
+                        subtitle_url = sub_list[0].get("url")
+                        subtitle_ext = sub_list[0].get("ext", "vtt")
+                    if subtitle_url:
+                        logger.info_i18n(
+                            "log.download_from_url_manual",
+                            lang=sub_lang,
+                            video_id=detection_result.video_id,
+                        )
+                        break
+            
+            # 如果没有人工字幕，查找自动字幕 URL
+            if not subtitle_url:
+                for sub_lang, sub_list in detection_result.auto_subtitle_urls.items():
+                    if lang_matches(sub_lang, lang_code) and sub_list:
+                        for sub_info in sub_list:
+                            ext = sub_info.get("ext", "")
+                            if ext in ["srt", "vtt", "srv3", "json3"]:
+                                subtitle_url = sub_info.get("url")
+                                subtitle_ext = ext
+                                break
+                        if not subtitle_url and sub_list:
+                            subtitle_url = sub_list[0].get("url")
+                            subtitle_ext = sub_list[0].get("ext", "vtt")
+                        if subtitle_url:
+                            logger.info_i18n(
+                                "log.download_from_url_auto",
+                                lang=sub_lang,
+                                video_id=detection_result.video_id,
+                            )
+                            break
+            
+            if not subtitle_url:
+                logger.warning_i18n(
+                    "log.no_subtitle_url_found",
+                    lang=lang_code,
+                    video_id=detection_result.video_id,
+                )
+                return None
+            
+            # 准备代理配置（使用现有的 proxy_manager）
+            proxies = None
+            if self.proxy_manager:
+                proxy = self.proxy_manager.get_next_proxy()
+                if proxy:
+                    proxies = {"http": proxy, "https": proxy}
+                    logger.debug(f"使用代理下载字幕: {proxy}")
+            
+            # 下载字幕
+            response = requests.get(subtitle_url, timeout=30, proxies=proxies)
+            response.raise_for_status()
+            
+            content = response.text
+            
+            # 如果是 JSON3 格式，转换为 SRT
+            if subtitle_ext == "json3":
+                content = self._convert_json3_to_srt(content)
+            elif subtitle_ext == "srv3":
+                content = self._convert_srv3_to_srt(content)
+            elif subtitle_ext == "vtt":
+                content = self._convert_vtt_to_srt(content)
+            
+            # 写入文件
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            
+            logger.info_i18n(
+                "log.subtitle_downloaded_from_url",
+                file_name=output_filename,
+                video_id=detection_result.video_id,
+            )
+            
+            return output_path
+            
+        except Exception as e:
+            logger.warning_i18n(
+                "log.download_from_url_failed",
+                error=str(e),
+                video_id=detection_result.video_id,
+            )
+            return None
+    
+    def _convert_vtt_to_srt(self, vtt_content: str) -> str:
+        """将 VTT 格式转换为 SRT 格式"""
+        import re
+        
+        # 移除 VTT 头部
+        lines = vtt_content.strip().split("\n")
+        if lines and lines[0].startswith("WEBVTT"):
+            lines = lines[1:]
+        
+        # 处理时间戳格式
+        srt_lines = []
+        counter = 1
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            # 跳过空行和注释
+            if not line or line.startswith("NOTE"):
+                i += 1
+                continue
+            # 检测时间戳行
+            if " --> " in line:
+                # 转换时间戳格式（VTT 用 . 分隔毫秒，SRT 用 ,）
+                timestamp = re.sub(r"(\d{2}:\d{2}:\d{2})\.(\d{3})", r"\1,\2", line)
+                # 移除 VTT 特有的位置信息
+                timestamp = re.sub(r" (align|position|line|size):[^\s]+", "", timestamp)
+                srt_lines.append(str(counter))
+                srt_lines.append(timestamp)
+                counter += 1
+                i += 1
+                # 收集字幕文本
+                while i < len(lines) and lines[i].strip():
+                    srt_lines.append(lines[i].strip())
+                    i += 1
+                srt_lines.append("")
+            else:
+                i += 1
+        
+        return "\n".join(srt_lines)
+    
+    def _convert_json3_to_srt(self, json_content: str) -> str:
+        """将 YouTube JSON3 格式转换为 SRT 格式"""
+        import json
+        
+        try:
+            data = json.loads(json_content)
+            events = data.get("events", [])
+            
+            srt_lines = []
+            counter = 1
+            
+            for event in events:
+                if "segs" not in event:
+                    continue
+                
+                start_ms = event.get("tStartMs", 0)
+                duration_ms = event.get("dDurationMs", 0)
+                end_ms = start_ms + duration_ms
+                
+                text = "".join(seg.get("utf8", "") for seg in event.get("segs", []))
+                text = text.strip()
+                
+                if text:
+                    srt_lines.append(str(counter))
+                    srt_lines.append(f"{self._ms_to_srt_time(start_ms)} --> {self._ms_to_srt_time(end_ms)}")
+                    srt_lines.append(text)
+                    srt_lines.append("")
+                    counter += 1
+            
+            return "\n".join(srt_lines)
+        except Exception:
+            return json_content
+    
+    def _convert_srv3_to_srt(self, srv3_content: str) -> str:
+        """将 YouTube SRV3 (XML) 格式转换为 SRT 格式"""
+        import re
+        from html import unescape
+        
+        try:
+            srt_lines = []
+            counter = 1
+            
+            # 简单的正则解析 <p t="start" d="duration">text</p>
+            pattern = r'<p[^>]*t="(\d+)"[^>]*d="(\d+)"[^>]*>([^<]*)</p>'
+            matches = re.findall(pattern, srv3_content)
+            
+            for start_ms_str, duration_ms_str, text in matches:
+                start_ms = int(start_ms_str)
+                duration_ms = int(duration_ms_str)
+                end_ms = start_ms + duration_ms
+                text = unescape(text).strip()
+                
+                if text:
+                    srt_lines.append(str(counter))
+                    srt_lines.append(f"{self._ms_to_srt_time(start_ms)} --> {self._ms_to_srt_time(end_ms)}")
+                    srt_lines.append(text)
+                    srt_lines.append("")
+                    counter += 1
+            
+            return "\n".join(srt_lines) if srt_lines else srv3_content
+        except Exception:
+            return srv3_content
+    
+    def _ms_to_srt_time(self, ms: int) -> str:
+        """将毫秒转换为 SRT 时间格式 (HH:MM:SS,mmm)"""
+        hours = ms // 3600000
+        minutes = (ms % 3600000) // 60000
+        seconds = (ms % 60000) // 1000
+        milliseconds = ms % 1000
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
     def _download_subtitle(
         self,
@@ -502,9 +786,30 @@ class SubtitleDownloader:
                 cmd.extend(["--write-auto-subs", "--sub-langs", lang_code])
             else:
                 # 下载人工字幕
+                # 如果指定语言失败，会在外层逻辑尝试自动字幕
                 cmd.extend(["--write-subs", "--sub-langs", lang_code])
+            
+            # 添加备用：如果指定语言不可用，尝试下载所有字幕
+            # 这可以处理 yt-dlp 语言代码匹配问题
+            if not is_auto:
+                cmd.extend(["--write-auto-subs"])  # 同时也尝试自动字幕
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            
+            # 调试日志：输出 yt-dlp 的执行结果（使用 DEBUG 级别避免刷屏）
+            logger.debug(f"yt-dlp 命令: {' '.join(cmd)}")
+            logger.debug(f"yt-dlp returncode: {result.returncode}")
+            if result.stdout:
+                logger.debug(f"yt-dlp stdout: {result.stdout[:500]}")
+            if result.stderr:
+                logger.debug(f"yt-dlp stderr: {result.stderr[:500]}")
+            
+            # 列出输出目录中的临时文件
+            temp_files = list(output_dir.glob("temp_*"))
+            if temp_files:
+                logger.debug(f"输出目录临时文件: {[f.name for f in temp_files]}")
+            else:
+                logger.debug(f"输出目录 {output_dir} 中没有临时文件")
 
             if result.returncode != 0:
                 error_msg = result.stderr
@@ -533,6 +838,18 @@ class SubtitleDownloader:
                 if not actual_paths:
                     # 最宽泛的搜索：temp_*.<lang>.*
                     actual_paths = list(output_dir.glob(f"temp_*.{lang_code}.*"))
+                # 如果是中文语言代码，扩展搜索模式以支持变体
+                if not actual_paths and is_chinese_lang(lang_code):
+                    # 支持多种字幕格式：srt, vtt, ttml, txt, srv3, json3
+                    chinese_langs = ["zh", "zh-Hans", "zh-Hant", "zh-CN", "zh-TW", "cmn"]
+                    subtitle_formats = ["srt", "vtt", "ttml", "txt", "srv3", "json3"]
+                    for zh_lang in chinese_langs:
+                        for fmt in subtitle_formats:
+                            actual_paths = list(output_dir.glob(f"temp_*.{zh_lang}.{fmt}"))
+                            if actual_paths:
+                                break
+                        if actual_paths:
+                            break
 
                 if actual_paths:
                     # 文件已经生成，即使 yt-dlp 报错也继续处理
@@ -619,6 +936,23 @@ class SubtitleDownloader:
             # 查找下载的文件
             expected_path = output_path
             actual_paths = list(output_dir.glob(f"temp_*.{lang_code}.srt"))
+            
+            # 如果是中文语言代码，扩展搜索模式以支持变体（zh-Hans, zh-Hant, zh-CN, zh-TW 等）
+            if not actual_paths and is_chinese_lang(lang_code):
+                # yt-dlp 可能返回 zh-Hans、zh-Hant 或其他变体
+                # 支持多种字幕格式：srt, vtt, ttml, txt, srv3, json3
+                chinese_langs = ["zh", "zh-Hans", "zh-Hant", "zh-CN", "zh-TW", "cmn"]
+                subtitle_formats = ["srt", "vtt", "ttml", "txt", "srv3", "json3"]
+                for zh_lang in chinese_langs:
+                    for fmt in subtitle_formats:
+                        actual_paths = list(output_dir.glob(f"temp_*.{zh_lang}.{fmt}"))
+                        if actual_paths:
+                            logger.debug_i18n("log.found_chinese_variant_file", 
+                                             pattern=f"{zh_lang}.{fmt}", 
+                                             file=actual_paths[0].name)
+                            break
+                    if actual_paths:
+                        break
 
             if actual_paths:
                 # 找到下载的文件，使用原子写机制移动到目标位置

@@ -39,8 +39,8 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         
         # 窗口基本设置（先设置默认标题，i18n 初始化后会更新）
         self.title(t("app_name"))
-        self.geometry("1600x1000")
-        self.minsize(1000, 700)
+        self.geometry("1700x1050")
+        self.minsize(1100, 750)
         
         # 初始化配置管理器
         self.config_manager = ConfigManager()

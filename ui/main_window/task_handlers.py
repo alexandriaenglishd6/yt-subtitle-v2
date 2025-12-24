@@ -76,7 +76,45 @@ class TaskHandlersMixin:
             self.log_panel.append_log("WARN", t("processing_in_progress"))
             return False
 
+        # 检查双语模式 + 翻译未启用的冲突
+        if self._check_bilingual_translation_conflict():
+            return False
+
         return True
+
+    def _check_bilingual_translation_conflict(self) -> bool:
+        """检查双语模式和翻译配置是否冲突
+        
+        Returns:
+            True 表示有冲突，False 表示无冲突
+        """
+        try:
+            # 获取语言配置
+            language_config = None
+            if hasattr(self, 'language_panel') and self.language_panel:
+                language_config = self.language_panel.get_config()
+            elif hasattr(self, 'app_config') and self.app_config:
+                language_config = self.app_config.language.to_dict()
+            
+            if not language_config:
+                return False
+            
+            bilingual_mode = language_config.get("bilingual_mode", "none")
+            
+            # 获取翻译启用状态
+            translation_enabled = True
+            if hasattr(self, 'app_config') and self.app_config:
+                translation_enabled = self.app_config.translation_ai.enabled
+            
+            if bilingual_mode == "source+target" and not translation_enabled:
+                self.log_panel.append_log("ERROR", t("bilingual_translation_conflict"))
+                return True
+        except Exception as e:
+            # 调试日志
+            import traceback
+            self.log_panel.append_log("DEBUG", f"Bilingual check error: {e}")
+        
+        return False
 
     def _on_check_new_videos(self, url: str, force: bool = False):
         """检查新视频按钮点击（Dry Run）"""
@@ -140,7 +178,7 @@ class TaskHandlersMixin:
             return
 
         self.is_processing = True
-        safe_on_log, safe_on_status, _, safe_on_complete = self._create_safe_callbacks()
+        safe_on_log, safe_on_status, safe_on_stats, safe_on_complete = self._create_safe_callbacks()
 
         self.video_processor.dry_run_url_list(
             urls_text=urls_text,
@@ -148,6 +186,7 @@ class TaskHandlersMixin:
             on_status=safe_on_status,
             on_complete=safe_on_complete,
             force=force,
+            on_stats=safe_on_stats,
         )
 
     def _on_start_processing_urls(self, urls_text: str, force: bool = False):
@@ -191,9 +230,28 @@ class TaskHandlersMixin:
             self._restore_processing_buttons()
 
     def _on_cancel_task(self):
-        """取消任务按钮点击"""
+        """取消任务按钮点击（P0-2 优化）
+        
+        点击后立即：
+        1. 禁用取消按钮，防止重复点击
+        2. 更新按钮文本为"正在停止"
+        3. 更新状态栏
+        4. 调用 stop_processing 触发取消
+        """
         if not self.is_processing:
             return
+
+        # P0-2: 立即禁用取消按钮，显示"正在停止"
+        if hasattr(self, "current_page") and self.current_page:
+            if hasattr(self.current_page, "set_stopping_state"):
+                self.current_page.set_stopping_state()
+
+        # 更新状态栏显示"正在停止"
+        if hasattr(self, "log_panel") and hasattr(self.log_panel, "update_stats"):
+            current_stats = self.state_manager.get(
+                "stats", {"total": 0, "success": 0, "failed": 0}
+            )
+            self.log_panel.update_stats(current_stats, t("status_stopping"))
 
         # 调用 VideoProcessor 的停止方法
         self.video_processor.stop_processing()
@@ -203,9 +261,11 @@ class TaskHandlersMixin:
         """恢复任务按钮点击（URL 列表模式）
         
         读取最近的 BatchManifest，获取未完成的视频并继续处理
+        P1-3: 恢复前清理残留 .tmp 文件
         """
         from pathlib import Path
         from core.state.manifest import ManifestManager, VideoStage
+        from core.utils.cleanup import cleanup_video_tmp_files
         
         try:
             # 获取 manifest 目录
@@ -215,6 +275,14 @@ class TaskHandlersMixin:
             if not manifest_dir.exists():
                 self.log_panel.append_log("WARN", "没有可恢复的任务（.state 目录不存在）")
                 return
+            
+            # P1-3: 清理残留 .tmp 文件
+            cleaned_count = cleanup_video_tmp_files(output_dir)
+            if cleaned_count > 0:
+                self.log_panel.append_log(
+                    "INFO", 
+                    t("log.cleanup_tmp_files", count=cleaned_count, directory=str(output_dir))
+                )
             
             # 初始化 ManifestManager 并获取最近的批次
             manifest_manager = ManifestManager(manifest_dir)
@@ -248,8 +316,16 @@ class TaskHandlersMixin:
                 t("resume_task_found", count=len(resumable_videos), batch_id=latest_batch_id)
             )
             
-            # 使用现有的处理逻辑
-            self._on_start_processing_urls(urls_text, force=False)
+            # 回填 URL 到输入框，让用户确认后再处理
+            if hasattr(self, "current_page") and hasattr(self.current_page, "set_url_text"):
+                self.current_page.set_url_text(urls_text)
+                self.log_panel.append_log(
+                    "INFO", 
+                    t("resume_urls_loaded", count=len(resumable_videos))
+                )
+            else:
+                # 回退：如果无法回填，则直接开始处理
+                self._on_start_processing_urls(urls_text, force=False)
             
         except Exception as e:
             self.log_panel.append_log("ERROR", t("resume_task_failed", error=str(e)))

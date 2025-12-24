@@ -1,9 +1,12 @@
 """
 日志面板组件
 负责显示实时日志输出
+
+P0-1 优化：使用 deque 缓冲区 + 轮询机制，解决高频日志导致 UI 卡死问题
 """
 
 import customtkinter as ctk
+from collections import deque
 from datetime import datetime
 from typing import Optional, List, Tuple
 from core.i18n import t, get_language
@@ -14,7 +17,19 @@ class LogPanel(ctk.CTkFrame):
     """日志面板
 
     显示实时日志输出，支持自动滚动和日志级别过滤
+    
+    P0-1 优化：
+    - 使用 deque 缓冲区接收日志（maxlen=2000，线程安全）
+    - 100ms 轮询一次，每次最多处理 50 条
+    - 显示条目上限 500 条，超出自动清理旧日志
     """
+    
+    # P0-1: 显示条目上限，超出时清理旧日志
+    MAX_ENTRIES = 500
+    # P0-1: 每次轮询最多处理的条目数
+    POLL_BATCH_SIZE = 50
+    # P0-1: 轮询间隔（毫秒）
+    POLL_INTERVAL_MS = 100
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -22,7 +37,9 @@ class LogPanel(ctk.CTkFrame):
         self.filter_level = "ALL"
         # 是否自动滚动
         self.auto_scroll = True
-        # 存储所有日志条目（用于过滤）：Tuple[timestamp, level, message, video_id]
+        # P0-1: 使用 deque 作为线程安全的日志缓冲区（maxlen=2000 防止内存溢出）
+        self._log_buffer: deque = deque(maxlen=2000)
+        # 存储已显示的日志条目（用于过滤重放）：Tuple[timestamp, level, message, video_id]
         self.log_entries: List[Tuple[str, str, str, Optional[str]]] = []
         # 统计信息
         self.stats = {"total": 0, "success": 0, "failed": 0}
@@ -31,7 +48,11 @@ class LogPanel(ctk.CTkFrame):
         self.proxy_manager = None  # 代理管理器引用（用于实时获取代理状态）
         # Cookie 状态的原始信息（用于语言切换时重新翻译）
         self._cookie_info = {"cookie": None, "region": None, "test_result": None}
+        # P0-1: 轮询是否在运行
+        self._polling = False
         self._build_ui()
+        # P0-1: 启动轮询
+        self._start_polling()
 
     def _build_ui(self):
         """构建 UI"""
@@ -101,6 +122,8 @@ class LogPanel(ctk.CTkFrame):
             filter_frame,
             values=filter_values,
             width=100,
+            font=body_font(),
+            dropdown_font=body_font(),
             command=self._on_filter_changed,
         )
         self.filter_combo.set(filter_values[0])  # 默认 ALL
@@ -140,7 +163,10 @@ class LogPanel(ctk.CTkFrame):
         self.append_log("INFO", t("gui_started"))
 
     def append_log(self, level: str, message: str, video_id: Optional[str] = None):
-        """追加日志到日志框
+        """追加日志到缓冲区（P0-1 优化版）
+
+        工作线程调用此方法只会写入 deque 缓冲区，不直接操作 Tk 控件。
+        真正的 UI 更新由 _poll_logs 在主线程中完成。
 
         Args:
             level: 日志级别（INFO, WARN, ERROR 等）
@@ -148,8 +174,63 @@ class LogPanel(ctk.CTkFrame):
             video_id: 视频ID（可选）
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # 保存日志条目
-        self.log_entries.append((timestamp, level, message, video_id))
+        # P0-1: 只写入缓冲区，UI 更新由轮询完成
+        self._log_buffer.append((timestamp, level, message, video_id))
+
+    def _start_polling(self):
+        """启动日志轮询（P0-1）"""
+        if self._polling:
+            return
+        self._polling = True
+        self._poll_logs()
+
+    def _stop_polling(self):
+        """停止日志轮询（P0-1）"""
+        self._polling = False
+
+    def _poll_logs(self):
+        """轮询处理缓冲区中的日志（P0-1）
+        
+        每 100ms 执行一次，每次最多处理 50 条，防止 UI 卡顿。
+        """
+        if not self._polling:
+            return
+        
+        count = 0
+        while self._log_buffer and count < self.POLL_BATCH_SIZE:
+            try:
+                item = self._log_buffer.popleft()
+                self._insert_log(item)
+                count += 1
+            except IndexError:
+                # deque 为空
+                break
+        
+        # 继续轮询
+        try:
+            self.after(self.POLL_INTERVAL_MS, self._poll_logs)
+        except Exception:
+            # 窗口可能已关闭
+            self._polling = False
+
+    def _insert_log(self, item: Tuple[str, str, str, Optional[str]]):
+        """真正插入日志到 UI（P0-1）
+        
+        Args:
+            item: (timestamp, level, message, video_id)
+        """
+        timestamp, level, message, video_id = item
+        
+        # 保存到 log_entries（用于过滤重放）
+        self.log_entries.append(item)
+        
+        # P0-1: 限制显示条目数量，超出时清理旧日志
+        if len(self.log_entries) > self.MAX_ENTRIES:
+            # 删除最早的 100 条
+            del self.log_entries[:100]
+            # 同时需要刷新显示
+            self._refresh_log_display()
+            return  # _refresh_log_display 已经显示了所有日志
 
         # 根据过滤级别决定是否显示
         if not self._should_show_log(level):
@@ -243,6 +324,8 @@ class LogPanel(ctk.CTkFrame):
 
     def clear(self):
         """清空日志"""
+        # P0-1: 同时清空缓冲区
+        self._log_buffer.clear()
         self.log_entries.clear()
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", "end")
@@ -404,7 +487,12 @@ class LogPanel(ctk.CTkFrame):
                 is_error = True
 
         # 统计部分文本（新格式：计划 - 已处理 - 状态）
-        stats_text = f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{t('stats_success')} {success} / {t('stats_failed')} {failed}   ••   {t('stats_status')}：{status_display}   ••   "
+        # P1-3: 增加待重跑数量显示
+        resumable = self.stats.get("resumable", 0)
+        processed_text = f"{t('stats_success')} {success} / {t('stats_failed')} {failed}"
+        if resumable > 0:
+            processed_text += f" ({resumable} {t('stats_resumable')})"
+        stats_text = f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{processed_text}   ••   {t('stats_status')}：{status_display}   ••   "
 
         # Cookie 状态（可能变红）
         cookie_text = f"{t('stats_cookie')}：{cookie_display}"

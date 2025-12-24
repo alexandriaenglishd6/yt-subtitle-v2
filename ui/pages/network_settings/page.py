@@ -52,14 +52,15 @@ class NetworkSettingsPage(CookieSectionMixin, ProxySectionMixin, ctk.CTkFrame):
         scroll_frame.pack(fill="both", expand=True, padx=16, pady=16)
         scroll_frame.grid_columnconfigure(0, weight=1)
 
-        # 标题（恢复 22px）
+        # 标题（居中显示）
         self._title_label = ctk.CTkLabel(
             scroll_frame,
             text=t("network_settings_group"),
             font=title_font(weight="bold"),
             text_color=("black", "white"),  # 强制设置为黑/白
+            anchor="center",
         )
-        self._title_label.pack(pady=(0, 24))
+        self._title_label.pack(fill="x", pady=(0, 24))
 
         # Cookie 配置区域
         self._build_cookie_section(scroll_frame)

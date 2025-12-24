@@ -50,6 +50,7 @@ def _init_registry() -> None:
             "glm": OpenAICompatibleClient,
             "groq": OpenAICompatibleClient,
             "xai": OpenAICompatibleClient,
+            "doubao": OpenAICompatibleClient,  # 豆包/火山引擎
         }
     )
 

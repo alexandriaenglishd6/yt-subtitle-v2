@@ -35,14 +35,15 @@ class RunParamsPage(ctk.CTkFrame):
 
     def _build_ui(self):
         """构建 UI"""
-        # 标题（恢复 22px）
+        # 标题（居中显示）
         self._title_label = ctk.CTkLabel(
             self,
             text=t("run_params"),
             font=title_font(weight="bold"),
             text_color=("black", "white"),  # 强制设置为黑/白
+            anchor="center",
         )
-        self._title_label.pack(pady=16)
+        self._title_label.pack(pady=16, fill="x")
 
         # 并发数量设置
         concurrency_frame = ctk.CTkFrame(self)
@@ -74,7 +75,7 @@ class RunParamsPage(ctk.CTkFrame):
         self.concurrency_slider.grid(row=0, column=0, padx=(0, 8), sticky="ew")
 
         # 输入框
-        self.concurrency_entry = ctk.CTkEntry(concurrency_control_frame, width=60)
+        self.concurrency_entry = ctk.CTkEntry(concurrency_control_frame, width=60, font=body_font())
         self.concurrency_entry.insert(0, str(self.concurrency))
         self.concurrency_entry.grid(row=0, column=1, padx=(0, 8))
         self.concurrency_entry.bind("<KeyRelease>", self._on_concurrency_entry_changed)
@@ -128,7 +129,7 @@ class RunParamsPage(ctk.CTkFrame):
         self.ai_concurrency_slider.set(self.ai_concurrency)
         self.ai_concurrency_slider.grid(row=0, column=0, padx=(0, 8), sticky="ew")
 
-        self.ai_concurrency_entry = ctk.CTkEntry(ai_concurrency_control_frame, width=60)
+        self.ai_concurrency_entry = ctk.CTkEntry(ai_concurrency_control_frame, width=60, font=body_font())
         self.ai_concurrency_entry.insert(0, str(self.ai_concurrency))
         self.ai_concurrency_entry.grid(row=0, column=1, padx=(0, 8))
         self.ai_concurrency_entry.bind(
@@ -164,7 +165,7 @@ class RunParamsPage(ctk.CTkFrame):
         retry_label.pack(side="left", padx=8, pady=8)
 
         self.retry_count_entry = ctk.CTkEntry(
-            retry_frame, width=100, placeholder_text="2"
+            retry_frame, width=100, placeholder_text="2", font=body_font()
         )
         self.retry_count_entry.pack(side="left", padx=8, pady=8)
         self.retry_count_entry.insert(0, str(self.retry_count))
@@ -187,7 +188,7 @@ class RunParamsPage(ctk.CTkFrame):
         output_dir_label.pack(side="left", padx=8, pady=8)
 
         self.output_dir_entry = ctk.CTkEntry(
-            output_dir_frame, width=200, placeholder_text="out"
+            output_dir_frame, width=200, placeholder_text="out", font=body_font()
         )
         self.output_dir_entry.pack(side="left", padx=8, pady=8)
         self.output_dir_entry.insert(0, str(self.output_dir))
@@ -197,6 +198,7 @@ class RunParamsPage(ctk.CTkFrame):
             output_dir_frame,
             text=t("select_folder"),
             width=100,
+            font=body_font(),
             command=self._on_select_folder,
         )
         select_folder_btn.pack(side="left", padx=8, pady=8)
@@ -214,7 +216,7 @@ class RunParamsPage(ctk.CTkFrame):
         button_frame.pack(fill="x", padx=32, pady=16)
 
         save_btn = ctk.CTkButton(
-            button_frame, text=t("save_settings"), command=self._on_save, width=120
+            button_frame, text=t("save_settings"), command=self._on_save, width=120, font=body_font()
         )
         save_btn.pack(side="left", padx=8)
 
@@ -313,12 +315,17 @@ class RunParamsPage(ctk.CTkFrame):
             pass
 
     def _update_ai_concurrency_warning(self, ai_concurrency: int):
-        """更新 AI 并发数警告提示"""
+        """更新 AI 并发数警告提示
+        
+        推荐值: 3
+        4-10: 黄色提示
+        11+: 红色警告
+        """
         if ai_concurrency > 10:
             self.ai_concurrency_warning.configure(
                 text=t("ai_concurrency_warning_high"), text_color=("red", "red")
             )
-        elif ai_concurrency > 5:
+        elif ai_concurrency > 3:
             self.ai_concurrency_warning.configure(
                 text=t("ai_concurrency_warning_medium"), text_color=("orange", "orange")
             )

@@ -33,6 +33,9 @@ class SubtitleDetectorMixin:
         channel_name: Optional[str] = None,
         channel_id: Optional[str] = None,
         dry_run: bool = False,
+        on_stats: Optional[Callable[[dict, str], None]] = None,
+        initial_total: Optional[int] = None,
+        initial_failed: int = 0,
     ) -> Tuple[int, int]:
         """检测视频字幕（Dry Run 核心逻辑）
 
@@ -43,13 +46,18 @@ class SubtitleDetectorMixin:
             channel_name: 频道名称（可选）
             channel_id: 频道 ID（可选）
             dry_run: 是否为 Dry Run 模式（Dry Run 模式下不写入文件）
+            on_stats: 状态更新回调（可选）
+            initial_total: 初始计划数量（可选，用于保持计划数不变）
+            initial_failed: 初始失败数量（获取视频信息失败的数量）
 
         Returns:
             (有字幕数, 无字幕数)
         """
         detector = SubtitleDetector(cookie_manager=self.cookie_manager)
         has_subtitle_count = 0
-        no_subtitle_count = 0
+        no_subtitle_count = initial_failed  # 从初始失败数开始计数
+        # 使用初始计划数量，如果未提供则使用视频数量
+        total_count = initial_total if initial_total is not None else len(videos)
 
         # 用于分类保存的列表
         videos_with_subtitle = []
@@ -57,6 +65,9 @@ class SubtitleDetectorMixin:
 
         try:
             on_log("INFO", t("detection_starting", count=len(videos)))
+            # 初始化状态栏（使用 initial_failed 保持之前的失败计数）
+            if on_stats:
+                on_stats({"total": total_count, "success": 0, "failed": no_subtitle_count})
         except Exception as log_err:
             logger.error(f"on_log callback failed: {log_err}")
 
@@ -73,6 +84,12 @@ class SubtitleDetectorMixin:
                 if result.has_subtitles:
                     has_subtitle_count += 1
                     videos_with_subtitle.append(video)
+                    # 更新状态栏
+                    if on_stats:
+                        try:
+                            on_stats({"total": total_count, "success": has_subtitle_count, "failed": no_subtitle_count})
+                        except Exception:
+                            pass
 
                     # 详细输出字幕信息 - 使用 try-except 保护 on_log 调用
                     try:
@@ -106,6 +123,12 @@ class SubtitleDetectorMixin:
                 else:
                     no_subtitle_count += 1
                     videos_without_subtitle.append(video)
+                    # 更新状态栏
+                    if on_stats:
+                        try:
+                            on_stats({"total": total_count, "success": has_subtitle_count, "failed": no_subtitle_count})
+                        except Exception:
+                            pass
                     try:
                         on_log(
                             "WARN",
@@ -119,6 +142,12 @@ class SubtitleDetectorMixin:
             except Exception as e:
                 no_subtitle_count += 1
                 videos_without_subtitle.append(video)
+                # 更新状态栏
+                if on_stats:
+                    try:
+                        on_stats({"total": total_count, "success": has_subtitle_count, "failed": no_subtitle_count})
+                    except Exception:
+                        pass
                 try:
                     on_log(
                         "ERROR",

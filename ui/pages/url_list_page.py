@@ -117,6 +117,7 @@ class UrlListPage(ctk.CTkFrame):
             text=t("import_url_file"),
             command=self._on_import_file,
             width=120,
+            font=body_font(),
             fg_color="gray50",
             hover_color="gray40",
         )
@@ -128,6 +129,7 @@ class UrlListPage(ctk.CTkFrame):
             text=t("deduplicate_urls"),
             command=self._on_deduplicate_urls,
             width=100,
+            font=body_font(),
             fg_color="gray50",
             hover_color="gray40",
         )
@@ -139,6 +141,7 @@ class UrlListPage(ctk.CTkFrame):
             text=t("clear_url_list"),
             command=self._on_clear_urls,
             width=80,
+            font=body_font(),
             fg_color="gray50",
             hover_color="gray40",
         )
@@ -153,6 +156,7 @@ class UrlListPage(ctk.CTkFrame):
             text=t("check_new_videos"),
             command=self._on_check_new,
             width=150,
+            font=body_font(),
         )
         self.check_new_btn.pack(side="left", padx=8)
 
@@ -161,38 +165,42 @@ class UrlListPage(ctk.CTkFrame):
             text=t("start_processing"),
             command=self._on_start_processing,
             width=150,
+            font=body_font(),
         )
         self.start_processing_btn.pack(side="left", padx=8)
 
         # 取消任务按钮（始终显示，初始状态禁用）
-        # 使用蓝色背景和白色文字，提高对比度
+        # 禁用状态：灰色文字（亮色主题用深灰，暗色主题用浅灰）；启用状态：蓝色背景 + 白色文字
         self.cancel_processing_btn = ctk.CTkButton(
             button_frame,
             text=t("cancel_processing"),
             command=self._on_cancel_processing,
             width=150,
-            font=body_font(),  # 明确指定字体，避免页面切换后文字模糊
-            fg_color=("#4A9EFF", "#4A9EFF"),  # 禁用状态下使用淡蓝色背景
-            hover_color=("#6BB5FF", "#6BB5FF"),  # 悬停时使用稍亮的蓝色
-            text_color=("white", "white"),  # 使用白色文字，确保高对比度
+            font=body_font(),
+            fg_color=("#3B82F6", "#3B82F6"),  # 启用时蓝色背景
+            hover_color=("#2563EB", "#2563EB"),  # 悬停时深蓝色
+            text_color=("white", "white"),  # 启用时白色文字
+            text_color_disabled=("#6B7280", "#D1D5DB"),  # 禁用时灰色文字（亮/暗主题适配）
             state="disabled",  # 初始状态禁用
         )
+        self.cancel_processing_btn._preserve_colors = True  # 防止主题覆盖颜色
         self.cancel_processing_btn.pack(side="left", padx=8)
-        # 强制刷新按钮，确保字体正确渲染
-        self.after(10, lambda: self.cancel_processing_btn.update_idletasks())
 
         # 恢复任务按钮（初始状态禁用，有可恢复任务时启用）
+        # 禁用状态：灰色文字；启用状态：绿色背景 + 白色文字
         self.resume_processing_btn = ctk.CTkButton(
             button_frame,
             text=t("resume_processing"),
             command=self._on_resume_processing,
             width=120,
             font=body_font(),
-            fg_color=("#2E7D32", "#2E7D32"),  # 绿色背景
-            hover_color=("#1B5E20", "#1B5E20"),  # 深绿色悬停
-            text_color=("white", "white"),
+            fg_color=("#10B981", "#10B981"),  # 启用时绿色背景
+            hover_color=("#059669", "#059669"),  # 悬停时深绿色
+            text_color=("white", "white"),  # 启用时白色文字
+            text_color_disabled=("#6B7280", "#D1D5DB"),  # 禁用时灰色文字（亮/暗主题适配）
             state="disabled",  # 初始状态禁用
         )
+        self.resume_processing_btn._preserve_colors = True  # 防止主题覆盖颜色
         self.resume_processing_btn.pack(side="left", padx=8)
 
         # 强制重跑选项
@@ -504,6 +512,20 @@ class UrlListPage(ctk.CTkFrame):
                 )
                 self.cancel_processing_btn.update_idletasks()  # 强制刷新
 
+    def set_stopping_state(self):
+        """设置正在停止状态（P0-2）
+        
+        取消按钮点击后调用，禁用按钮并显示"正在停止"
+        """
+        if hasattr(self, "cancel_processing_btn"):
+            self.cancel_processing_btn.configure(
+                state="disabled",
+                text=t("status_stopping"),
+                fg_color=("#FF9800", "#FF9800"),  # 橙色表示正在停止
+                text_color=("white", "white"),
+            )
+            self.cancel_processing_btn.update_idletasks()
+
     def set_resumable_state(self, has_resumable: bool, resumable_count: int = 0):
         """设置是否有可恢复任务
         
@@ -541,6 +563,19 @@ class UrlListPage(ctk.CTkFrame):
         if is_zh_placeholder or is_en_placeholder or not text:
             return ""
         return text
+
+    def set_url_text(self, urls_text: str):
+        """设置 URL 输入框的文本内容（用于恢复任务时回填）
+        
+        Args:
+            urls_text: 要设置的 URL 文本（多个 URL 以换行分隔）
+        """
+        # 清空现有内容
+        self.url_list_textbox.delete("1.0", "end")
+        # 设置新文本
+        self.url_list_textbox.insert("1.0", urls_text)
+        # 触发校验
+        self._on_text_changed()
 
     def update_stats(self, stats: Dict[str, Any], status: str = ""):
         """更新统计信息（已移至日志面板，此方法保留以保持兼容性）"""
