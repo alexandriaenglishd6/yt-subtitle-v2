@@ -96,6 +96,9 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         
         # 初始化 Cookie 状态显示
         self._update_cookie_status()
+        
+        # 启动时检查更新
+        self._check_for_updates()
     
     def _init_i18n(self):
         """初始化 i18n，从配置读取语言设置"""
@@ -170,3 +173,34 @@ class MainWindow(PageManagerMixin, TaskHandlersMixin, EventHandlersMixin, ctk.CT
         self.event_bus.subscribe(
             EventType.COOKIE_STATUS_CHANGED, self._on_cookie_status_changed
         )
+    
+    def _check_for_updates(self):
+        """检查更新"""
+        from core.version_checker import check_for_updates, open_releases_page, CURRENT_VERSION
+        from tkinter import messagebox
+        
+        def on_update_available(latest_version: str, release_notes: str):
+            # 在主线程中显示弹窗
+            self.after(0, lambda: self._show_update_dialog(latest_version, release_notes))
+        
+        # 异步检查更新
+        check_for_updates(on_update_available=on_update_available)
+    
+    def _show_update_dialog(self, latest_version: str, release_notes: str):
+        """显示更新弹窗"""
+        from core.version_checker import open_releases_page, CURRENT_VERSION
+        from tkinter import messagebox
+        
+        message = t("update_available_message").format(
+            current=CURRENT_VERSION,
+            latest=latest_version
+        )
+        
+        result = messagebox.askyesno(
+            t("update_available_title"),
+            message,
+            parent=self
+        )
+        
+        if result:
+            open_releases_page()
