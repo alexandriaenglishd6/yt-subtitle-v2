@@ -18,6 +18,7 @@ from core.url_parser import (
     extract_video_id as _extract_video_id,
     YOUTUBE_PATTERNS,
 )
+from core.subprocess_utils import run_command, get_subprocess_kwargs
 
 # 初始化 logger
 logger = get_logger()
@@ -52,10 +53,8 @@ class VideoFetcher:
         import subprocess
 
         try:
-            result = subprocess.run(
+            result = run_command(
                 [self.yt_dlp_path, "--version"],
-                capture_output=True,
-                text=True,
                 timeout=5,
             )
             if result.returncode == 0:
@@ -343,7 +342,7 @@ class VideoFetcher:
 
                 cmd.append(url)
 
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                result = run_command(cmd, timeout=60)
 
                 if result.returncode != 0:
                     error_msg = result.stderr
@@ -514,7 +513,7 @@ class VideoFetcher:
 
             cmd.append(channel_url)
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = run_command(cmd, timeout=120)
 
             if result.returncode != 0:
                 error_msg = result.stderr
@@ -650,7 +649,7 @@ class VideoFetcher:
 
             cmd.append(playlist_url)
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = run_command(cmd, timeout=120)
 
             if result.returncode != 0:
                 error_msg = result.stderr

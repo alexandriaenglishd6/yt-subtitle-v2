@@ -23,6 +23,9 @@ from .base import (
 # 从 factory 导入工厂函数（向后兼容）
 from .factory import create_llm_client
 
+# 创建别名（向后兼容）
+create_ai_client = create_llm_client
+
 # 从 registry 导入注册相关函数
 from .registry import (
     register_provider,
@@ -66,6 +69,7 @@ __all__ = [
     "get_capabilities",
     # 工厂和注册
     "create_llm_client",
+    "create_ai_client",  # 别名（向后兼容）
     "register_provider",
     "get_provider",
     "list_providers",

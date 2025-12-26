@@ -86,11 +86,20 @@ class UrlListPage(ctk.CTkFrame):
             height=150,  # 固定高度，避免占用过多空间
         )
         self.url_list_textbox.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
-        # 恢复保存的URL列表或使用占位符
+        
+        # Placeholder 支持
+        self._placeholder_text = t("url_list_placeholder")
+        self._placeholder_active = False  # 标记当前是否显示占位符
+        
+        # 恢复保存的URL列表或显示占位符
         if self.initial_url_list_text:
             self.url_list_textbox.insert("1.0", self.initial_url_list_text)
         else:
-            self.url_list_textbox.insert("1.0", t("url_list_placeholder"))
+            self._show_placeholder()
+        
+        # 绑定焦点事件实现placeholder效果
+        self.url_list_textbox.bind("<FocusIn>", self._on_focus_in)
+        self.url_list_textbox.bind("<FocusOut>", self._on_focus_out)
 
         # 错误提示标签
         self.url_error_label = ctk.CTkLabel(
@@ -320,8 +329,8 @@ class UrlListPage(ctk.CTkFrame):
         else:
             logger.info(t("url_list_already_empty"))
 
-        self.url_list_textbox.delete("1.0", "end")
-        self.url_list_textbox.insert("1.0", t("url_list_placeholder"))
+        # 显示占位符
+        self._show_placeholder()
 
     def _on_deduplicate_urls(self):
         """去重 URL 列表（基于视频 ID）"""
@@ -391,11 +400,13 @@ class UrlListPage(ctk.CTkFrame):
 
         if removed_count > 0:
             # 更新文本框内容
-            self.url_list_textbox.delete("1.0", "end")
             if unique_urls:
+                self._placeholder_active = False
+                self.url_list_textbox.delete("1.0", "end")
                 self.url_list_textbox.insert("1.0", "\n".join(unique_urls))
+                self.url_list_textbox.configure(text_color=("gray10", "gray90"))
             else:
-                self.url_list_textbox.insert("1.0", t("url_list_placeholder"))
+                self._show_placeholder()
 
             # 在日志中显示去重结果
             logger.info(
@@ -440,6 +451,33 @@ class UrlListPage(ctk.CTkFrame):
         """恢复处理按钮点击"""
         if self.on_resume_processing:
             self.on_resume_processing()
+
+    def _show_placeholder(self):
+        """显示占位符（灰色文本）"""
+        self._placeholder_active = True
+        self.url_list_textbox.delete("1.0", "end")
+        self.url_list_textbox.insert("1.0", self._placeholder_text)
+        # 设置灰色文本颜色
+        self.url_list_textbox.configure(text_color="gray50")
+    
+    def _hide_placeholder(self):
+        """隐藏占位符"""
+        if self._placeholder_active:
+            self._placeholder_active = False
+            self.url_list_textbox.delete("1.0", "end")
+            # 恢复正常文本颜色
+            self.url_list_textbox.configure(text_color=("gray10", "gray90"))
+    
+    def _on_focus_in(self, event=None):
+        """输入框获得焦点时"""
+        if self._placeholder_active:
+            self._hide_placeholder()
+    
+    def _on_focus_out(self, event=None):
+        """输入框失去焦点时"""
+        text = self.url_list_textbox.get("1.0", "end-1c").strip()
+        if not text:
+            self._show_placeholder()
 
     def _on_text_changed(self, event=None):
         """文本内容变化时的实时校验"""
@@ -553,15 +591,11 @@ class UrlListPage(ctk.CTkFrame):
 
     def _get_cleaned_urls_text(self) -> str:
         """获取清理后的 URL 文本（排除占位符）"""
-        text = self.url_list_textbox.get("1.0", "end-1c").strip()
-        
-        # 检查是否是占位符文本（通过检查第一行是否包含占位符特征）
-        first_line = text.split('\n')[0].strip() if text else ""
-        is_zh_placeholder = "支持输入" in first_line or "视频链接" in first_line
-        is_en_placeholder = "Supports:" in first_line or "Video URL" in first_line
-        
-        if is_zh_placeholder or is_en_placeholder or not text:
+        # 如果当前显示的是占位符，返回空
+        if self._placeholder_active:
             return ""
+        
+        text = self.url_list_textbox.get("1.0", "end-1c").strip()
         return text
 
     def set_url_text(self, urls_text: str):
@@ -570,10 +604,12 @@ class UrlListPage(ctk.CTkFrame):
         Args:
             urls_text: 要设置的 URL 文本（多个 URL 以换行分隔）
         """
-        # 清空现有内容
+        # 隐藏占位符并设置新文本
+        self._placeholder_active = False
         self.url_list_textbox.delete("1.0", "end")
-        # 设置新文本
         self.url_list_textbox.insert("1.0", urls_text)
+        # 恢复正常文本颜色
+        self.url_list_textbox.configure(text_color=("gray10", "gray90"))
         # 触发校验
         self._on_text_changed()
 
@@ -632,24 +668,15 @@ class UrlListPage(ctk.CTkFrame):
         if hasattr(self, "language_config_panel"):
             self.language_config_panel.refresh_language()
 
-        # 更新 URL 文本框占位符（如果当前是占位符文本）
-        if hasattr(self, "url_list_textbox"):
-            text = self.url_list_textbox.get("1.0", "end-1c").strip()
-            # 检查是否是占位符文本（通过检查第一行是否包含占位符特征）
-            # 中文占位符第一行: "支持输入：视频链接..."
-            # 英文占位符第一行: "Supports: Video URL..."
-            first_line = text.split('\n')[0].strip() if text else ""
-            is_zh_placeholder = "支持输入" in first_line or "视频链接" in first_line
-            is_en_placeholder = "Supports:" in first_line or "Video URL" in first_line
-            
-            if is_zh_placeholder or is_en_placeholder or not text:
-                # 是占位符或空，更新为当前语言的占位符
-                self.url_list_textbox.delete("1.0", "end")
-                self.url_list_textbox.insert("1.0", t("url_list_placeholder"))
-                # 清除错误提示
-                if hasattr(self, "url_error_label"):
-                    self.url_error_label.configure(text="")
-                    self.url_list_textbox.configure(border_color=["#979DA2", "#565B5E"])
+        # 更新占位符文本（如果当前显示的是占位符）
+        if hasattr(self, "_placeholder_active") and self._placeholder_active:
+            # 更新占位符文本为当前语言
+            self._placeholder_text = t("url_list_placeholder")
+            self._show_placeholder()
+            # 清除错误提示
+            if hasattr(self, "url_error_label"):
+                self.url_error_label.configure(text="")
+                self.url_list_textbox.configure(border_color=["#979DA2", "#565B5E"])
 
         # 统计信息已移至日志面板，不再需要更新
 

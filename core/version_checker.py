@@ -14,7 +14,7 @@ from core.logger import get_logger
 logger = get_logger()
 
 # 当前版本
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.1"
 
 # GitHub API 地址
 GITHUB_API_URL = "https://api.github.com/repos/alexandriaenglishd6/yt-subtitle-v2/releases/latest"

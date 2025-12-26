@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v2.0 布局设计 - 基于 v1.0 改进</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background: #1a1a2e;
+            padding: 20px;
+        }
+
+        .window {
+            background: #f0f0f0;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 1100px;
+            margin: 0 auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 标题栏 */
+        .title-bar {
+            background: linear-gradient(180deg, #fff 0%, #e8e8e8 100%);
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .title-bar .left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .title-bar .right {
+            display: flex;
+            gap: 8px;
+        }
+
+        .title-bar .btn {
+            padding: 4px 12px;
+            border: 1px solid #0078d4;
+            background: #0078d4;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .title-bar select {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* 主体区域 */
+        .main-container {
+            display: flex;
+            background: #fff;
+        }
+
+        /* 左侧导航 */
+        .sidebar {
+            width: 110px;
+            background: #f5f5f5;
+            border-right: 1px solid #ddd;
+            padding: 8px 0;
+        }
+
+        .sidebar-item {
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #333;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-item:hover {
+            background: #e8e8e8;
+        }
+
+        .sidebar-item.active {
+            background: #e0f0ff;
+            border-left-color: #0078d4;
+            color: #0078d4;
+        }
+
+        .sidebar-item::before {
+            content: "▶ ";
+            font-size: 10px;
+        }
+
+        /* 内容区 + 状态栏 */
+        .content-wrapper {
+            flex: 1;
+            display: flex;
+        }
+
+        /* 主内容区 */
+        .content {
+            flex: 1;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 右侧状态栏 */
+        .status-panel {
+            width: 160px;
+            background: #f8f8f8;
+            border-left: 1px solid #ddd;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .status-section {
+            margin-bottom: 16px;
+        }
+
+        .status-title {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+
+        .status-value {
+            font-weight: bold;
+        }
+
+        .status-value.green {
+            color: #10b981;
+        }
+
+        .status-value.yellow {
+            color: #f59e0b;
+        }
+
+        .status-value.red {
+            color: #ef4444;
+        }
+
+        .status-value.blue {
+            color: #0078d4;
+        }
+
+        .progress-mini {
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-mini-fill {
+            height: 100%;
+            width: 65%;
+            background: #0078d4;
+        }
+
+        /* 页面标题 */
+        .page-title {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 16px;
+        }
+
+        /* 输入区 */
+        .input-section {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .input-hint {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .input-box {
+            width: 100%;
+            height: 60px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 12px;
+            color: #0066cc;
+            resize: none;
+            font-family: monospace;
+        }
+
+        /* 按钮行 */
+        .btn-row {
+            display: flex;
+            gap: 6px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .btn-row .btn {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .btn-row .btn:hover {
+            background: #e8e8e8;
+        }
+
+        .btn-row .btn-primary {
+            background: #0078d4;
+            border-color: #0078d4;
+            color: white;
+        }
+
+        .btn-row .btn-warning {
+            background: #f59e0b;
+            border-color: #f59e0b;
+            color: white;
+        }
+
+        .btn-row .btn-success {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+
+        /* 语言配置（精简版） */
+        .config-section {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .config-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .config-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .config-row label {
+            width: 70px;
+            color: #666;
+        }
+
+        .config-row input,
+        .config-row select {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 100px;
+        }
+
+        .config-row .hint {
+            margin-left: 8px;
+            color: #999;
+            font-size: 11px;
+        }
+
+        .config-row .checkbox {
+            margin-left: 16px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 日志区 */
+        .log-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            min-height: 150px;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+        }
+
+        .log-stats {
+            display: flex;
+            gap: 16px;
+            color: #666;
+        }
+
+        .log-stats span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .log-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .log-controls select {
+            padding: 2px 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .log-controls label {
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .log-content {
+            flex: 1;
+            background: #1e1e2e;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            color: #ccc;
+            overflow-y: auto;
+        }
+
+        .log-line {
+            margin: 2px 0;
+        }
+
+        .log-time {
+            color: #666;
+        }
+
+        .log-info {
+            color: #3b82f6;
+        }
+
+        .log-success {
+            color: #10b981;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        /* 说明区 */
+        .description {
+            max-width: 1100px;
+            margin: 30px auto 0;
+            background: #252535;
+            border-radius: 8px;
+            padding: 20px;
+            color: #e5e5e5;
+        }
+
+        .description h2 {
+            color: #6366f1;
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+
+        .description table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .description th,
+        .description td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            font-size: 13px;
+        }
+
+        .description th {
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="window">
+        <!-- 标题栏 -->
+        <div class="title-bar">
+            <div class="left">
+                <span>📺 YouTube Tools v2.0</span>
+            </div>
+            <div class="right">
+                <span style="font-size: 12px; color: #666;">GitHub 开源地址</span>
+                <span style="font-size: 12px; margin: 0 8px;">版本: v2.0.0</span>
+                <select>
+                    <option>中文</option>
+                </select>
+                <select>
+                    <option>亮色 (白)</option>
+                </select>
+                <button class="btn">打开输出文件夹</button>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <!-- 左侧导航 -->
+            <div class="sidebar">
+                <div class="sidebar-item active">任务</div>
+                <div class="sidebar-item" style="padding-left: 24px; font-size: 11px; color: #0078d4;">开始任务</div>
+                <div class="sidebar-item">运行设置</div>
+                <div class="sidebar-item" style="padding-left: 24px; font-size: 11px;">运行参数</div>
+                <div class="sidebar-item" style="padding-left: 24px; font-size: 11px;">网络设置</div>
+                <div class="sidebar-item">翻译&摘要</div>
+            </div>
+
+            <!-- 内容 + 状态栏 -->
+            <div class="content-wrapper">
+                <!-- 主内容 -->
+                <div class="content">
+                    <div class="page-title">开始任务</div>
+
+                    <!-- 输入区 -->
+                    <div class="input-section">
+                        <div class="input-hint">支持输入：视频链接 / 频道链接 / 播放列表链接（可混合）</div>
+                        <textarea class="input-box">https://www.youtube.com/watch?v=xxxxx
+https://www.youtube.com/@channel_name
+https://www.youtube.com/playlist?list=xxxxx</textarea>
+                    </div>
+
+                    <!-- 按钮行（紧凑） -->
+                    <div class="btn-row">
+                        <button class="btn">📁 导入文件</button>
+                        <button class="btn">📤 上传</button>
+                        <button class="btn">🗑️ 清空</button>
+                        <button class="btn">🔍 检查新视频</button>
+                        <button class="btn btn-primary">▶ 开始处理</button>
+                        <button class="btn btn-warning">⏸ 暂停任务</button>
+                        <button class="btn btn-success">⚡ 快速任务</button>
+                        <label style="font-size: 12px; margin-left: 8px;">
+                            <input type="checkbox"> 强制重做（忽略历史记录）
+                        </label>
+                    </div>
+
+                    <!-- 语言配置（精简版） -->
+                    <div class="config-section">
+                        <div class="config-title">语言配置</div>
+                        <div class="config-row">
+                            <label>源语言:</label>
+                            <input type="text" value="en,ja">
+                            <span class="hint">☑ 自动选择（优先级: en > zh-CN > zh-TW > es > de > ja）</span>
+                        </div>
+                        <div class="config-row">
+                            <label>目标语言:</label>
+                            <input type="text" value="zh-CN">
+                            <span class="checkbox"><input type="checkbox" checked> 启用翻译</span>
+                            <span class="checkbox"><input type="checkbox" checked> 启用摘要</span>
+                        </div>
+                    </div>
+
+                    <!-- 日志区 -->
+                    <div class="log-section">
+                        <div class="log-header">
+                            <div class="log-stats">
+                                <span>日志输出</span>
+                                <span>计划: <b>100</b></span>
+                                <span>已处理: <b>65/100</b></span>
+                                <span>成功: <b style="color: #10b981;">60</b> / 失败: <b
+                                        style="color: #ef4444;">5</b></span>
+                            </div>
+                            <div class="log-controls">
+                                <span>过滤:</span>
+                                <select>
+                                    <option>全部</option>
+                                </select>
+                                <label><input type="checkbox" checked> 自动滚动</label>
+                                <button class="btn" style="padding: 2px 8px;">清空</button>
+                            </div>
+                        </div>
+                        <div class="log-content">
+                            <div class="log-line"><span class="log-time">[2025-12-25 22:05:01]</span> <span
+                                    class="log-info">[INFO]</span> 开始处理 100 个视频...</div>
+                            <div class="log-line"><span class="log-time">[2025-12-25 22:05:05]</span> <span
+                                    class="log-success">[SUCCESS]</span> video_001 字幕下载完成</div>
+                            <div class="log-line"><span class="log-time">[2025-12-25 22:05:08]</span> <span
+                                    class="log-info">[INFO]</span> video_002 使用备用代理</div>
+                            <div class="log-line"><span class="log-time">[2025-12-25 22:05:12]</span> <span
+                                    class="log-error">[ERROR]</span> video_003 无可用字幕</div>
+                            <div class="log-line"><span class="log-time">[2025-12-25 22:05:15]</span> <span
+                                    class="log-success">[SUCCESS]</span> video_004 翻译完成</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧状态栏（新增） -->
+                <div class="status-panel">
+                    <div class="status-item">
+                        <span>总进度</span>
+                        <span class="status-value blue">65%</span>
+                    </div>
+                    <div class="progress-mini">
+                        <div class="progress-mini-fill"></div>
+                    </div>
+                    <div class="status-item" style="margin-top: 6px;">
+                        <span>有字幕</span>
+                        <span>80 / ~3min</span>
+                    </div>
+                    <div class="status-item">
+                        <span>无字幕</span>
+                        <span>20 / ~8min</span>
+                    </div>
+                    <div class="status-item">
+                        <span>预估</span>
+                        <span class="status-value">~5 min</span>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 10px 0;">
+
+                    <div class="status-item">
+                        <span>代理池</span>
+                        <span class="status-value green">3/5 ✓</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Cookie</span>
+                        <span class="status-value yellow">2/3 ⚠</span>
+                    </div>
+                    <div class="status-item">
+                        <span>API Key</span>
+                        <span class="status-value green">5/5 ✓</span>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 10px 0;">
+
+                    <div class="status-item">
+                        <span>成功</span>
+                        <span class="status-value green">60</span>
+                    </div>
+                    <div class="status-item">
+                        <span>失败</span>
+                        <span class="status-value red">5</span>
+                    </div>
+                    <div class="status-item">
+                        <span>等待</span>
+                        <span>35</span>
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 10px 0;">
+
+                    <div class="status-item">
+                        <span>ASR 费用</span>
+                        <span>$0.36</span>
+                    </div>
+                    <div class="status-item">
+                        <span>翻译费用</span>
+                        <span>$0.12</span>
+                    </div>
+                    <div class="status-item">
+                        <span>摘要费用</span>
+                        <span>$0.05</span>
+                    </div>
+                    <div class="status-item" style="margin-top: 4px; font-weight: bold;">
+                        <span>总费用</span>
+                        <span class="status-value blue">$0.53</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 说明 -->
+    <div class="description">
+        <h2>v2.0 布局改动说明</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>改动项</th>
+                    <th>v1.0</th>
+                    <th>v2.0</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>右侧状态栏</td>
+                    <td>❌ 无</td>
+                    <td>✅ 新增 160px 宽度状态面板</td>
+                </tr>
+                <tr>
+                    <td>语言配置</td>
+                    <td>4 行配置</td>
+                    <td>精简为 2 行，其余移至「运行参数」</td>
+                </tr>
+                <tr>
+                    <td>按钮区</td>
+                    <td>分散</td>
+                    <td>紧凑排列</td>
+                </tr>
+                <tr>
+                    <td>日志框</td>
+                    <td>底部固定</td>
+                    <td>底部固定（不变）</td>
+                </tr>
+                <tr>
+                    <td>状态显示</td>
+                    <td>日志上方一行</td>
+                    <td>右侧面板分组显示</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+
+</html>

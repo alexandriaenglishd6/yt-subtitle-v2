@@ -178,17 +178,29 @@ class TranslationSummaryPage(ctk.CTkFrame):
             self.on_log_message("INFO", t("ai_testing"))
 
         config = self.translation_panel.get_config()
+        provider = config.get("provider", "unknown")
 
         def test_in_thread():
             try:
                 from core.ai_providers import create_ai_client
 
                 client = create_ai_client(config)
-                response = client.generate("Hello, please respond with 'OK'.")
+                result = client.generate("Hello, please respond with 'OK'.")
+                
+                # LLMResult 对象需要访问 .text 属性
+                response_text = result.text if hasattr(result, 'text') else str(result)
+                
+                # 获取 provider 和 model 信息
+                result_provider = getattr(result, 'provider', provider)
+                result_model = getattr(result, 'model', config.get('model', 'unknown'))
 
                 def on_success():
                     if self.on_log_message:
-                        self.on_log_message("INFO", t("ai_test_success", response=response[:100]))
+                        # 谷歌翻译已经显示了专门的测试消息，跳过通用成功消息
+                        if result_provider == "google_translate":
+                            pass  # 不显示重复消息
+                        else:
+                            self.on_log_message("INFO", t("ai_test_success", response=f"{result_provider}/{result_model}: {response_text[:50]}"))
 
                 self.after(0, on_success)
             except Exception as e:
@@ -207,17 +219,29 @@ class TranslationSummaryPage(ctk.CTkFrame):
             self.on_log_message("INFO", t("ai_testing"))
 
         config = self.summary_panel.get_config()
+        provider = config.get("provider", "unknown")
 
         def test_in_thread():
             try:
                 from core.ai_providers import create_ai_client
 
                 client = create_ai_client(config)
-                response = client.generate("Hello, please respond with 'OK'.")
+                result = client.generate("Hello, please respond with 'OK'.")
+                
+                # LLMResult 对象需要访问 .text 属性
+                response_text = result.text if hasattr(result, 'text') else str(result)
+                
+                # 获取 provider 和 model 信息
+                result_provider = getattr(result, 'provider', provider)
+                result_model = getattr(result, 'model', config.get('model', 'unknown'))
 
                 def on_success():
                     if self.on_log_message:
-                        self.on_log_message("INFO", t("ai_test_success", response=response[:100]))
+                        # 谷歌翻译已经显示了专门的测试消息，跳过通用成功消息
+                        if result_provider == "google_translate":
+                            pass  # 不显示重复消息
+                        else:
+                            self.on_log_message("INFO", t("ai_test_success", response=f"{result_provider}/{result_model}: {response_text[:50]}"))
 
                 self.after(0, on_success)
             except Exception as e:

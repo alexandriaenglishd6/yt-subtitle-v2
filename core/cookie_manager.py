@@ -4,6 +4,8 @@ Cookie 管理器模块
 """
 
 import tempfile
+import sys
+import shutil
 from pathlib import Path
 from typing import Optional, Dict
 import subprocess
@@ -28,8 +30,36 @@ class CookieManager:
             yt_dlp_path: yt-dlp 可执行文件路径
         """
         self.cookie_string = cookie_string.strip()
-        self.yt_dlp_path = yt_dlp_path
+        self.yt_dlp_path = self._find_yt_dlp_path(yt_dlp_path)
         self._temp_cookie_file: Optional[Path] = None
+
+    def _find_yt_dlp_path(self, default_path: str) -> str:
+        """查找 yt-dlp 可执行文件路径
+        
+        优先级：
+        1. 打包环境中的 yt-dlp.exe
+        2. 系统 PATH 中的 yt-dlp
+        3. 默认值
+        """
+        # 如果是打包环境，优先使用与程序同目录的 yt-dlp
+        if getattr(sys, 'frozen', False):
+            # 打包环境
+            exe_dir = Path(sys.executable).parent
+            for name in ['yt-dlp.exe', 'yt-dlp']:
+                yt_dlp_exe = exe_dir / name
+                if yt_dlp_exe.exists():
+                    return str(yt_dlp_exe)
+        
+        # 尝试在系统 PATH 中查找
+        found_path = shutil.which('yt-dlp')
+        if found_path:
+            return found_path
+        
+        found_path = shutil.which('yt-dlp.exe')
+        if found_path:
+            return found_path
+        
+        return default_path
 
     def _cookie_string_to_netscape_file(self, cookie_string: str) -> Optional[Path]:
         """将 Cookie 字符串转换为 Netscape 格式文件
@@ -270,7 +300,23 @@ class CookieManager:
                 test_video_url,
             ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            # Windows 下隐藏命令行窗口
+            startupinfo = None
+            creationflags = 0
+            if sys.platform == 'win32':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+                creationflags = subprocess.CREATE_NO_WINDOW
+
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=60,
+                startupinfo=startupinfo,
+                creationflags=creationflags
+            )
 
             if result.returncode != 0:
                 error_msg = result.stderr[:200] if result.stderr else translate_log("unknown_error")

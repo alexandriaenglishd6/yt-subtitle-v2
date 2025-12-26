@@ -13,6 +13,16 @@ block_cipher = None
 # 项目根目录
 project_root = os.path.dirname(os.path.abspath(SPEC))
 
+# 检查 yt-dlp.exe 是否存在，如果存在则打包进去
+binaries = []
+yt_dlp_path = os.path.join(project_root, 'yt-dlp.exe')
+if os.path.exists(yt_dlp_path):
+    binaries.append((yt_dlp_path, '.'))
+    print(f"[build.spec] 找到 yt-dlp.exe，将包含在打包中")
+else:
+    print(f"[build.spec] 警告：未找到 yt-dlp.exe，请下载并放置在项目根目录")
+    print(f"[build.spec] 下载地址：https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
+
 # 收集数据文件
 datas = [
     # i18n 语言文件
@@ -53,7 +63,7 @@ except Exception:
 a = Analysis(
     ['main.py'],
     pathex=[project_root],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

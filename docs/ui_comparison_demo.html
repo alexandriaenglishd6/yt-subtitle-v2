@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI 优化效果对比</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #e5e5e5;
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #fff;
+        }
+
+        .container {
+            display: flex;
+            gap: 40px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            flex: 1;
+            padding: 24px;
+            border-radius: 16px;
+        }
+
+        .panel h2 {
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #333;
+        }
+
+        /* ===== 方案 A: 轻量优化 ===== */
+        .light-optimization {
+            background: #2d2d3f;
+        }
+
+        .light-optimization h2 {
+            color: #6366f1;
+            border-color: #6366f1;
+        }
+
+        .light-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 8px;
+            transition: all 0.2s;
+        }
+
+        .light-btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .light-btn-primary:hover {
+            background: #4f46e5;
+        }
+
+        .light-btn-secondary {
+            background: #3d3d4f;
+            color: #e5e5e5;
+        }
+
+        .light-btn-secondary:hover {
+            background: #4d4d5f;
+        }
+
+        .light-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #4d4d5f;
+            border-radius: 8px;
+            background: #1e1e2e;
+            color: #e5e5e5;
+            margin: 8px 0;
+        }
+
+        .light-input:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        .light-progress {
+            width: 100%;
+            height: 8px;
+            background: #3d3d4f;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .light-progress-bar {
+            width: 65%;
+            height: 100%;
+            background: #6366f1;
+        }
+
+        .light-card {
+            background: #1e1e2e;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        /* ===== 方案 B: 中等优化 ===== */
+        .medium-optimization {
+            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d3f 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .medium-optimization h2 {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-color: transparent;
+            border-image: linear-gradient(90deg, #6366f1, #8b5cf6) 1;
+        }
+
+        .medium-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 8px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .medium-btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .medium-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        .medium-btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: #e5e5e5;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .medium-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+
+        .medium-btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .medium-btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .medium-input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(30, 30, 46, 0.8);
+            color: #e5e5e5;
+            margin: 8px 0;
+            transition: all 0.3s;
+        }
+
+        .medium-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .medium-progress {
+            width: 100%;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .medium-progress-bar {
+            width: 65%;
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .medium-card {
+            background: rgba(30, 30, 46, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 20px;
+            margin: 16px 0;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        .medium-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .medium-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin: 4px;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .badge-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        /* 图标模拟 */
+        .icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background: currentColor;
+            mask-size: contain;
+        }
+
+        .section {
+            margin: 24px 0;
+        }
+
+        .section-title {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 对比表 */
+        .comparison-table {
+            width: 100%;
+            margin-top: 40px;
+            border-collapse: collapse;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid #3d3d4f;
+        }
+
+        .comparison-table th {
+            background: #2d2d3f;
+            color: #6366f1;
+        }
+
+        .comparison-table tr:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 UI 优化效果对比</h1>
+    
+    <div class="container">
+        <!-- 方案 A: 轻量优化 -->
+        <div class="panel light-optimization">
+            <h2>A. 轻量优化 (3天)</h2>
+            
+            <div class="section">
+                <div class="section-title">按钮</div>
+                <button class="light-btn light-btn-primary">开始下载</button>
+                <button class="light-btn light-btn-secondary">取消</button>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">输入框</div>
+                <input type="text" class="light-input" placeholder="请输入 YouTube 链接...">
+            </div>
+            
+            <div class="section">
+                <div class="section-title">进度条</div>
+                <div class="light-progress">
+                    <div class="light-progress-bar"></div>
+                </div>
+                <span style="color: #888; font-size: 14px;">65% - 正在翻译...</span>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">卡片</div>
+                <div class="light-card">
+                    <div style="font-weight: bold; margin-bottom: 8px;">视频标题</div>
+                    <div style="color: #888; font-size: 14px;">时长: 10:30 | 状态: 处理中</div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">特点</div>
+                <ul style="color: #888; padding-left: 20px; line-height: 2;">
+                    <li>✅ 统一主题色</li>
+                    <li>✅ 统一圆角</li>
+                    <li>✅ 统一间距</li>
+                    <li>❌ 无图标</li>
+                    <li>❌ 无渐变</li>
+                    <li>❌ 无动画</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 方案 B: 中等优化 -->
+        <div class="panel medium-optimization">
+            <h2>B. 中等优化 (5-6天)</h2>
+            
+            <div class="section">
+                <div class="section-title">按钮</div>
+                <button class="medium-btn medium-btn-primary">
+                    <span>▶</span> 开始下载
+                </button>
+                <button class="medium-btn medium-btn-secondary">
+                    <span>✕</span> 取消
+                </button>
+                <button class="medium-btn medium-btn-success">
+                    <span>✓</span> 完成
+                </button>
+                <button class="medium-btn medium-btn-danger">
+                    <span>!</span> 错误
+                </button>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">输入框</div>
+                <input type="text" class="medium-input" placeholder="🔗 请输入 YouTube 链接...">
+            </div>
+            
+            <div class="section">
+                <div class="section-title">进度条 (渐变动画)</div>
+                <div class="medium-progress">
+                    <div class="medium-progress-bar"></div>
+                </div>
+                <span style="color: #6366f1; font-size: 14px;">✨ 65% - 正在翻译...</span>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">卡片 (悬停效果)</div>
+                <div class="medium-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: bold; margin-bottom: 8px;">📺 视频标题</div>
+                            <div style="color: #888; font-size: 14px;">时长: 10:30</div>
+                        </div>
+                        <span class="medium-badge badge-success">✓ 完成</span>
+                    </div>
+                </div>
+                <div class="medium-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: bold; margin-bottom: 8px;">📺 另一个视频</div>
+                            <div style="color: #888; font-size: 14px;">时长: 5:20</div>
+                        </div>
+                        <span class="medium-badge badge-warning">⏳ 处理中</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">特点</div>
+                <ul style="color: #888; padding-left: 20px; line-height: 2;">
+                    <li>✅ 统一主题色</li>
+                    <li>✅ 统一圆角</li>
+                    <li>✅ 统一间距</li>
+                    <li>✅ 图标支持</li>
+                    <li>✅ 渐变效果</li>
+                    <li>✅ 悬停动画</li>
+                    <li>✅ 状态标签</li>
+                    <li>✅ 毛玻璃效果</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 对比表 -->
+    <table class="comparison-table" style="max-width: 1400px; margin: 40px auto;">
+        <thead>
+            <tr>
+                <th>对比项</th>
+                <th>A. 轻量优化</th>
+                <th>B. 中等优化</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>工作量</td>
+                <td>3 天</td>
+                <td>5-6 天</td>
+            </tr>
+            <tr>
+                <td>主题色</td>
+                <td>✅ 单色</td>
+                <td>✅ 渐变色</td>
+            </tr>
+            <tr>
+                <td>图标</td>
+                <td>❌ 无</td>
+                <td>✅ 有</td>
+            </tr>
+            <tr>
+                <td>动画效果</td>
+                <td>❌ 无</td>
+                <td>✅ 悬停/进度动画</td>
+            </tr>
+            <tr>
+                <td>卡片样式</td>
+                <td>简单边框</td>
+                <td>毛玻璃+阴影</td>
+            </tr>
+            <tr>
+                <td>状态标签</td>
+                <td>❌ 无</td>
+                <td>✅ 彩色标签</td>
+            </tr>
+            <tr>
+                <td>性能影响</td>
+                <td>🟢 无</td>
+                <td>🟢 很小</td>
+            </tr>
+            <tr>
+                <td>推荐版本</td>
+                <td>v2.0</td>
+                <td>v2.1+</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

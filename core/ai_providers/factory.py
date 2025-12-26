@@ -3,19 +3,20 @@ AI 供应商工厂函数
 根据配置创建对应的客户端实例
 """
 
+from typing import Union
 from config.manager import AIConfig
 from core.llm_client import LLMClient, LLMException, LLMErrorType
 
 from .registry import get_provider, _init_registry
 
 
-def create_llm_client(ai_config: AIConfig) -> LLMClient:
+def create_llm_client(ai_config: Union[AIConfig, dict]) -> LLMClient:
     """创建 LLM 客户端实例（工厂函数）
 
     根据 AIConfig 中的 provider 创建对应的客户端实例
 
     Args:
-        ai_config: AI 配置
+        ai_config: AI 配置（可以是 AIConfig 对象或 dict）
 
     Returns:
         LLMClient 实例
@@ -24,6 +25,10 @@ def create_llm_client(ai_config: AIConfig) -> LLMClient:
         LLMException: 如果 provider 不支持或初始化失败
     """
     _init_registry()
+
+    # 支持 dict 类型配置（自动转换为 AIConfig）
+    if isinstance(ai_config, dict):
+        ai_config = AIConfig.from_dict(ai_config)
 
     provider = ai_config.provider.lower()
 
@@ -48,3 +53,4 @@ def create_llm_client(ai_config: AIConfig) -> LLMClient:
             f"exception.ai_client_init_failed:provider={provider},error={str(e)}",
             LLMErrorType.UNKNOWN,
         )
+

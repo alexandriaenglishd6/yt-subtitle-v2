@@ -418,13 +418,18 @@ class AIConfigPanel(ctk.CTkFrame):
             entry_val = self.api_key_entry.get().strip()
             
             if not entry_val:
+                # 输入为空，删除该 provider 的 key
                 if self._last_provider in self.config["api_keys"]:
                     del self.config["api_keys"][self._last_provider]
                 self._real_key = ""
-            elif self._real_key:
-                if entry_val != self._mask_api_key(self._real_key):
-                    self.config["api_keys"][self._last_provider] = entry_val
-                    self._real_key = entry_val
+            elif "****" in entry_val:
+                # 脱敏格式，保持原有 key
+                if self._real_key:
+                    self.config["api_keys"][self._last_provider] = self._real_key
+            else:
+                # 新输入的完整 key（不含 ****）
+                self.config["api_keys"][self._last_provider] = entry_val
+                self._real_key = entry_val
         
         self._last_provider = current_provider
     

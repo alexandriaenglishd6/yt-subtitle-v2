@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v2.0 布局设计方案</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        body {
+            background: #0f0f1a;
+            color: #e5e5e5;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #fff;
+            font-size: 24px;
+        }
+
+        h2 {
+            color: #6366f1;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .layout-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .layout-demo {
+            background: #1e1e2e;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+
+        .layout-title {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            padding: 12px 16px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .layout-title .tag {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .layout-content {
+            padding: 0;
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ===== 方案 A: 顶部卡片式状态栏 ===== */
+        .layout-a .top-area {
+            padding: 12px;
+            background: #252535;
+            display: flex;
+            gap: 12px;
+        }
+
+        .layout-a .input-box {
+            flex: 1;
+            background: #1e1e2e;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #888;
+            font-size: 13px;
+        }
+
+        .layout-a .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .layout-a .status-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            padding: 12px;
+            background: #1a1a28;
+        }
+
+        .layout-a .status-card {
+            background: #252535;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .layout-a .status-card .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #6366f1;
+        }
+
+        .layout-a .status-card .label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .layout-a .log-area {
+            flex: 1;
+            background: #0f0f1a;
+            margin: 0 12px 12px;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            color: #888;
+        }
+
+        .layout-a .log-area .log-info {
+            color: #e5e5e5;
+        }
+
+        .layout-a .log-area .log-success {
+            color: #10b981;
+        }
+
+        .layout-a .log-area .log-warning {
+            color: #3b82f6;
+        }
+
+        .layout-a .log-area .log-error {
+            color: #ef4444;
+        }
+
+        /* ===== 方案 B: 左右分栏（参考 JDownloader） ===== */
+        .layout-b .main-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .layout-b .sidebar {
+            width: 200px;
+            background: #252535;
+            padding: 12px;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .layout-b .sidebar-item {
+            background: #1e1e2e;
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .layout-b .sidebar-item .status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .layout-b .sidebar-item .status.green {
+            background: #10b981;
+        }
+
+        .layout-b .sidebar-item .status.yellow {
+            background: #f59e0b;
+        }
+
+        .layout-b .sidebar-item .status.red {
+            background: #ef4444;
+        }
+
+        .layout-b .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+        }
+
+        .layout-b .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .layout-b .input-box {
+            flex: 1;
+            background: #1a1a28;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #888;
+            font-size: 13px;
+        }
+
+        .layout-b .progress-section {
+            background: #1a1a28;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .layout-b .progress-bar {
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .layout-b .progress-fill {
+            width: 65%;
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .layout-b .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .layout-b .log-area {
+            flex: 1;
+            background: #0f0f1a;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            color: #888;
+        }
+
+        /* ===== 方案 C: 底部固定日志 + 顶部仪表盘（参考 qBittorrent） ===== */
+        .layout-c .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 12px;
+            padding: 12px;
+            background: #1a1a28;
+        }
+
+        .layout-c .main-panel {
+            background: #252535;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .layout-c .side-panel {
+            background: #252535;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .layout-c .input-group {
+            margin-bottom: 12px;
+        }
+
+        .layout-c .input-box {
+            width: 100%;
+            background: #1a1a28;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .layout-c .btn-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .layout-c .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .layout-c .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .layout-c .btn-secondary {
+            background: #333;
+            color: #888;
+        }
+
+        .layout-c .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .layout-c .stat-item {
+            background: #1a1a28;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .layout-c .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #6366f1;
+        }
+
+        .layout-c .stat-label {
+            font-size: 10px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .layout-c .resource-list {
+            margin-top: 12px;
+        }
+
+        .layout-c .resource-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+        }
+
+        .layout-c .resource-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .layout-c .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .layout-c .dot.green {
+            background: #10b981;
+        }
+
+        .layout-c .dot.yellow {
+            background: #f59e0b;
+        }
+
+        .layout-c .task-list {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+        }
+
+        .layout-c .task-item {
+            background: #252535;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .layout-c .task-badge {
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+        }
+
+        .layout-c .badge-success {
+            background: #10b98133;
+            color: #10b981;
+        }
+
+        .layout-c .badge-running {
+            background: #3b82f633;
+            color: #3b82f6;
+        }
+
+        .layout-c .badge-pending {
+            background: #6b728033;
+            color: #6b7280;
+        }
+
+        .layout-c .log-area {
+            height: 120px;
+            background: #0f0f1a;
+            border-top: 1px solid #333;
+            padding: 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            overflow-y: auto;
+            color: #888;
+        }
+
+        /* ===== 方案 D: 紧凑型（参考 yt-dlp-gui） ===== */
+        .layout-d .compact-header {
+            padding: 12px;
+            background: #252535;
+            display: flex;
+            gap: 8px;
+        }
+
+        .layout-d .input-box {
+            flex: 1;
+            background: #1a1a28;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #888;
+            font-size: 12px;
+        }
+
+        .layout-d .btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            background: #6366f1;
+            color: white;
+        }
+
+        .layout-d .status-strip {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #1a1a28;
+            font-size: 11px;
+            color: #888;
+            border-bottom: 1px solid #333;
+        }
+
+        .layout-d .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .layout-d .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+
+        .layout-d .progress-strip {
+            padding: 8px 12px;
+            background: #252535;
+        }
+
+        .layout-d .progress-bar {
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .layout-d .progress-fill {
+            width: 65%;
+            height: 100%;
+            background: #6366f1;
+        }
+
+        .layout-d .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .layout-d .task-table {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .layout-d .table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            padding: 8px 12px;
+            background: #1a1a28;
+            font-size: 11px;
+            color: #666;
+            border-bottom: 1px solid #333;
+        }
+
+        .layout-d .table-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            padding: 8px 12px;
+            font-size: 11px;
+            border-bottom: 1px solid #252535;
+        }
+
+        .layout-d .table-row:hover {
+            background: #252535;
+        }
+
+        .layout-d .log-area {
+            height: 100px;
+            background: #0f0f1a;
+            border-top: 1px solid #333;
+            padding: 10px 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            overflow-y: auto;
+            color: #888;
+        }
+
+        /* 日志样式通用 */
+        .log-line {
+            margin: 2px 0;
+        }
+
+        .log-time {
+            color: #666;
+        }
+
+        .log-info {
+            color: #e5e5e5;
+        }
+
+        .log-success {
+            color: #10b981;
+        }
+
+        .log-warning {
+            color: #3b82f6;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        /* 推荐标签 */
+        .recommended {
+            background: #10b981;
+            color: white;
+        }
+
+        /* 对比表 */
+        .comparison {
+            max-width: 1600px;
+            margin: 40px auto 0;
+            background: #1e1e2e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .comparison table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .comparison th,
+        .comparison td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            font-size: 13px;
+        }
+
+        .comparison th {
+            color: #6366f1;
+            font-weight: 600;
+        }
+
+        .comparison tr:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎨 v2.0 布局设计方案对比</h1>
+    <p style="text-align: center; color: #888; margin-bottom: 30px;">参考：JDownloader / qBittorrent / yt-dlp-gui / 4K
+        Video Downloader</p>
+
+    <div class="layout-container">
+        <!-- 方案 A: 顶部卡片式 -->
+        <div class="layout-demo">
+            <div class="layout-title">
+                方案 A: 顶部卡片式状态栏
+                <span class="tag">简洁</span>
+            </div>
+            <div class="layout-content layout-a">
+                <div class="top-area">
+                    <div class="input-box">🔗 粘贴 YouTube 链接或选择文件...</div>
+                    <button class="btn-primary">▶ 开始</button>
+                </div>
+                <div class="status-cards">
+                    <div class="status-card">
+                        <div class="value">65%</div>
+                        <div class="label">总进度</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="value" style="color: #10b981;">3/5</div>
+                        <div class="label">代理池</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="value" style="color: #f59e0b;">2/3</div>
+                        <div class="label">Cookie</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="value">~5min</div>
+                        <div class="label">预估时间</div>
+                    </div>
+                </div>
+                <div class="log-area">
+                    <div class="log-line"><span class="log-time">[14:23:01]</span> <span class="log-info">开始处理 100
+                            个视频...</span></div>
+                    <div class="log-line"><span class="log-time">[14:23:05]</span> <span class="log-success">✓ video_001
+                            字幕下载完成</span></div>
+                    <div class="log-line"><span class="log-time">[14:23:08]</span> <span class="log-warning">⚠ video_002
+                            使用备用代理</span></div>
+                    <div class="log-line"><span class="log-time">[14:23:12]</span> <span class="log-error">✗ video_003
+                            下载失败: 无字幕</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方案 B: 左右分栏 -->
+        <div class="layout-demo">
+            <div class="layout-title">
+                方案 B: 侧边栏资源面板
+                <span class="tag recommended">推荐</span>
+            </div>
+            <div class="layout-content layout-b">
+                <div class="main-area">
+                    <div class="sidebar">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">资源状态</div>
+                        <div class="sidebar-item">
+                            <span>代理池</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="color: #10b981;">3/5</span>
+                                <div class="status green"></div>
+                            </div>
+                        </div>
+                        <div class="sidebar-item">
+                            <span>Cookie</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="color: #f59e0b;">2/3</span>
+                                <div class="status yellow"></div>
+                            </div>
+                        </div>
+                        <div class="sidebar-item">
+                            <span>API Key</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="color: #10b981;">5/5</span>
+                                <div class="status green"></div>
+                            </div>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin: 12px 0 4px;">任务统计</div>
+                        <div class="sidebar-item">
+                            <span>有字幕</span>
+                            <span style="color: #10b981;">80</span>
+                        </div>
+                        <div class="sidebar-item">
+                            <span>无字幕</span>
+                            <span style="color: #ef4444;">20</span>
+                        </div>
+                    </div>
+                    <div class="content-area">
+                        <div class="input-row">
+                            <div class="input-box">🔗 粘贴链接...</div>
+                            <button class="btn-primary"
+                                style="background: #6366f1; border: none; border-radius: 6px; padding: 8px 16px; color: white; cursor: pointer;">开始</button>
+                        </div>
+                        <div class="progress-section">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                                <span>处理进度</span>
+                                <span style="color: #6366f1;">65/100</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                            <div class="progress-info">
+                                <span>有字幕: ~3min | 无字幕: ~8min</span>
+                                <span>ETA: 5分钟</span>
+                            </div>
+                        </div>
+                        <div class="log-area">
+                            <div class="log-line"><span class="log-time">[14:23:01]</span> <span
+                                    class="log-info">开始处理...</span></div>
+                            <div class="log-line"><span class="log-time">[14:23:05]</span> <span class="log-success">✓
+                                    下载完成</span></div>
+                            <div class="log-line"><span class="log-time">[14:23:08]</span> <span class="log-warning">⚠
+                                    切换代理</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方案 C: 仪表盘式 -->
+        <div class="layout-demo">
+            <div class="layout-title">
+                方案 C: 仪表盘 + 任务列表
+                <span class="tag">功能丰富</span>
+            </div>
+            <div class="layout-content layout-c">
+                <div class="dashboard">
+                    <div class="main-panel">
+                        <div class="input-group">
+                            <input type="text" class="input-box" placeholder="🔗 粘贴链接...">
+                            <div class="btn-row">
+                                <button class="btn btn-primary">▶ 开始</button>
+                                <button class="btn btn-secondary">⏸ 暂停</button>
+                                <button class="btn btn-secondary">⬜ 停止</button>
+                            </div>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-value">65%</div>
+                                <div class="stat-label">总进度</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">~5min</div>
+                                <div class="stat-label">预估</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" style="color: #10b981;">80</div>
+                                <div class="stat-label">有字幕</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" style="color: #ef4444;">20</div>
+                                <div class="stat-label">无字幕</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="side-panel">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 8px;">资源监控</div>
+                        <div class="resource-list">
+                            <div class="resource-item">
+                                <span>代理池</span>
+                                <div class="resource-status">
+                                    <span>3/5</span>
+                                    <div class="dot green"></div>
+                                </div>
+                            </div>
+                            <div class="resource-item">
+                                <span>Cookie</span>
+                                <div class="resource-status">
+                                    <span>2/3</span>
+                                    <div class="dot yellow"></div>
+                                </div>
+                            </div>
+                            <div class="resource-item">
+                                <span>API</span>
+                                <div class="resource-status">
+                                    <span>5/5</span>
+                                    <div class="dot green"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-list">
+                    <div class="task-item">
+                        <span>video_001.mp4</span>
+                        <span class="task-badge badge-success">完成</span>
+                    </div>
+                    <div class="task-item">
+                        <span>video_002.mp4</span>
+                        <span class="task-badge badge-running">翻译中</span>
+                    </div>
+                    <div class="task-item">
+                        <span>video_003.mp4</span>
+                        <span class="task-badge badge-pending">等待</span>
+                    </div>
+                </div>
+                <div class="log-area">
+                    <div class="log-line"><span class="log-time">[14:23:01]</span> 开始处理...</div>
+                    <div class="log-line"><span class="log-time">[14:23:05]</span> <span class="log-success">✓
+                            下载完成</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方案 D: 紧凑型 -->
+        <div class="layout-demo">
+            <div class="layout-title">
+                方案 D: 紧凑表格式
+                <span class="tag">高效</span>
+            </div>
+            <div class="layout-content layout-d">
+                <div class="compact-header">
+                    <input type="text" class="input-box" placeholder="🔗 粘贴链接...">
+                    <button class="btn">开始</button>
+                    <button class="btn" style="background: #333;">停止</button>
+                </div>
+                <div class="status-strip">
+                    <div class="status-item">
+                        <div class="status-dot"></div>
+                        <span>代理: 3/5</span>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-dot" style="background: #f59e0b;"></div>
+                        <span>Cookie: 2/3</span>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-dot"></div>
+                        <span>API: 5/5</span>
+                    </div>
+                    <span>有字幕: 80 | 无字幕: 20</span>
+                </div>
+                <div class="progress-strip">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span>65/100 视频</span>
+                        <span>ETA: 5 分钟</span>
+                    </div>
+                </div>
+                <div class="task-table">
+                    <div class="table-header">
+                        <span>文件名</span>
+                        <span>字幕</span>
+                        <span>状态</span>
+                        <span>进度</span>
+                    </div>
+                    <div class="table-row">
+                        <span>video_001</span>
+                        <span style="color: #10b981;">有</span>
+                        <span style="color: #10b981;">完成</span>
+                        <span>100%</span>
+                    </div>
+                    <div class="table-row">
+                        <span>video_002</span>
+                        <span style="color: #10b981;">有</span>
+                        <span style="color: #3b82f6;">翻译中</span>
+                        <span>45%</span>
+                    </div>
+                    <div class="table-row">
+                        <span>video_003</span>
+                        <span style="color: #ef4444;">无</span>
+                        <span style="color: #666;">等待</span>
+                        <span>0%</span>
+                    </div>
+                </div>
+                <div class="log-area">
+                    <div class="log-line"><span class="log-time">[14:23:01]</span> 开始处理...</div>
+                    <div class="log-line"><span class="log-time">[14:23:05]</span> <span class="log-success">✓
+                            下载完成</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 对比表 -->
+    <div class="comparison">
+        <h2>方案对比</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>方案</th>
+                    <th>特点</th>
+                    <th>参考工具</th>
+                    <th>改动量</th>
+                    <th>推荐</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A. 顶部卡片式</td>
+                    <td>简洁、状态一目了然</td>
+                    <td>4K Video Downloader</td>
+                    <td>🟢 小</td>
+                    <td>v2.0 备选</td>
+                </tr>
+                <tr>
+                    <td><strong>B. 侧边栏</strong></td>
+                    <td><strong>扩展性好、资源监控清晰</strong></td>
+                    <td><strong>JDownloader</strong></td>
+                    <td><strong>🟡 中</strong></td>
+                    <td><strong>✅ 推荐</strong></td>
+                </tr>
+                <tr>
+                    <td>C. 仪表盘式</td>
+                    <td>功能全面、信息丰富</td>
+                    <td>qBittorrent</td>
+                    <td>🔴 大</td>
+                    <td>v2.1+</td>
+                </tr>
+                <tr>
+                    <td>D. 紧凑表格</td>
+                    <td>高效、适合批量任务</td>
+                    <td>yt-dlp-gui</td>
+                    <td>🟡 中</td>
+                    <td>可选</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+
+</html>

@@ -417,8 +417,8 @@ class LogPanel(ctk.CTkFrame):
             Tuple[统计信息文本, Cookie状态文本, 代理和预计时间文本, 是否为错误状态]
         """
         total = self.stats.get("total", 0)
-        success = self.stats.get("success", 0)
-        failed = self.stats.get("failed", 0)
+        success = max(0, self.stats.get("success", 0))  # 确保不为负
+        failed = max(0, self.stats.get("failed", 0))    # 确保不为负
 
         # 格式化状态
         if self.running_status:
@@ -492,7 +492,19 @@ class LogPanel(ctk.CTkFrame):
         processed_text = f"{t('stats_success')} {success} / {t('stats_failed')} {failed}"
         if resumable > 0:
             processed_text += f" ({resumable} {t('stats_resumable')})"
-        stats_text = f"{t('stats_planned')}：{total}   ••   {t('stats_processed')}：{processed_text}   ••   {t('stats_status')}：{status_display}   ••   "
+        
+        # 两阶段显示：
+        # - total=-1 且有 url_count：显示 "url_count (检测中...)"
+        # - total>=0：显示实际数量
+        url_count = self.stats.get("url_count", 0)
+        if total == -1 and url_count > 0:
+            total_display = f"{url_count} ({t('stats_detecting')})"
+        elif total == -1:
+            total_display = t("stats_detecting")
+        else:
+            total_display = str(total)
+        
+        stats_text = f"{t('stats_planned')}：{total_display}   ••   {t('stats_processed')}：{processed_text}   ••   {t('stats_status')}：{status_display}   ••   "
 
         # Cookie 状态（可能变红）
         cookie_text = f"{t('stats_cookie')}：{cookie_display}"

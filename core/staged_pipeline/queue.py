@@ -189,7 +189,8 @@ class StageQueue:
 
                     # 更新统计
                     with self._lock:
-                        if result.error or result.processing_failed:
+                        if result.error or result.processing_failed or result.skip_reason:
+                            # 错误、处理失败、或跳过（如无字幕）都计入失败
                             self._failed_count += 1
                         else:
                             self._processed_count += 1
@@ -314,13 +315,27 @@ class StageQueue:
         """获取阶段统计信息
 
         Returns:
-            统计信息字典：{"processed": 已处理数, "failed": 失败数, "total": 总数}
+            统计信息字典：{
+                "processed": 已处理数,
+                "failed": 失败数,
+                "total": 总数,
+                "pending": 等待中的数量,
+                "processing": 正在处理的数量
+            }
         """
         with self._lock:
+            # 计算等待中和正在处理的数量
+            queue_size = self.input_queue.qsize()  # 等待中的
+            # 正在处理的 = 总数 - 已完成（成功+失败）- 等待中
+            completed = self._processed_count + self._failed_count
+            processing = max(0, self._total_count - completed - queue_size)
+            
             return {
                 "processed": self._processed_count,
                 "failed": self._failed_count,
                 "total": self._total_count,
+                "pending": queue_size,
+                "processing": processing,
             }
 
     def wait_for_completion(self, timeout: Optional[float] = None):

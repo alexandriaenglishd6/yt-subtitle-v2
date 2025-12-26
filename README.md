@@ -1,4 +1,4 @@
-# YouTube Subtitle Tool / YouTube 字幕工具 v1.0.0
+# YouTube Subtitle Tool / YouTube 字幕工具 v1.0.1
 
 **[English](#english)** | **[中文](#chinese)**
 
@@ -143,6 +143,13 @@ python cli.py channel --url "https://www.youtube.com/@channel" --run
 ---
 
 ## 更新日志 / Changelog
+
+### v1.0.1 (2025-12-27) - Bug 修复版本 / Bug Fix Release
+- 🐛 **统计显示修复**：修复 "计划" 数量在视频检测完成后不更新的问题
+- 🐛 **失败计数修复**：修复 "失败" 数量始终显示为 0 的问题，无字幕视频现在正确计入失败数
+- 🐛 **Cookie 测试修复**：修复 Cookie 保存和检测失败的问题
+- 🐛 **AI 测试修复**：修复免费谷歌翻译和 Kimi API 测试问题
+- ✨ **输入框优化**：URL 输入框提示文本改为占位符样式（灰色显示，点击自动消失）
 
 ### v1.0.0 (2025-12-24) - 重构稳定版 / Refactored Stable Release
 - ✨ **双语字幕优化**：选择双语模式自动启用翻译

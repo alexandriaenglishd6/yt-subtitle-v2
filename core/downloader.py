@@ -16,6 +16,7 @@ from core.fetcher import _map_ytdlp_error_to_app_error
 from core.failure_logger import _atomic_write
 from core.language_utils import lang_matches
 from core.chinese_detector import is_chinese_lang, normalize_chinese_lang_code
+from core.subprocess_utils import run_command
 
 logger = get_logger()
 
@@ -794,7 +795,7 @@ class SubtitleDownloader:
             if not is_auto:
                 cmd.extend(["--write-auto-subs"])  # 同时也尝试自动字幕
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = run_command(cmd, timeout=60)
             
             # 调试日志：输出 yt-dlp 的执行结果（使用 DEBUG 级别避免刷屏）
             logger.debug(f"yt-dlp 命令: {' '.join(cmd)}")
@@ -1103,7 +1104,7 @@ class SubtitleDownloader:
             else:
                 cmd.extend(["--write-subs", "--sub-langs", lang_code])
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = run_command(cmd, timeout=60)
 
             if result.returncode != 0:
                 logger.error_i18n(

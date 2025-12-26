@@ -117,11 +117,11 @@ class ProcessingPipelineMixin:
         # URL 列表模式使用批次 archive（不区分频道）
         archive_path = self.incremental_manager.get_batch_archive_path()
 
-        # 使用初始 URL 数量作为 total（如果没有传入则使用视频数量）
-        total_count = initial_url_count if initial_url_count > 0 else len(videos)
+        # 使用实际视频数量作为 total（不再使用 URL 数量）
+        actual_video_count = len(videos)
         
-        # 初始化统计信息（保持 total 为初始 URL 数量，failed 包含获取失败的）
-        stats = {"total": total_count, "success": 0, "failed": fetch_failed_count, "current": fetch_failed_count}
+        # 初始化统计信息（使用实际视频数量）
+        stats = {"total": actual_video_count, "success": 0, "failed": 0, "current": 0}
         on_stats(stats)
 
         on_log("INFO", t("videos_found", count=len(videos)))
@@ -162,13 +162,9 @@ class ProcessingPipelineMixin:
         )
 
         # 更新最终统计信息（包含错误分类）
-        # 处理阶段的 failed + 获取阶段的 failed
-        process_failed = result.get("failed", 0)
-        total_failed = fetch_failed_count + process_failed
-        
         stats["success"] = result.get("success", 0)
-        stats["failed"] = total_failed
-        stats["current"] = total_count
+        stats["failed"] = result.get("failed", 0)
+        stats["current"] = actual_video_count
         stats["error_counts"] = result.get("error_counts", {})  # 错误分类统计
         on_stats(stats)
 

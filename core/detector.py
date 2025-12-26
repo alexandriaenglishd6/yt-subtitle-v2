@@ -11,6 +11,7 @@ from core.models import DetectionResult, VideoInfo
 from core.logger import get_logger, translate_exception
 from core.exceptions import AppException, ErrorType
 from core.fetcher import _map_ytdlp_error_to_app_error
+from core.subprocess_utils import run_command
 
 logger = get_logger()
 
@@ -179,7 +180,7 @@ class SubtitleDetector:
 
             cmd.append(url)
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = run_command(cmd, timeout=60)
 
             if result.returncode != 0:
                 # 将 yt-dlp 错误映射为 AppException

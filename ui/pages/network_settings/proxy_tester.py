@@ -10,6 +10,7 @@ from typing import List, Dict, Callable, Optional
 
 from core.i18n import t
 from core.logger import get_logger
+from core.subprocess_utils import run_command
 
 logger = get_logger()
 
@@ -504,13 +505,9 @@ class ProxyTesterMixin:
             ]
 
             # 执行命令
-            result = subprocess.run(
+            result = run_command(
                 cmd,
-                capture_output=True,
-                text=True,
                 timeout=timeout,
-                encoding="utf-8",
-                errors="ignore",
             )
 
             # 提取错误输出

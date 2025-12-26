@@ -313,8 +313,8 @@ def _process_video_list_staged(
     from core.staged_pipeline import StagedPipeline
     from core.staged_pipeline.data_types import StageData
 
-    # 使用初始 URL 数量作为 total（如果没有传入则使用视频数量）
-    total = initial_url_count if initial_url_count > 0 else len(videos)
+    # 始终使用实际视频数量作为 total（不再使用 URL 数量）
+    total = len(videos)
     videos_count = len(videos)  # 实际要处理的视频数量
 
     # 根据总并发数配置各阶段的并发数
@@ -411,14 +411,16 @@ def _process_video_list_staged(
                 """定期更新统计信息"""
                 from core.progress.eta import ProgressTracker
                 
-                progress_tracker = ProgressTracker(total=total, task_name="video_processing")
+                # 使用实际视频数量（不是 URL 数量）
+                actual_video_count = len(videos)
+                progress_tracker = ProgressTracker(total=actual_video_count, task_name="video_processing")
                 last_completed = 0
                 last_update_time = time.time()
                 
-                # 发送初始 stats 确保 total 正确显示
+                # 发送初始 stats 确保 total 正确显示（使用实际视频数量）
                 try:
                     initial_stats = {
-                        "total": total,
+                        "total": actual_video_count,
                         "success": 0,
                         "failed": 0,
                         "current": 0,
@@ -426,7 +428,7 @@ def _process_video_list_staged(
                         "eta_seconds": None,
                         "eta_message": "",
                     }
-                    logger.info(f"stats_updater sending initial stats: total={total}")
+                    logger.info(f"stats_updater sending initial stats: total={actual_video_count}")
                     on_stats(initial_stats)
                 except Exception as e:
                     logger.warning(f"stats_updater initial on_stats failed: {e}")
@@ -442,21 +444,30 @@ def _process_video_list_staged(
 
                         # 计算成功数和失败数
                         success_count = output_stats["processed"]
-                        # 失败数 = 总数 - 成功数 - 仍在队列中的数量
-                        # 注意：不能简单用 total - success，因为可能还有视频在处理中
-                        # 但为了避免重复计数，使用 (已完成数 - 成功数) 来计算失败数
-                        # 已完成数 = 总入队数 - 各阶段仍在队列中的数
-                        in_queue_count = (
+                        
+                        # 使用实际视频数量（不是 URL 数量）
+                        actual_total = len(videos)
+                        
+                        # 累加各阶段的失败数（每个视频只会在一个阶段失败）
+                        total_failed = (
+                            detect_stats["failed"]
+                            + download_stats["failed"]
+                            + translate_stats["failed"]
+                            + summarize_stats["failed"]
+                            + output_stats["failed"]
+                        )
+                        
+                        # 计算仍在处理中的数量
+                        in_progress_count = (
                             detect_stats["pending"] + detect_stats["processing"]
                             + download_stats["pending"] + download_stats["processing"]
                             + translate_stats["pending"] + translate_stats["processing"]
                             + summarize_stats["pending"] + summarize_stats["processing"]
                             + output_stats["pending"] + output_stats["processing"]
                         )
-                        completed_count = len(videos) - in_queue_count
-                        failed_count = completed_count - success_count if completed_count > success_count else 0
                         
-                        current_completed = success_count + failed_count
+                        # 已完成数 = 成功 + 失败
+                        current_completed = success_count + total_failed
                         
                         # 记录新完成的视频到 ProgressTracker
                         if current_completed > last_completed:
@@ -487,9 +498,9 @@ def _process_video_list_staged(
                             proxy_unhealthy = proxy_manager.get_unhealthy_count()
 
                         stats = {
-                            "total": total,
+                            "total": actual_total,  # 使用实际视频数量
                             "success": success_count,
-                            "failed": failed_count,
+                            "failed": total_failed,  # 使用累加的失败数
                             "current": current_completed,
                             "running": [],
                             "eta_seconds": eta_seconds,

@@ -96,6 +96,9 @@ class GoogleTranslateClient:
             if not subtitle_text or not source_lang or not target_lang:
                 # 尝试从 prompt 中提取目标语言名称（即使字幕提取失败）
                 import re
+                
+                # 标记是否为测试模式
+                is_test_mode = False
 
                 # 尝试提取目标语言名称
                 target_match = re.search(r"翻译成\s+(\S+)", prompt)
@@ -106,8 +109,9 @@ class GoogleTranslateClient:
                     source_lang_short = "auto"
                     target_lang_short = self._normalize_lang_code(target_lang)
                 else:
-                    # 完全无法提取，使用默认值（但这是不应该发生的情况）
-                    logger.warning_i18n("ai_extract_language_failed")
+                    # 完全无法提取，使用默认值
+                    # 这在测试连接时是正常的（测试文本不是字幕格式）
+                    is_test_mode = True
                     source_lang_short = "auto"
                     target_lang_short = "zh-CN"
 
@@ -126,6 +130,10 @@ class GoogleTranslateClient:
                             source=source_lang_short, target=target_lang_short
                         )
                         translated_text = translator.translate(subtitle_text)
+                    
+                    # 翻译成功后才显示测试成功消息
+                    if is_test_mode:
+                        logger.info_i18n("ai_google_translate_test_mode")
                 else:
                     from core.logger import translate_log
 
