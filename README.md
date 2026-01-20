@@ -1,4 +1,4 @@
-# YouTube Subtitle Tool / YouTube 字幕工具 v1.0.1
+# YouTube Subtitle Tool / YouTube 字幕工具 v1.1.1
 
 **[English](#english)** | **[中文](#chinese)**
 
@@ -17,6 +17,7 @@
 - ✅ **URL List Mode**: Paste multiple URLs or import from file
 - ✅ **Staged Pipeline**: Detect, Download, Translate, Summarize, Output - each stage runs independently
 - ✅ **Smart Concurrency**: Separate concurrency control for tasks and AI requests
+- ✅ **Auto-Retry**: Smarter proxy rotation on failure
 
 #### Subtitle Processing
 - ✅ **Smart Detection**: Distinguish between manual and auto-generated subtitles
@@ -32,7 +33,7 @@
 - ✅ **Separate Config**: Different providers for translation and summarization
 
 #### Network & Security
-- ✅ **Proxy Support**: HTTP/SOCKS5 with health check
+- ✅ **Proxy Support**: HTTP/SOCKS5 with health check & auto-exclusion
 - ✅ **Cookie Management**: Netscape format cookie support
 - ✅ **Data Masking**: Auto-mask API keys and cookies in logs
 
@@ -60,6 +61,7 @@ python cli.py channel --url "https://www.youtube.com/@channel" --run
 ### Portable Version
 
 Download the pre-built portable version from [Releases](https://github.com/alexandriaenglishd6/yt-subtitle-v2/releases), extract and run `YT-Subtitle-Tool.exe`.
+(v1.1.1+ includes `yt-dlp.exe` out of the box)
 
 ---
 
@@ -76,6 +78,7 @@ Download the pre-built portable version from [Releases](https://github.com/alexa
 - ✅ **URL 列表模式**：支持粘贴多行 URL 或从文本文件导入链接
 - ✅ **分阶段流水线**：检测、下载、翻译、摘要、输出五个阶段独立运行
 - ✅ **智能并发**：支持普通任务与 AI 请求独立并发控制
+- ✅ **自动重试**：失败时更智能的代理轮换策略
 
 #### 字幕处理
 - ✅ **智能检测**：自动区分人工字幕和自动生成字幕
@@ -91,7 +94,7 @@ Download the pre-built portable version from [Releases](https://github.com/alexa
 - ✅ **独立配置**：翻译和摘要可配置不同的供应商、模型和并发限制
 
 #### 网络与安全
-- ✅ **多代理轮询**：支持 HTTP/SOCKS5 代理，自动健康检查
+- ✅ **多代理轮询**：支持 HTTP/SOCKS5 代理，自动健康检查与排除已失败代理
 - ✅ **Cookie 管理**：内置 Netscape 格式 Cookie 支持
 - ✅ **信息脱敏**：日志中自动脱敏 API Key、Cookie 等敏感信息
 
@@ -119,6 +122,7 @@ python cli.py channel --url "https://www.youtube.com/@channel" --run
 ### 便携版
 
 从 [Releases](https://github.com/alexandriaenglishd6/yt-subtitle-v2/releases) 下载预编译便携版，解压后运行 `YT-Subtitle-Tool.exe` 即可。
+(v1.1.1+ 版本已内置 `yt-dlp.exe`，解压即用)
 
 ---
 
@@ -143,6 +147,12 @@ python cli.py channel --url "https://www.youtube.com/@channel" --run
 ---
 
 ## 更新日志 / Changelog
+
+### v1.1.1 (2026-01-20) - 代理优化 & 代码重构 / Proxy Optimization & Refactoring
+- ✨ **智能代理重试**：失败时自动排除已尝试的代理，重试间隔加长，大幅提高不稳定性网络下的成功率
+- ✨ **内置依赖**：便携版已内置 `yt-dlp.exe`，无需单独安装
+- 🔧 **核心重构**：Pipeline 阶段拆分，提取独立模块，代码质量提升至 A 级
+- 🐛 **Bug 修复**：修复重试逻辑可能重复使用坏代理的问题
 
 ### v1.0.1 (2025-12-27) - Bug 修复版本 / Bug Fix Release
 - 🐛 **统计显示修复**：修复 "计划" 数量在视频检测完成后不更新的问题
