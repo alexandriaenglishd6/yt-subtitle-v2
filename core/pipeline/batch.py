@@ -301,16 +301,20 @@ def _process_video_list_staged(
     translation_llm_init_error: Optional[str] = None,
     initial_url_count: int = 0,  # 初始 URL 数量
     fetch_failed_count: int = 0,  # URL 获取阶段失败的数量
+    use_thread_pipeline: bool = True,  # 使用线程级流水线（推荐）
 ) -> Dict[str, int]:
     """使用分阶段队列化 Pipeline 处理视频列表
 
     Args:
         与 process_video_list 相同
+        use_thread_pipeline: 是否使用线程级流水线（每个线程独立处理一个视频），
+                             默认 True，设为 False 使用分阶段队列模式
 
     Returns:
         统计信息
     """
     from core.staged_pipeline import StagedPipeline
+    from core.staged_pipeline.thread_pipeline import ThreadPipeline
     from core.staged_pipeline.data_types import StageData
 
     # 始终使用实际视频数量作为 total（不再使用 URL 数量）
@@ -371,37 +375,67 @@ def _process_video_list_staged(
         except Exception as e:
             logger.warning(f"Failed to update manifest for video: {e}")
 
-    # 创建分阶段 Pipeline
-    pipeline = StagedPipeline(
-        language_config=language_config,
-        translation_llm=translation_llm,
-        summary_llm=summary_llm,
-        output_writer=output_writer,
-        failure_logger=failure_logger,
-        incremental_manager=incremental_manager,
-        archive_path=archive_path,
-        force=force,
-        dry_run=dry_run,
-        cancel_token=cancel_token,
-        proxy_manager=proxy_manager,
-        cookie_manager=cookie_manager,
-        run_id=run_id,
-        on_log=on_log,
-        on_error=lambda data: on_error(data.error_type, str(data.error)) if on_error and data.error_type else None,
-        on_video_complete=on_video_complete,  # 视频完成回调
-        detect_concurrency=detect_concurrency,
-        download_concurrency=download_concurrency,
-        translate_concurrency=translate_concurrency,
-        summarize_concurrency=summarize_concurrency,
-        output_concurrency=output_concurrency,
-        translation_llm_init_error_type=translation_llm_init_error_type,
-        translation_llm_init_error=translation_llm_init_error,
-    )
+    # 创建 Pipeline（根据配置选择模式）
+    if use_thread_pipeline:
+        # 线程级流水线：每个线程独立处理一个视频的完整流程
+        logger.info_i18n("log.using_thread_pipeline", concurrency=concurrency, ai_concurrency=ai_concurrency)
+        pipeline = ThreadPipeline(
+            language_config=language_config,
+            translation_llm=translation_llm,
+            summary_llm=summary_llm,
+            output_writer=output_writer,
+            failure_logger=failure_logger,
+            incremental_manager=incremental_manager,
+            archive_path=archive_path,
+            force=force,
+            dry_run=dry_run,
+            cancel_token=cancel_token,
+            proxy_manager=proxy_manager,
+            cookie_manager=cookie_manager,
+            run_id=run_id,
+            on_log=on_log,
+            on_error=lambda data: on_error(data.error_type, str(data.error)) if on_error and data.error_type else None,
+            on_video_complete=on_video_complete,
+            on_stats=on_stats,  # ThreadPipeline 内部处理统计更新
+            concurrency=concurrency,
+            ai_concurrency=ai_concurrency,
+            translation_llm_init_error_type=translation_llm_init_error_type,
+            translation_llm_init_error=translation_llm_init_error,
+        )
+    else:
+        # 分阶段队列模式：各阶段独立队列
+        logger.info_i18n("log.using_staged_pipeline")
+        pipeline = StagedPipeline(
+            language_config=language_config,
+            translation_llm=translation_llm,
+            summary_llm=summary_llm,
+            output_writer=output_writer,
+            failure_logger=failure_logger,
+            incremental_manager=incremental_manager,
+            archive_path=archive_path,
+            force=force,
+            dry_run=dry_run,
+            cancel_token=cancel_token,
+            proxy_manager=proxy_manager,
+            cookie_manager=cookie_manager,
+            run_id=run_id,
+            on_log=on_log,
+            on_error=lambda data: on_error(data.error_type, str(data.error)) if on_error and data.error_type else None,
+            on_video_complete=on_video_complete,
+            detect_concurrency=detect_concurrency,
+            download_concurrency=download_concurrency,
+            translate_concurrency=translate_concurrency,
+            summarize_concurrency=summarize_concurrency,
+            output_concurrency=output_concurrency,
+            translation_llm_init_error_type=translation_llm_init_error_type,
+            translation_llm_init_error=translation_llm_init_error,
+        )
 
     # 处理视频
     try:
-        # 如果需要实时统计更新，启动一个后台线程定期更新
-        if on_stats:
+        # 如果需要实时统计更新且使用分阶段队列模式，启动一个后台线程定期更新
+        # ThreadPipeline 内部已经处理了 on_stats，无需额外线程
+        if on_stats and not use_thread_pipeline:
             import threading
 
             stats_update_thread = None
@@ -529,8 +563,8 @@ def _process_video_list_staged(
         # 执行处理
         stats = pipeline.process_videos(videos)
 
-        # 停止统计更新线程
-        if on_stats and "stats_update_thread" in locals():
+        # 停止统计更新线程（仅当使用分阶段队列模式时）
+        if on_stats and not use_thread_pipeline and "stats_update_thread" in locals():
             stop_stats_update.set()
             stats_update_thread.join(timeout=1.0)
 

@@ -114,5 +114,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='YT-Subtitle-Tool',
+    name='YT-Subtitle-Tool-V1.1.1',
 )

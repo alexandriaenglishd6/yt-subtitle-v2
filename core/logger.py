@@ -365,13 +365,31 @@ class Logger:
         """
         try:
             if log_file is None:
-                log_dir = get_user_data_dir() / "logs"
+                # 优先使用工具目录的 logs 文件夹
+                # 获取工具所在目录（main.py 所在目录）
+                import sys
+                if getattr(sys, 'frozen', False):
+                    # 打包后的 exe 文件目录
+                    app_dir = Path(sys.executable).parent
+                else:
+                    # 开发环境：使用项目根目录
+                    app_dir = Path(__file__).parent.parent
+                
+                log_dir = app_dir / "logs"
                 try:
                     log_dir.mkdir(parents=True, exist_ok=True)
                 except (OSError, PermissionError):
-                    # 目录创建失败，回退到控制台
-                    return None
-                log_file = log_dir / "app.log"
+                    # 如果工具目录不可写，回退到用户数据目录
+                    log_dir = get_user_data_dir() / "logs"
+                    try:
+                        log_dir.mkdir(parents=True, exist_ok=True)
+                    except (OSError, PermissionError):
+                        return None
+                
+                # 使用时间戳作为文件名，避免覆盖
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                log_file = log_dir / f"app_{timestamp}.log"
 
             # 使用 RotatingFileHandler 自动轮转（最大 20MB，保留 5 个备份）
             file_handler = RotatingFileHandler(
@@ -789,7 +807,13 @@ def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> 
         清理的文件数量
     """
     if log_dir is None:
-        log_dir = get_user_data_dir() / "logs"
+        # 使用与 _create_file_handler 相同的逻辑确定日志目录
+        import sys
+        if getattr(sys, 'frozen', False):
+            app_dir = Path(sys.executable).parent
+        else:
+            app_dir = Path(__file__).parent.parent
+        log_dir = app_dir / "logs"
 
     if not log_dir.exists():
         return 0
@@ -804,8 +828,8 @@ def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> 
             if not log_file.is_file():
                 continue
 
-            # 检查文件是否匹配日志文件模式（app.log, app.log.1, app.log.2 等）
-            if log_file.name.startswith("app.log"):
+            # 检查文件是否匹配日志文件模式（app_*.log 或旧的 app.log*）
+            if log_file.name.startswith("app_") and log_file.name.endswith(".log") or log_file.name.startswith("app.log"):
                 try:
                     # 获取文件修改时间
                     file_mtime = log_file.stat().st_mtime

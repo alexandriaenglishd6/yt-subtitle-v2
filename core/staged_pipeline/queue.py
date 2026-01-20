@@ -167,9 +167,10 @@ class StageQueue:
                         if self.on_error:
                             self.on_error(result)
 
-                    # 如果处理成功且没有跳过，传递给下一阶段
+                    # 如果处理成功且没有跳过或失败，传递给下一阶段
                     if (
                         not result.error
+                        and not result.processing_failed  # 也检查 processing_failed
                         and not result.skip_reason
                         and self.next_stage_queue
                     ):
@@ -178,6 +179,7 @@ class StageQueue:
                     # 如果是最后阶段且成功完成，调用 on_complete 回调
                     if (
                         not result.error
+                        and not result.processing_failed  # 也检查 processing_failed
                         and not result.skip_reason
                         and self.next_stage_queue is None
                         and self.on_complete

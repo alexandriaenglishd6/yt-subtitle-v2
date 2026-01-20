@@ -53,7 +53,7 @@ PROVIDER_CAPABILITIES: Dict[str, ProviderCapabilities] = {
         supports_streaming=True,
         supports_tools=True,
         supports_json_mode=True,
-        default_timeout=60,
+        default_timeout=120,  # 长文本摘要需要更长时间
         max_tokens=4096,
         context_window=64000,
     ),
@@ -62,7 +62,7 @@ PROVIDER_CAPABILITIES: Dict[str, ProviderCapabilities] = {
         supports_streaming=True,
         supports_tools=True,
         supports_json_mode=True,
-        default_timeout=60,
+        default_timeout=120,  # Kimi 处理长文本需要更长时间
         max_tokens=4096,
         context_window=128000,
     ),
@@ -71,7 +71,7 @@ PROVIDER_CAPABILITIES: Dict[str, ProviderCapabilities] = {
         supports_streaming=True,
         supports_tools=True,
         supports_json_mode=True,
-        default_timeout=60,
+        default_timeout=120,  # 长文本摘要需要更长时间
         max_tokens=4096,
         context_window=32000,
     ),
@@ -80,7 +80,7 @@ PROVIDER_CAPABILITIES: Dict[str, ProviderCapabilities] = {
         supports_streaming=True,
         supports_tools=True,
         supports_json_mode=True,
-        default_timeout=60,
+        default_timeout=120,  # 长文本摘要需要更长时间
         max_tokens=4096,
         context_window=128000,
     ),

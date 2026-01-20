@@ -172,14 +172,9 @@ class TaskRunnerMixin:
 
                 on_log("INFO", t("videos_found", count=len(videos)))
 
-                # 先执行字幕检测，显示详细列表
-                self._detect_subtitles(
-                    videos,
-                    on_log,
-                    source_url=url,
-                    channel_name=channel_name,
-                    channel_id=channel_id,
-                )
+                # 跳过预检测阶段：字幕检测将在 ThreadPipeline 内部并行执行
+                # 这样可以实现边识别边下载，避免 Cookie 在预检测阶段失效
+                on_log("INFO", t("log.skip_predetect_use_pipeline"))
 
                 # 如果翻译 AI 初始化失败，提前提示
                 if (
@@ -355,17 +350,9 @@ class TaskRunnerMixin:
 
                 on_log("INFO", t("videos_found", count=len(videos)))
 
-                # 先执行字幕检测，显示详细列表（传入on_stats用于实时更新）
-                self._detect_subtitles(
-                    videos,
-                    on_log,
-                    source_url=t("url_list_source"),
-                    channel_name=None,
-                    channel_id=None,
-                    dry_run=True,
-                    on_stats=on_stats,  # 传入on_stats用于实时更新
-                    initial_total=actual_video_count,  # 使用实际视频数量
-                )
+                # 跳过预检测阶段：字幕检测将在 ThreadPipeline 内部并行执行
+                # 这样可以实现边识别边下载，避免 Cookie 在预检测阶段失效
+                on_log("INFO", t("log.skip_predetect_use_pipeline"))
 
                 # 如果翻译 AI 初始化失败，提前提示
                 if (

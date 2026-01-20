@@ -194,11 +194,12 @@ class ProxyManager:
         except Exception:
             return False
 
-    def get_next_proxy(self, allow_direct: bool = True) -> Optional[str]:
+    def get_next_proxy(self, allow_direct: bool = True, exclude: set = None) -> Optional[str]:
         """获取下一个代理（round-robin 轮询）
 
         Args:
             allow_direct: 如果所有代理都不健康，是否允许返回 None（表示直连），默认 True
+            exclude: 要排除的代理集合（用于重试时避免使用同一个代理）
 
         Returns:
             代理 URL，如果没有可用代理且 allow_direct=True 则返回 None（表示直连），否则返回失败最少的代理
@@ -206,24 +207,42 @@ class ProxyManager:
         if not self.proxies:
             return None
 
+        exclude = exclude or set()
+
         with self._lock:
-            # 尝试找到健康的代理
+            # 尝试找到健康的代理（排除已尝试的）
             healthy_proxies = [
-                p for p in self.proxies if not self._proxy_statuses[p].is_unhealthy
+                p for p in self.proxies 
+                if not self._proxy_statuses[p].is_unhealthy and p not in exclude
             ]
 
-            # 如果没有健康的代理，检查是否有可以重试的
+            # 如果没有健康的代理，检查是否有可以重试的（也排除已尝试的）
             if not healthy_proxies:
                 retryable_proxies = [
                     p
                     for p in self.proxies
                     if self._proxy_statuses[p].should_retry(self.retry_delay_minutes)
+                    and p not in exclude
                 ]
                 if retryable_proxies:
                     logger.info_i18n(
                         "proxy_retry_attempt", count=len(retryable_proxies)
                     )
                     healthy_proxies = retryable_proxies
+
+            # 如果排除后没有可用代理，但有被排除的健康代理，降级使用
+            if not healthy_proxies and exclude:
+                # 尝试使用被排除但健康的代理（最后手段）
+                excluded_healthy = [
+                    p for p in self.proxies 
+                    if not self._proxy_statuses[p].is_unhealthy and p in exclude
+                ]
+                if excluded_healthy:
+                    # 选择失败次数最少的
+                    best = min(excluded_healthy, 
+                               key=lambda p: self._proxy_statuses[p].consecutive_failures)
+                    logger.debug(f"所有代理已尝试，降级使用: {best[:30]}...")
+                    return best
 
             # 如果还是没有健康的代理
             if not healthy_proxies:
@@ -250,6 +269,7 @@ class ProxyManager:
                 return proxy
 
             return None
+
 
     def _get_best_unhealthy_proxy(self) -> Optional[str]:
         """获取失败最少的代理（降级策略）
